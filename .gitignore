@@ -218,3 +218,50 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# ==========================================
+# Rust & Cargo
+# ==========================================
+**/target/
+target/
+**/*.rs.bk
+*.pdb
+
+# ==========================================
+# Node.js & Frontend
+# ==========================================
+**/node_modules/
+node_modules/
+**/dist/
+dist/
+.vite/
+**/.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.eslintcache
+
+# ==========================================
+# Embedded Database & SQLite
+# ==========================================
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+
+# ==========================================
+# OS & Editor
+# ==========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.local_bak
+*.bak
+
+# Allow script libraries in .agents
+!.agents/**/lib/

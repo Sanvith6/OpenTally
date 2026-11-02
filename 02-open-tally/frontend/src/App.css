@@ -1,0 +1,769 @@
+.ot-app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  overflow: hidden;
+}
+
+/* Header */
+.ot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background-color: var(--bg-secondary);
+  border-bottom: 2px solid var(--border-color);
+  padding: 8px 16px;
+  height: 48px;
+  flex-shrink: 0;
+}
+
+.ot-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ot-logo {
+  font-family: var(--font-mono);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 0.5px;
+}
+
+.ot-logo-bracket {
+  color: var(--text-muted);
+}
+
+.ot-tagline {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  border-left: 1px solid var(--border-color);
+  padding-left: 10px;
+}
+
+.ot-header-center {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ot-mode-badge {
+  background-color: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.4);
+  color: var(--accent-cyan);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ot-env-badge {
+  background-color: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: var(--accent-emerald);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ot-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.8rem;
+}
+
+.ot-hotkey-hint {
+  color: var(--text-muted);
+}
+
+.ot-version {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-primary);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+/* Notification Banner */
+.ot-notification-banner {
+  background-color: var(--accent-blue);
+  color: #ffffff;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  animation: otFadeIn 0.2s ease-in-out;
+  flex-shrink: 0;
+}
+
+@keyframes otFadeIn {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.ot-notification-text {
+  flex: 1;
+  margin: 0 10px;
+}
+
+.ot-notification-close {
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+/* Workspace Layout */
+.ot-workspace {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  background: radial-gradient(circle at 50% 0%, #172554 0%, var(--bg-primary) 70%);
+}
+
+.ot-workspace-grid {
+  display: grid;
+  grid-template-columns: 380px 1fr;
+  gap: 16px;
+  max-width: 1380px;
+  margin: 0 auto;
+  height: 100%;
+}
+
+.ot-col-company {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ot-col-gateway {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Cards & Panels */
+.ot-card, .ot-company-panel, .ot-gateway-container {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+}
+
+.ot-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ot-panel-header h3 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-main);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ot-badge-info {
+  background-color: rgba(56, 189, 248, 0.15);
+  color: var(--accent-cyan);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.ot-badge-clean {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+/* Company Details */
+.ot-company-details {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ot-detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+}
+
+.ot-detail-label {
+  color: var(--text-muted);
+}
+
+.ot-detail-value {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.ot-text-muted {
+  color: var(--text-muted);
+}
+
+.ot-text-emerald {
+  color: var(--accent-emerald);
+}
+
+.ot-company-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px 14px;
+  background-color: rgba(15, 23, 42, 0.4);
+  border-top: 1px solid var(--border-color);
+}
+
+.ot-btn {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+}
+
+.ot-btn-primary {
+  background-color: var(--accent-blue);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.ot-btn-primary:hover {
+  background-color: #0369a1;
+}
+
+.ot-btn-secondary {
+  background-color: var(--bg-tertiary);
+  color: var(--text-main);
+  border: 1px solid var(--border-highlight);
+}
+
+.ot-btn-secondary:hover {
+  background-color: var(--border-highlight);
+}
+
+/* Subsystems Card */
+.ot-subsystems-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.ot-subsystems-list {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+}
+
+.ot-subsystem-row {
+  background-color: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px 10px;
+}
+
+.ot-subsystem-name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.ot-subsystem-details {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.ot-status-pill {
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.ot-status-uninitialized {
+  background-color: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.ot-status-inactive {
+  background-color: rgba(245, 158, 11, 0.15);
+  color: var(--accent-amber);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+/* Gateway Menu */
+.ot-gateway-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.ot-gateway-header {
+  padding: 14px 18px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ot-gateway-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  letter-spacing: 0.5px;
+}
+
+.ot-keyboard-guide {
+  font-size: 0.75rem;
+  color: var(--accent-amber);
+  font-weight: 600;
+}
+
+.ot-gateway-menu {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow-y: auto;
+}
+
+.ot-section-title {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+  padding-bottom: 3px;
+}
+
+.ot-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ot-menu-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  background-color: rgba(30, 41, 59, 0.5);
+  border: 1px solid transparent;
+  transition: all 0.1s ease;
+}
+
+.ot-menu-row:hover {
+  background-color: var(--bg-tertiary);
+  border-color: var(--border-highlight);
+}
+
+.ot-menu-row.ot-selected {
+  background-color: #0284c7;
+  border-color: #38bdf8;
+  color: #ffffff;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.3);
+}
+
+.ot-menu-row.ot-selected .ot-hotkey {
+  color: #fef08a;
+  text-decoration: underline;
+}
+
+.ot-menu-row.ot-selected .ot-item-badge {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+}
+
+.ot-item-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ot-hotkey {
+  color: var(--accent-amber);
+  font-weight: 800;
+}
+
+.ot-item-badge {
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 3px;
+  background-color: rgba(15, 23, 42, 0.6);
+  color: var(--text-muted);
+}
+
+.ot-gateway-footer {
+  padding: 10px 16px;
+  background-color: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* Status Bar */
+.ot-statusbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #020617;
+  border-top: 1px solid var(--border-color);
+  padding: 4px 16px;
+  height: 28px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.ot-status-left, .ot-status-center, .ot-status-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ot-status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ot-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--accent-emerald);
+  box-shadow: 0 0 6px var(--accent-emerald);
+}
+
+.ot-status-online {
+  color: #e2e8f0;
+}
+
+.ot-status-error {
+  color: var(--accent-rose);
+}
+
+.ot-status-segment {
+  border-left: 1px solid var(--border-color);
+  padding-left: 12px;
+}
+
+.ot-status-tag {
+  background-color: var(--bg-secondary);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+}
+
+.ot-refresh-btn {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-highlight);
+  color: var(--text-main);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  cursor: pointer;
+}
+
+.ot-refresh-btn:hover {
+  background: var(--border-highlight);
+}
+
+.ot-status-mode {
+  color: var(--accent-amber);
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+/* Modals */
+.ot-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: otFadeIn 0.15s ease-out;
+}
+
+.ot-modal-content {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-highlight);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 580px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+
+.ot-modal-lg {
+  max-width: 840px;
+}
+
+.ot-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background-color: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ot-modal-header h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+  margin: 0;
+}
+
+.ot-btn-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 4px;
+}
+
+.ot-btn-close:hover {
+  color: var(--accent-rose);
+}
+
+.ot-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 18px;
+  background-color: var(--bg-tertiary);
+  border-top: 1px solid var(--border-color);
+}
+
+.ot-modal-error {
+  background-color: rgba(244, 63, 94, 0.15);
+  border-left: 4px solid var(--accent-rose);
+  color: #fecdd3;
+  padding: 10px 14px;
+  font-size: 0.82rem;
+  margin: 12px 16px 0;
+  border-radius: 2px;
+}
+
+/* Forms */
+.ot-form {
+  padding: 16px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ot-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ot-form-group label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ot-form-group input,
+.ot-form-group select {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: var(--text-main);
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.ot-form-group input:focus,
+.ot-form-group select:focus {
+  border-color: var(--accent-cyan);
+}
+
+.ot-form-row {
+  display: flex;
+  gap: 12px;
+}
+
+.ot-form-row .ot-form-group {
+  flex: 1;
+}
+
+.ot-form-help {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.ot-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+/* Tables & Lists */
+.ot-company-list-container {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 200px;
+}
+
+.ot-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.ot-table th {
+  background-color: var(--bg-tertiary);
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.ot-table td {
+  padding: 10px;
+  border-bottom: 1px solid rgba(51, 65, 85, 0.4);
+}
+
+.ot-clickable-row {
+  cursor: pointer;
+  transition: background-color 0.12s ease;
+}
+
+.ot-clickable-row:hover {
+  background-color: rgba(56, 189, 248, 0.08);
+}
+
+.ot-row-active {
+  background-color: rgba(56, 189, 248, 0.12);
+}
+
+.ot-badge-active {
+  margin-left: 8px;
+  background-color: rgba(16, 185, 129, 0.2);
+  color: var(--accent-emerald);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+}
+
+.ot-fw-bold {
+  font-weight: 600;
+}
+
+.ot-action-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.ot-btn-sm {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  border-radius: 3px;
+}
+
+.ot-btn-warning {
+  background-color: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.4);
+  color: var(--accent-amber);
+}
+
+.ot-btn-warning:hover:not(:disabled) {
+  background-color: rgba(245, 158, 11, 0.3);
+}
+
+.ot-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ot-status-active {
+  background-color: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.ot-status-archived {
+  background-color: rgba(148, 163, 184, 0.15);
+  color: var(--text-muted);
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.ot-status-closed {
+  background-color: rgba(244, 63, 94, 0.15);
+  color: var(--accent-rose);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.ot-loading-text, .ot-empty-state {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+
