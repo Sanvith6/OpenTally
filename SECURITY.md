@@ -31,3 +31,4 @@ Instead, please report security vulnerabilities responsibly by:
 - We will acknowledge receipt of your vulnerability report within 48 hours.
 - We will work diligently to confirm the issue and develop a fix in a timely manner.
 - We kindly ask that you keep the issue confidential until a security patch has been released.
+

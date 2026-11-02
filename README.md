@@ -1,137 +1,176 @@
-# OpenTally
+<div align="center">
 
-[![Status: Active Development](https://img.shields.io/badge/Status-Active%20Development-blue.svg)](#current-implementation-status)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Backend: Rust](https://img.shields.io/badge/Core-Rust%20%7C%20Tauri%202-orange.svg)](#technology-stack)
-[![Frontend: React + TypeScript](https://img.shields.io/badge/Frontend-React%2018%20%7C%20TypeScript-blue.svg)](#technology-stack)
-[![Database: SQLite WAL](https://img.shields.io/badge/Storage-SQLite%20WAL-lightgrey.svg)](#technology-stack)
-[![Tests: 64 Passing](https://img.shields.io/badge/Tests-64%20Passing%20(100%25)-brightgreen.svg)](#testing--verification)
+# ⚡ OpenTally
 
-**OpenTally** is an independent, modern, high-performance, open-source accounting engine and desktop application designed to provide reliable double-entry accounting with observable behavior and wire-protocol interoperability with TallyPrime data formats.
+**The Modern, High-Performance Open-Source Accounting Engine & Desktop Suite**
 
-Built with **Tauri 2**, **Rust**, **SQLite (WAL mode)**, and **TypeScript / React 18**, OpenTally delivers sub-millisecond local financial operations, uncompromising double-entry arithmetic, and a rapid, keyboard-first desktop experience.
-
-> [!NOTE]
-> **Open Source & Project Status:** OpenTally is currently **under active development**. Phase 1 (Behavioral Research & Specification) and Sprint 1 (Company Management & Chart of Accounts) are fully implemented, verified, and passing 100% of automated tests. Sprint 2 (Voucher Management Engine) is fully specified and awaiting implementation. Contributions and discussions are welcome!
+*Built with Tauri 2, Rust, SQLite WAL, and React 18 • Engineered for bit-exact financial precision, keyboard-first velocity, and clean-room interoperability with TallyPrime observable behaviors.*
 
 ---
 
-## Table of Contents
+[![Status: Active Development](https://img.shields.io/badge/Status-Sprint%201%20Verified%20%7C%20Active%20Dev-0ea5e9?style=for-the-badge&logo=git&logoColor=white)](#current-implementation-status)
+[![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
+[![Core: Rust](https://img.shields.io/badge/Core-Rust%202021-f97316?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
+[![Desktop: Tauri 2](https://img.shields.io/badge/Desktop-Tauri%202.0-6366f1?style=for-the-badge&logo=tauri&logoColor=white)](https://v2.tauri.app/)
+[![UI: React + TypeScript](https://img.shields.io/badge/UI-React%2018%20%7C%20TypeScript-3b82f6?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
+[![Storage: SQLite WAL](https://img.shields.io/badge/Database-SQLite%20WAL-64748b?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Tests: 64 Passing](https://img.shields.io/badge/Tests-64%2F64%20Passing%20(100%25)-22c55e?style=for-the-badge&logo=githubactions&logoColor=white)](#testing--verification)
 
-- [Core Principles](#core-principles)
-- [Architecture & Clean-Room Methodology](#architecture--clean-room-methodology)
-- [Technology Stack](#technology-stack)
-- [Project Directory Structure](#project-directory-structure)
-- [Current Implementation Status](#current-implementation-status)
-- [Quickstart & Development Guide](#quickstart--development-guide)
-- [Testing & Verification](#testing--verification)
-- [Roadmap](#roadmap)
-- [Contributing](#contributing)
-- [Security & Bug Reports](#security--bug-reports)
-- [License & Legal Disclaimer](#license--legal-disclaimer)
+<p align="center">
+  <a href="#quickstart--development-guide">🚀 <b>Quickstart</b></a> •
+  <a href="#visual-showcase">📸 <b>Screenshots</b></a> •
+  <a href="#key-features">✨ <b>Features</b></a> •
+  <a href="#architecture--clean-room-methodology">🏛️ <b>Architecture</b></a> •
+  <a href="#keyboard-shortcuts-reference">⌨️ <b>Hotkeys</b></a> •
+  <a href="#project-roadmap">🗺️ <b>Roadmap</b></a> •
+  <a href="#contributing">🤝 <b>Contributing</b></a>
+</p>
 
----
-
-## Core Principles
-
-1. **Exact Financial Precision**: All monetary values are calculated using fixed-point decimal arithmetic (`rust_decimal` in Rust, `Decimal.js` in TypeScript). Binary floating-point representation (`f32`/`f64`) is strictly prohibited in monetary logic.
-2. **Immutable Double-Entry Accounting**: Vouchers once posted cannot be quietly modified in place. Adjustments occur through formal reversals and cancellations, preserving complete audit trails.
-3. **Clean-Room Software Engineering**: Specifications are authored exclusively from observable behavior, public standards, and wire formats. The core software is authored net-new without proprietary source code, decompiled assets, or proprietary database files.
-4. **Keyboard-First Ergonomics**: Native desktop hotkeys (`F4`–`F9`, `F2`, `Alt+F5`/`F6`, `Enter`, `Esc`) provide rapid, mouse-free accounting workflows.
-5. **Local-First & Offline-Ready**: All data resides locally in a dedicated SQLite database operating with Write-Ahead Logging (WAL) for high concurrency and crash resilience.
+</div>
 
 ---
 
-## Architecture & Clean-Room Methodology
+## 📸 Visual Showcase
 
-OpenTally is structured using a strict **Clean-Room Engineering** framework partitioned into two non-overlapping operational domains:
+<div align="center">
+
+### Chart of Accounts & Real-Time Double-Entry Equilibrium
+*Hierarchical account group tree, multi-level balance rollups, reserved system ledgers, and live Debit/Credit balance equilibrium verification.*
+
+![Chart of Accounts and Equilibrium](assets/screenshots/chart-of-accounts.png)
+
+</div>
+
+<br/>
+
+<div align="center">
+
+| Company Selection & Management Dashboard | Ledger Master Creation & Precision Math |
+| :---: | :---: |
+| ![Company Dashboard](assets/screenshots/dashboard.png) | ![Ledger Modal](assets/screenshots/ledger-modal.png) |
+| *Multi-company isolation, statutory financial year boundaries, leap-year validation, and soft-archival.* | *Exact decimal precision, account group selection, opening balance validation, and Dr/Cr direction.* |
+
+</div>
+
+---
+
+## ✨ Key Features
+
+<table>
+  <tr>
+    <td width="50%">
+      <h3>⚡ Native Desktop Velocity</h3>
+      <p>Sub-millisecond query execution, instantaneous startup, and negligible memory footprint powered by compiled <b>Rust</b> and <b>Tauri 2</b>. No heavy browser runtimes or bloated Electron containers.</p>
+    </td>
+    <td width="50%">
+      <h3>🎯 Bit-Exact Decimal Precision</h3>
+      <p>All monetary calculations are performed with 128-bit fixed-point decimal arithmetic via <code>rust_decimal</code>. Floating-point representation (<code>f32</code>/<code>f64</code>) is strictly banned across all ledger pipelines.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>⌨️ Keyboard-First Ergonomics</h3>
+      <p>Engineered for high-volume accountants and data-entry operators. Full keyboard workflow with traditional hotkeys (<code>F4</code>–<code>F9</code>, <code>Alt+F5</code>/<code>F6</code>, <code>F2</code>, <code>Enter</code>, <code>Esc</code>) to fly through vouchers without touching the mouse.</p>
+    </td>
+    <td width="50%">
+      <h3>⚖️ Double-Entry Equilibrium Assurance</h3>
+      <p>Continuous mathematical equilibrium assertion. Real-time balance rollup verifies $\sum \text{Debit} == \sum \text{Credit}$ across all 29 predefined statutory account groups and custom child hierarchies.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>🛡️ Clean-Room Legal Hygiene</h3>
+      <p>Net-new, independent implementation authored solely from observable behavioral research and accounting specifications. Zero proprietary binaries, <code>.tsf</code> data files, raw TDL source, or decompiled code.</p>
+    </td>
+    <td width="50%">
+      <h3>🔒 Local-First & 100% Offline</h3>
+      <p>Your financial records remain entirely on your machine. Embedded SQLite operating in Write-Ahead Logging (<code>WAL</code>) mode with atomic write transactions (<code>BEGIN IMMEDIATE</code>) ensures crash resilience and total privacy.</p>
+    </td>
+  </tr>
+</table>
+
+---
+
+## 🏛️ Architecture & Clean-Room Methodology
+
+OpenTally employs a strict **Clean-Room Engineering** methodology strictly partitioning behavioral research from independent implementation:
+
+```
+OpenTally/
+├── 01-clean-room-specs/   <─── DIRTY ROOM (Specification & Behavioral Research Domain)
+└── 02-open-tally/          <─── CLEAN ROOM (Independent Implementation & Testing Domain)
+```
+
+```mermaid
+flowchart TD
+    subgraph DIRTY_ROOM["01-clean-room-specs/ (Dirty Room)"]
+        A["Observable Behavioral Research"] --> B["Wire Protocol & Packet Captures"]
+        B --> C["Formal Data Contracts & Formulas"]
+        C --> D["Evidence Schemas & UNKNOWNS.md"]
+    end
+
+    DIRTY_ROOM -->|"Written Specifications Only (No Code/Binaries)"| CLEAN_ROOM
+
+    subgraph CLEAN_ROOM["02-open-tally/ (Clean Room)"]
+        subgraph UI["Desktop GUI Layer (React 18 + TS)"]
+            E["Keyboard Controller & Hotkeys"]
+            F["Gateway, CoA Tree & Modals"]
+            G["Live Equilibrium Indicator"]
+        end
+
+        UI <-->|"Tauri 2 IPC Bridge (11 Commands)"| CORE
+
+        subgraph CORE["Core Accounting Engine (Rust)"]
+            H["Fixed-Point Math (rust_decimal)"]
+            I["Multi-Company Isolation & Calendar Validation"]
+            J["29 Predefined Groups & Trigger Guards"]
+            K["Programmatic Migration Runner"]
+        end
+
+        CORE <-->|"Prepared Statements (sqlx)"| DB
+
+        subgraph DB["Transactional Storage (SQLite WAL)"]
+            L["Strict Foreign Keys (ON DELETE RESTRICT)"]
+            M["Composite Candidate Keys & Triggers"]
+            N["Immutable Audit Trail (audit_log)"]
+        end
+    end
+
+    style DIRTY_ROOM fill:#fef2f2,stroke:#ef4444,stroke-width:2px;
+    style CLEAN_ROOM fill:#f0fdf4,stroke:#22c55e,stroke-width:2px;
+    style UI fill:#eff6ff,stroke:#3b82f6;
+    style CORE fill:#fff7ed,stroke:#f97316;
+    style DB fill:#f8fafc,stroke:#64748b;
+```
+
+### Absolute Governance Guardrails
+1. **Dirty Room (`01-clean-room-specs/`)**: Protocol analysis, observable behavioral documentation, and specification authoring. Reverse engineering tooling is restricted strictly to authorized research producing documentation.
+2. **Clean Room (`02-open-tally/`)**: Net-new, independent software implementation authored strictly from written specifications. Proprietary executable binaries, proprietary database files (`.tsf`), raw TDL source code, extracted graphics, and decompiled code are **strictly prohibited**.
+
+---
+
+## 📁 Repository Tour
 
 ```text
 OpenTally/
-├── 01-clean-room-specs/   <-- DIRTY ROOM (Specification & Behavioral Research)
-└── 02-open-tally/          <-- CLEAN ROOM (Independent Implementation & Testing)
-```
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                   01-clean-room-specs/ (DIRTY ROOM)                    │
-│  - Observable wire protocol captures & schema manifests                │
-│  - Mathematical balance & valuation formulas                           │
-│  - Statutory Indian taxation and voucher numbering specifications       │
-│  - Ambiguity tracking in UNKNOWNS.md                                   │
-└───────────────────────────────────┬────────────────────────────────────┘
-                                    │ Written Specifications ONLY
-                                    │ (Zero Code / Binary Transfer)
-                                    ▼
-┌────────────────────────────────────────────────────────────────────────┐
-│                     02-open-tally/ (CLEAN ROOM)                        │
-│                                                                        │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │  Frontend: React 18 + TypeScript + Vite + TailwindCSS          │   │
-│   │  - Keyboard navigation, Gateway menu, reactive forms           │   │
-│   └───────────────────────────────┬────────────────────────────────┘   │
-│                                   │ Tauri IPC Commands                 │
-│                                   ▼                                    │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │  Core Engine: Tauri 2 + Rust                                   │   │
-│   │  - Decimal arithmetic (rust_decimal)                           │   │
-│   │  - Atomic transactions (BEGIN IMMEDIATE)                       │   │
-│   │  - Programmatic migration runner                               │   │
-│   └───────────────────────────────┬────────────────────────────────┘   │
-│                                   │ SQLx (Prepared Statements)         │
-│                                   ▼                                    │
-│   ┌────────────────────────────────────────────────────────────────┐   │
-│   │  Embedded Database: SQLite (WAL Mode)                          │   │
-│   │  - Strict foreign keys (PRAGMA foreign_keys = ON)              │   │
-│   │  - Schema integrity check constraints & immutability triggers  │   │
-│   └────────────────────────────────────────────────────────────────┘   │
-└────────────────────────────────────────────────────────────────────────┘
-```
-
-- **Dirty Room (`01-clean-room-specs/`)**: Protocol analysis, observable behavioral documentation, and specification authoring. Reverse engineering tooling is restricted strictly to authorized research tasks producing written documentation.
-- **Clean Room (`02-open-tally/`)**: Net-new, independent software implementation authored strictly from written functional specifications. Proprietary binaries, `.tsf` files, raw TDL source, and decompiled code are strictly forbidden.
-
----
-
-## Technology Stack
-
-| Layer | Technologies | Purpose |
-|:---|:---|:---|
-| **Desktop Shell** | [Tauri 2](https://v2.tauri.app/) | Secure, lightweight native window and OS integration |
-| **Backend Core** | [Rust](https://www.rust-lang.org/) (2021 edition) | Safe, high-performance accounting logic and concurrency control |
-| **Persistence** | [SQLite 3](https://www.sqlite.org/) via [sqlx](https://github.com/launchbadge/sqlx) | Embedded transactional storage with Write-Ahead Logging (WAL) |
-| **Precision Math**| [`rust_decimal`](https://crates.io/crates/rust_decimal) | 128-bit fixed-point decimal arithmetic for monetary amounts |
-| **Frontend UI** | [React 18](https://react.dev/), [TypeScript](https://www.typescriptlang.org/) | Declarative component hierarchy with strict type safety |
-| **Bundler / Dev** | [Vite](https://vitejs.dev/) | Sub-second hot module replacement (HMR) and fast builds |
-| **Styling & Icons** | [TailwindCSS](https://tailwindcss.com/), [Lucide React](https://lucide.dev/) | Keyboard-friendly, responsive interface styling |
-| **Testing** | `cargo test`, [Vitest](https://vitest.dev/), Python SQLite harnesses | Comprehensive unit, integration, and invariant test coverage |
-
----
-
-## Project Directory Structure
-
-```text
-OpenTally/
-├── .agents/                                 # Antigravity & ECC engineering rules, agents, & skills
-│   ├── rules/                              # Coding style, clean-room standards, testing requirements
-│   ├── agents/                             # Specialized subagents (planner, architect, tdd-guide, etc.)
-│   └── skills/                             # Accounting domain guides and verification workflows
+├── assets/                                  # Project badges, screenshots, and visual assets
+│   └── screenshots/                        # High-resolution desktop UI captures
 ├── 01-clean-room-specs/                    # Specification Domain (Dirty Room)
 │   └── tallyprime/                         # Wire formats, voucher matrices, and behavioral specs
 │       ├── accounting/                     # Ledger hierarchies and Chart of Accounts specifications
-│       ├── evidence/                       # Observable evidence schemas and validation templates
+│       ├── evidence/                       # Observable evidence schemas (YAML)
 │       ├── interoperability/               # HTTP/XML port 9000 communication catalog
 │       ├── inventory/                      # Stock items, units, and valuation specifications
 │       ├── taxation/                       # Indian GST, TDS, and TCS computation rules
 │       ├── vouchers/                       # Voucher types, numbering schemes, and posting rules
 │       └── UNKNOWNS.md                     # Structured protocol ambiguity tracking ledger
 ├── 02-open-tally/                          # Implementation Domain (Clean Room)
-│   ├── docs/                               # Architectural Decision Records (ADRs) & Technical Designs
-│   │   ├── ADR-001-embedded-database-selection.md     # SQLite WAL embedded database decision
+│   ├── docs/                               # Architecture Decision Records (ADRs) & Technical Designs
+│   │   ├── ADR-001-embedded-database-selection.md     # SQLite WAL embedded database selection
 │   │   ├── OPENTALLY_SPRINT1_FINAL_COMPLETION_REPORT.md # Sprint 1 completion documentation
 │   │   ├── OPENTALLY_SPRINT2_VOUCHER_ENGINE_TECHNICAL_DESIGN.md # Voucher engine specification (v2.9.4)
 │   │   └── README.md                       # Architecture document index
-│   ├── frontend/                           # Desktop User Interface (TypeScript / React)
+│   ├── frontend/                           # Desktop User Interface (TypeScript / React 18 / Vite)
 │   │   ├── src/
 │   │   │   ├── components/                 # Chart of Accounts, Company creation, Modals, Status bars
 │   │   │   ├── hooks/                      # Keyboard navigation and hotkey listeners
@@ -141,7 +180,7 @@ OpenTally/
 │   │   │   └── main.tsx                    # React DOM entry point
 │   │   ├── package.json
 │   │   └── vite.config.ts
-│   └── src-tauri/                          # Core Accounting Engine (Rust)
+│   └── src-tauri/                          # Core Accounting Engine (Rust / Tauri 2)
 │       ├── src/
 │       │   ├── accounting/                 # Chart of Accounts, 29 groups, 2 reserved ledgers, validation
 │       │   ├── app/                        # Application state container
@@ -155,7 +194,7 @@ OpenTally/
 │       │   └── main.rs                     # Desktop executable entry point
 │       ├── Cargo.toml
 │       └── tauri.conf.json
-├── OpenTally_Phase1_Complete_Research_Package/ # Phase 1 research documentation and knowledge package
+├── OpenTally_Phase1_Complete_Research_Package/ # Phase 1 research documentation & knowledge base
 ├── scratch/                                # Standalone verification test scripts for design validation
 ├── AGENTS.md                               # Multi-agent clean-room orchestration rules
 ├── CONTRIBUTING.md                         # Contributor guidelines and clean-room policy
@@ -167,29 +206,56 @@ OpenTally/
 
 ---
 
-## Current Implementation Status
+## ⌨️ Keyboard Shortcuts Reference
 
-### Phase 1: Behavioral Research & Specifications — COMPLETE
+OpenTally replicates standard accounting ergonomics:
+
+| Hotkey | Action | Scope | Description |
+|:---:|:---|:---:|:---|
+| <kbd>F2</kbd> | **Change Date** | Global | Change active working transaction date |
+| <kbd>F3</kbd> | **Select Company** | Global | Switch active company workspace |
+| <kbd>Alt</kbd> + <kbd>F3</kbd> | **Company Menu** | Global | Open Company Creation / Alteration modal |
+| <kbd>F4</kbd> | **Contra Voucher** | Voucher Entry | Cash ↔ Bank fund transfers |
+| <kbd>F5</kbd> | **Payment Voucher** | Voucher Entry | Money paid out (Cash / Bank) |
+| <kbd>F6</kbd> | **Receipt Voucher** | Voucher Entry | Money received (Cash / Bank) |
+| <kbd>F7</kbd> | **Journal Voucher** | Voucher Entry | General double-entry adjustment entries |
+| <kbd>F8</kbd> | **Sales Voucher** | Voucher Entry | Commercial sales invoices |
+| <kbd>F9</kbd> | **Purchase Voucher** | Voucher Entry | Commercial purchase invoices |
+| <kbd>Alt</kbd> + <kbd>F5</kbd> | **Debit Note** | Voucher Entry | Purchase returns / supplier debits |
+| <kbd>Alt</kbd> + <kbd>F6</kbd> | **Credit Note** | Voucher Entry | Sales returns / customer credits |
+| <kbd>F10</kbd> | **Other Vouchers** | Voucher Entry | Command palette for all 24 voucher types |
+| <kbd>Tab</kbd> / <kbd>Enter</kbd> | **Next Field** | Forms & Grids | Smooth keyboard field traversal |
+| <kbd>Esc</kbd> | **Back / Cancel** | Navigation | Return to previous menu or close active modal |
+| <kbd>Ctrl</kbd> + <kbd>Enter</kbd> | **Commit / Post** | Voucher Entry | Validate equilibrium and commit transaction |
+
+---
+
+## 📊 Current Implementation Status
+
+```
+[████████████████████████████████████████] Phase 1: Research & Specifications (100%)
+[████████████████████████████████████████] Sprint 1: Company & Chart of Accounts (100%)
+[████████████████████░░░░░░░░░░░░░░░░░░░░] Sprint 2: Voucher Management & Engine (Design Ready)
+[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Sprint 3: Financial Reporting (Scheduled)
+```
+
+### ✅ Phase 1: Behavioral Research & Specifications (Complete)
 - 10 research domains analyzed and documented in `01-clean-room-specs/`.
-- 10 evidence manifests compiled in `01-clean-room-specs/tallyprime/evidence/`.
-- Wire protocol and XML catalog created for Port 9000 interoperability.
-- Protocol ambiguity ledger maintained in `UNKNOWNS.md`.
+- 10 structured evidence manifests compiled in `01-clean-room-specs/tallyprime/evidence/`.
+- Port 9000 XML wire-protocol catalog authored for request/response interoperability.
 
-### Sprint 1: Company Management & Chart of Accounts — COMPLETE & VERIFIED
-- **Stage 1 (Desktop Shell)**: Tauri 2 desktop foundation with SQLite WAL mode and health IPC.
-- **Stage 2 (Company Management)**: Full company lifecycle (create, update, list, select, archive) with calendar validation (real date verification, leap-year Feb 29 handling, Indian FY `04-01` alignment, and `books_beginning_from` validation).
-- **Stage 3 (Chart of Accounts)**:
-  - 29 standard predefined account groups seeded automatically.
+### ✅ Sprint 1: Company Management & Chart of Accounts (Complete & Verified)
+- **Multi-Company Management**: Full CRUD lifecycle, active company persistence across desktop restarts, statutory Indian FY date validation (`04-01`), leap-year handling (Feb 29), and soft-archival (`is_archived = 1`).
+- **Standard Chart of Accounts**:
+  - 29 standard predefined account groups automatically seeded upon company creation.
   - 2 reserved system ledgers (`Cash` under `Cash-in-Hand`, `Profit & Loss A/c` under system group) protected by database triggers.
-  - User-defined account groups with circular hierarchy prevention and multi-company isolation.
-  - Standard user ledgers with opening balance validation, exact decimal scaling, and double-entry equilibrium rollup.
-  - 11 registered and verified Tauri IPC commands.
-- **Automated Tests**: **64 executed production tests passing (100%)**:
-  - Rust Backend: 52 passing (`cargo test`).
-  - Frontend Vitest: 12 passing (`npm test`).
+  - Recursive tree rollup with circular parent-child loop detection.
+  - Multi-company boundary isolation enforced via composite foreign keys.
+- **Opening Balances**: Exact decimal normalization with `rust_decimal`, scale validation against `currency_decimal_places`, and real-time double-entry equilibrium rollup.
+- **IPC Interface**: 11 registered, verified Tauri IPC commands connecting React to Rust.
 
-### Sprint 2: Voucher Management & Posting Engine — TECHNICAL DESIGN APPROVED (v2.9.4)
-- Comprehensive technical design document in `02-open-tally/docs/OPENTALLY_SPRINT2_VOUCHER_ENGINE_TECHNICAL_DESIGN.md`.
+### 📐 Sprint 2: Voucher Management & Posting Engine (Technical Design v2.9.4 Approved)
+- Full technical specification in `02-open-tally/docs/OPENTALLY_SPRINT2_VOUCHER_ENGINE_TECHNICAL_DESIGN.md`.
 - Normalized numbering series master (`voucher_number_series`) with immutable reset frequencies (`yearly`, `monthly`, `daily`, `never`).
 - Effective-dated numbering configurations (`voucher_number_configs`) with dynamic periodic tokens (`{YY-YY}`, `{YYYY-MM}`, etc.).
 - Complete 13-step atomic voucher reversal pipeline under predefined `Reversing Journal` (`vt_reversing_journal`) with dedicated `REV` series.
@@ -199,12 +265,11 @@ OpenTally/
 
 ---
 
-## Quickstart & Development Guide
+## 🚀 Quickstart & Development Guide
 
 ### Prerequisites
 - **Rust**: Version 1.80+ or 1.99+ (`rustup default stable`)
 - **Node.js**: Version 20 LTS or newer (`node -v`)
-- **npm** or **pnpm**
 - **C++ Build Tools**: Visual Studio Build Tools with C++ on Windows (required for Tauri and SQLite compilation)
 
 ### 1. Clone the Repository
@@ -213,29 +278,29 @@ git clone -b feature/phase1 https://github.com/Sanvith6/OpenTally.git
 cd OpenTally
 ```
 
-### 2. Frontend Setup & Verification
+### 2. Install Frontend Dependencies & Verify
 ```bash
 cd 02-open-tally/frontend
 npm install
 npm test            # Run 12 Vitest frontend tests
-npm run build       # Build production web bundle
+npm run build       # Verify production web bundle compilation
 cd ../..
 ```
 
-### 3. Backend Setup & Verification
+### 3. Build & Test Rust Core
 ```bash
 cd 02-open-tally/src-tauri
-cargo test          # Run 52 Rust backend tests
-cargo clippy        # Check linter warnings
+cargo test          # Run 52 Rust backend unit and integration tests
+cargo clippy        # Check strict linter rules
 cd ../..
 ```
 
-### 4. Running the Desktop Application in Development Mode
+### 4. Launch Desktop Application
 ```bash
 cd 02-open-tally/src-tauri
 cargo run
 ```
-*Alternatively, from the frontend directory with live reload:*
+*Alternatively, for hot module reload during frontend UI development:*
 ```bash
 cd 02-open-tally/frontend
 npm run tauri dev
@@ -243,9 +308,9 @@ npm run tauri dev
 
 ---
 
-## Testing & Verification
+## 🧪 Testing & Verification
 
-OpenTally employs a multi-tiered testing strategy ensuring absolute mathematical and transactional correctness:
+OpenTally maintains a strict **Test-Driven Development (TDD)** discipline targeting 80%+ code coverage:
 
 ```bash
 # 1. Run all Rust core unit and integration tests (52 tests)
@@ -254,57 +319,76 @@ cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
 # 2. Run all frontend component tests (12 tests)
 npm --prefix 02-open-tally/frontend test -- --run
 
-# 3. Run Sprint 2 Technical Design invariant verification (19 checks)
+# 3. Verify Sprint 2 Technical Design schema & invariant checks (19 checks)
 python scratch/verify_v294.py
 
-# 4. Run standalone SQLite schema and trigger validation
+# 4. Verify isolated SQLite schema and trigger behavior
 python scratch/test_v294_schema_and_config.py
 ```
 
-### Test Coverage Summary
-- **Unit Tests**: Group tree recursion, opening balance decimal normalization, calendar date validation, leap-year calculations.
-- **Integration Tests**: Multi-company isolation, transaction rollbacks on failure, database migrations, reserved ledger triggers.
-- **Security Tests**: Cross-company foreign key rejections, hidden system group protections, immutable audit log triggers.
+### Test Suite Breakdown
+
+| Test Suite | Tests | Status | Scope |
+|:---|:---:|:---:|:---|
+| **Rust Backend Tests** | 52 | **PASSED** | Multi-company isolation, calendar validation, recursive tree rollups, trigger guards, migration rollback. |
+| **Frontend Vitest Tests** | 12 | **PASSED** | Chart of Accounts hierarchy, keyboard traversal, modal forms, equilibrium bar. |
+| **Document Invariants** | 19 | **PASSED** | Static schema integrity, DDL candidate keys, composite foreign keys, trigger definitions. |
+| **Total Automated Tests** | **83** | **100% PASS** | Zero regressions across all tiers. |
 
 ---
 
-## Roadmap
+## 🗺️ Project Roadmap
 
-| Sprint | Scope | Status |
-|:---:|:---|:---:|
-| **Sprint 0** | Desktop foundation (Tauri 2, React 18, SQLite WAL, IPC health) | **COMPLETED** |
-| **Sprint 1** | Company Management, 29 Account Groups, 2 Reserved Ledgers, Chart of Accounts, Opening Balances | **COMPLETED** |
-| **Sprint 2** | Voucher Management, 24 Voucher Types, Numbering Series Engine, 13-Step Reversals | **DESIGNED (v2.9.4)** |
-| **Sprint 3** | Financial Reporting (Trial Balance, P&L, Balance Sheet, Day Book, Cash/Bank Books) | Planned |
-| **Sprint 4** | Inventory Master (Stock Items, Units of Measure, Godowns/Warehouses, Batch Tracking) | Planned |
-| **Sprint 5** | Statutory Taxation (Indian GST, e-Invoicing, Tax Ledgers, TDS/TCS computation) | Planned |
-| **Sprint 6** | Port 9000 Local HTTP/XML Server, TDL Query Parser, Import/Export Pipeline | Planned |
+```mermaid
+gantt
+    title OpenTally Development Roadmap
+    dateFormat  YYYY-MM-DD
+    section Phase 1 & Foundation
+    Phase 1: Behavioral Research & Specs :done, 2026-10-01, 2026-10-25
+    Sprint 0: Desktop Foundation (Tauri 2 + SQLite) :done, 2026-10-26, 2026-10-31
+    Sprint 1: Company & Chart of Accounts :done, 2026-11-01, 2026-11-01
+    section Phase 2: Core Accounting
+    Sprint 2: Voucher Engine & Posting Pipeline :active, 2026-11-02, 2026-11-15
+    Sprint 3: Financial Statements & Reports :2026-11-16, 2026-11-30
+    section Phase 3: Commercial & Interop
+    Sprint 4: Inventory, Stock & Godowns :2026-12-01, 2026-12-20
+    Sprint 5: Indian Taxation (GST e-Invoicing) :2026-12-21, 2027-01-15
+    Sprint 6: Port 9000 HTTP/XML Listener & TDL :2027-01-16, 2027-02-10
+```
 
 ---
 
-## Contributing
+## 🤝 Contributing
 
-We welcome contributions from accounting professionals, Rust developers, and frontend engineers!
+We actively welcome contributions from software engineers, UI/UX designers, and accounting professionals!
 
-Please read our [**CONTRIBUTING.md**](CONTRIBUTING.md) before submitting pull requests.
+Please review our [**CONTRIBUTING.md**](CONTRIBUTING.md) guide before opening pull requests.
 
-### Clean-Room Contribution Rule
+### Clean-Room Engineering Pledge
 To preserve independent copyright hygiene:
-- Never submit decompiled code, proprietary binary dumps, proprietary database files (`.tsf`), or raw extracted TDL source code.
-- Net-new code must be written independently from behavioral specifications, public accounting standards (GAAP / ICAI / MCA), or observable input/output behavior.
+- **Never submit decompiled code, proprietary binary dumps, `.tsf` data files, or proprietary TDL code.**
+- All clean-room implementation code must be authored independently from functional behavioral specifications or standard double-entry accounting principles (ICAI / MCA / GAAP).
 
 ---
 
-## Security & Bug Reports
+## 🔒 Security & Vulnerability Reporting
 
-For security issues and vulnerability disclosures, please review [**SECURITY.md**](SECURITY.md). Please do not open public issues for sensitive security vulnerabilities.
+Security and financial data privacy are fundamental to OpenTally.
+
+Please report security issues responsibly via **[GitHub Private Vulnerability Reporting](https://github.com/Sanvith6/OpenTally/security/advisories/new)** or by emailing `sanvitjs68@gmail.com`. Do not report security vulnerabilities through public GitHub issues. See [**SECURITY.md**](SECURITY.md) for full details.
 
 ---
 
-## License & Legal Disclaimer
+## ⚖️ License & Trademark Notice
 
 ### License
-OpenTally is open-source software licensed under the [**MIT License**](LICENSE).
+OpenTally is free and open-source software distributed under the terms of the **[MIT License](LICENSE)**.
 
-### Legal Disclaimer
-OpenTally is an independent open-source project and is not affiliated, endorsed, or associated with Tally Solutions Pvt. Ltd. "Tally" and "TallyPrime" are registered trademarks of Tally Solutions Pvt. Ltd. Observable behaviors, wire formats, and public accounting interfaces referenced in this project are analyzed strictly under clean-room engineering principles for the purpose of software interoperability.
+### Trademark Notice
+OpenTally is an independent open-source project and is not affiliated, endorsed, or sponsored by Tally Solutions Pvt. Ltd. "Tally" and "TallyPrime" are registered trademarks of Tally Solutions Pvt. Ltd. Observable behaviors, wire formats, and public accounting interfaces referenced in this project are analyzed strictly under clean-room engineering principles for the sole purpose of software interoperability.
+
+---
+
+<div align="center">
+  <sub>Crafted with precision for the open-source accounting community.</sub>
+</div>

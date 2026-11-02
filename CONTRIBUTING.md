@@ -86,3 +86,4 @@ Use standard Conventional Commits format:
 1. Push your branch to GitHub.
 2. Open a Pull Request against the appropriate branch.
 3. Include a clear description of the change, test evidence, and confirmation that no proprietary code or decompilations were used.
+
