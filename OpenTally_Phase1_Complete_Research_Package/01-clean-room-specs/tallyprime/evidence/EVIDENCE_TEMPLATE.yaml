@@ -1,0 +1,18 @@
+evidence_id: "EVD-WORKSTREAM-000"
+target_product: "TallyPrime"
+target_version: "Release 4.1"
+target_build: "Build 4.1.001 / Desk Reference"
+platform: "Windows 11 x64 (Clean Room Observation Target)"
+observation_timestamp: "2026-11-01T07:00:00Z"
+observation_method: "DESK_OFFICIAL_DOCS"
+source_identity: "OpenTally REA Clean-Room Agent"
+target_identity: "Tally Solutions Official Documentation & XML Developer Reference"
+original_evidence_sha256: "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+sanitized_evidence_location: "01-clean-room-specs/tallyprime/vouchers/README.md"
+observation_description: "Behavioral observation description detailing preconditions, steps, observed state changes, and responses."
+confidence: "OFFICIAL_DOCUMENTATION"
+limitations:
+  - "Observed via published developer and user manuals without active live socket execution."
+related_spec: "01-clean-room-specs/tallyprime/vouchers/README.md"
+unresolved_questions:
+  - "Validation behavior when invalid input is submitted via HTTP interface."

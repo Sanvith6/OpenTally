@@ -1,0 +1,37 @@
+# OpenTally Observable Evidence Metadata Manifest
+# Schema Reference: 01-clean-room-specs/tallyprime/evidence/EVIDENCE_SCHEMA.md
+
+evidence_id: "EVD-[AREA]-[000]"
+target_product:
+  name: "TallyPrime"
+  release: "Release 4.1" # Example: populate with exact observed version
+  build_number: "Build 12345"
+  bitness: "x64"
+  platform: "Windows 11 Pro 23H2"
+
+observation_timestamp: "2026-11-01T00:00:00Z"
+observation_method: "PCAP_CAPTURE" # Options: PCAP_CAPTURE | HTTP_CLIENT_INTERACTION | LOCAL_EXPORT_ANALYSIS | ODBC_QUERY_TRACE | PROCESS_OBSERVATION
+
+source_and_target_identity:
+  client_identity: "Test HTTP Client (127.0.0.1:54321)"
+  target_service: "TallyPrime Server (127.0.0.1:9000)"
+
+original_evidence_sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+sanitized_evidence_location: "01-clean-room-specs/tallyprime/evidence/wire/EVD-[AREA]-[000]-sanitized.xml"
+
+observation_description: >
+  Summary of the observation. Detail the input stimulus provided, the sequence of events,
+  and the observed output response.
+
+confidence_classification: "VERIFIED_OBSERVATION" # Options: VERIFIED_OBSERVATION | INTERPRETATION | HYPOTHESIS | UNKNOWN
+
+limitations:
+  - "Observed only on single-user local educational/test license."
+  - "Multi-currency and remote synchronization modules were disabled."
+
+related_specification:
+  - "01-clean-room-specs/tallyprime/interoperability/http-xml-server.md"
+
+unresolved_questions:
+  - "Related Unknown reference: UNK-001"
+
