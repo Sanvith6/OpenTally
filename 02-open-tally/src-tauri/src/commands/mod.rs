@@ -531,6 +531,573 @@ pub async fn set_opening_balance(
     exec_set_opening_balance(&state, req).await
 }
 
+// ---------------------------------------------------------------------------
+// Voucher Type & Numbering Series IPC Commands (Sprint 2 Stage 2)
+// ---------------------------------------------------------------------------
+
+pub async fn exec_list_voucher_types(
+    state: &AppState,
+) -> Result<Vec<crate::vouchers::VoucherType>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherTypeService::list_voucher_types(state.db.pool(), &company_id).await
+}
+
+#[tauri::command]
+pub async fn list_voucher_types(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<crate::vouchers::VoucherType>, OpenTallyError> {
+    exec_list_voucher_types(&state).await
+}
+
+pub async fn exec_get_voucher_type(
+    state: &AppState,
+    id: String,
+) -> Result<crate::vouchers::VoucherType, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherTypeService::get_voucher_type(state.db.pool(), &company_id, &id).await
+}
+
+#[tauri::command]
+pub async fn get_voucher_type(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::vouchers::VoucherType, OpenTallyError> {
+    exec_get_voucher_type(&state, id).await
+}
+
+pub async fn exec_create_voucher_series(
+    state: &AppState,
+    req: crate::vouchers::CreateVoucherSeriesRequest,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::create_series(state.db.pool(), &company_id, req).await
+}
+
+#[tauri::command]
+pub async fn create_voucher_series(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::CreateVoucherSeriesRequest,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    exec_create_voucher_series(&state, req).await
+}
+
+pub async fn exec_list_voucher_series(
+    state: &AppState,
+    voucher_type_id: String,
+) -> Result<Vec<crate::vouchers::VoucherNumberSeries>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::list_series_by_voucher_type(
+        state.db.pool(),
+        &company_id,
+        &voucher_type_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_voucher_series(
+    state: tauri::State<'_, AppState>,
+    voucher_type_id: String,
+) -> Result<Vec<crate::vouchers::VoucherNumberSeries>, OpenTallyError> {
+    exec_list_voucher_series(&state, voucher_type_id).await
+}
+
+pub async fn exec_get_voucher_series(
+    state: &AppState,
+    id: String,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::get_series(state.db.pool(), &company_id, &id).await
+}
+
+#[tauri::command]
+pub async fn get_voucher_series(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    exec_get_voucher_series(&state, id).await
+}
+
+pub async fn exec_update_voucher_series(
+    state: &AppState,
+    id: String,
+    req: crate::vouchers::UpdateVoucherSeriesRequest,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::update_series(state.db.pool(), &company_id, &id, req)
+        .await
+}
+
+#[tauri::command]
+pub async fn update_voucher_series(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    req: crate::vouchers::UpdateVoucherSeriesRequest,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    exec_update_voucher_series(&state, id, req).await
+}
+
+pub async fn exec_deactivate_voucher_series(
+    state: &AppState,
+    id: String,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::deactivate_series(state.db.pool(), &company_id, &id)
+        .await
+}
+
+#[tauri::command]
+pub async fn deactivate_voucher_series(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::vouchers::VoucherNumberSeries, OpenTallyError> {
+    exec_deactivate_voucher_series(&state, id).await
+}
+
+pub async fn exec_delete_voucher_series(
+    state: &AppState,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::delete_series(state.db.pool(), &company_id, &id).await
+}
+
+#[tauri::command]
+pub async fn delete_voucher_series(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    exec_delete_voucher_series(&state, id).await
+}
+
+pub async fn exec_create_voucher_number_config(
+    state: &AppState,
+    series_id: String,
+    req: crate::vouchers::CreateVoucherNumberConfigRequest,
+) -> Result<crate::vouchers::VoucherNumberConfig, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::create_configuration(
+        state.db.pool(),
+        &company_id,
+        &series_id,
+        req,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn create_voucher_number_config(
+    state: tauri::State<'_, AppState>,
+    series_id: String,
+    req: crate::vouchers::CreateVoucherNumberConfigRequest,
+) -> Result<crate::vouchers::VoucherNumberConfig, OpenTallyError> {
+    exec_create_voucher_number_config(&state, series_id, req).await
+}
+
+pub async fn exec_list_voucher_number_configs(
+    state: &AppState,
+    series_id: String,
+) -> Result<Vec<crate::vouchers::VoucherNumberConfig>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherSeriesService::list_configurations(
+        state.db.pool(),
+        &company_id,
+        &series_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_voucher_number_configs(
+    state: tauri::State<'_, AppState>,
+    series_id: String,
+) -> Result<Vec<crate::vouchers::VoucherNumberConfig>, OpenTallyError> {
+    exec_list_voucher_number_configs(&state, series_id).await
+}
+
+// ---------------------------------------------------------------------------
+// Stage 3: Numbering Configuration Resolution & Safe Sequence Diagnostics IPC Commands
+// ---------------------------------------------------------------------------
+
+pub async fn exec_resolve_effective_voucher_config(
+    state: &AppState,
+    series_id: String,
+    voucher_date: String,
+) -> Result<crate::vouchers::EffectiveNumberConfig, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    let mut conn = state
+        .db
+        .pool()
+        .acquire()
+        .await
+        .map_err(OpenTallyError::Database)?;
+    crate::vouchers::VoucherSequenceService::resolve_effective_config(
+        &mut conn,
+        &company_id,
+        &series_id,
+        &voucher_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn resolve_effective_voucher_config(
+    state: tauri::State<'_, AppState>,
+    series_id: String,
+    voucher_date: String,
+) -> Result<crate::vouchers::EffectiveNumberConfig, OpenTallyError> {
+    exec_resolve_effective_voucher_config(&state, series_id, voucher_date).await
+}
+
+pub async fn exec_inspect_voucher_sequence(
+    state: &AppState,
+    req: crate::vouchers::InspectSequenceRequest,
+) -> Result<crate::vouchers::SequenceRecoveryReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    let mut conn = state
+        .db
+        .pool()
+        .acquire()
+        .await
+        .map_err(OpenTallyError::Database)?;
+    crate::vouchers::VoucherSequenceService::inspect_sequence(
+        &mut conn,
+        &company_id,
+        &req.series_id,
+        &req.period_start,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn inspect_voucher_sequence(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::InspectSequenceRequest,
+) -> Result<crate::vouchers::SequenceRecoveryReport, OpenTallyError> {
+    exec_inspect_voucher_sequence(&state, req).await
+}
+
+pub async fn exec_resync_voucher_sequence(
+    state: &AppState,
+    req: crate::vouchers::ResyncSequenceRequest,
+) -> Result<crate::vouchers::SequenceRecoveryReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    let mut tx = state
+        .db
+        .pool()
+        .begin()
+        .await
+        .map_err(OpenTallyError::Database)?;
+    let report = crate::vouchers::VoucherSequenceService::resync_voucher_sequence(
+        &mut tx,
+        &company_id,
+        &req.series_id,
+        &req.period_start,
+        "admin",
+        &req.resolution_mode,
+        req.resolution_reason.as_deref(),
+    )
+    .await?;
+    tx.commit().await.map_err(OpenTallyError::Database)?;
+    Ok(report)
+}
+
+#[tauri::command]
+pub async fn resync_voucher_sequence(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::ResyncSequenceRequest,
+) -> Result<crate::vouchers::SequenceRecoveryReport, OpenTallyError> {
+    exec_resync_voucher_sequence(&state, req).await
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 2 Stage 4: Voucher Creation & Draft Management IPC Commands
+// ---------------------------------------------------------------------------
+
+pub async fn exec_create_voucher_draft(
+    state: &AppState,
+    req: crate::vouchers::CreateVoucherDraftRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::create_draft(state.db.pool(), &company_id, req).await
+}
+
+#[tauri::command]
+pub async fn create_voucher_draft(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::CreateVoucherDraftRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    exec_create_voucher_draft(&state, req).await
+}
+
+pub async fn exec_get_voucher_draft(
+    state: &AppState,
+    voucher_id: String,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::get_draft(state.db.pool(), &company_id, &voucher_id).await
+}
+
+#[tauri::command]
+pub async fn get_voucher_draft(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    exec_get_voucher_draft(&state, voucher_id).await
+}
+
+pub async fn exec_list_voucher_drafts(
+    state: &AppState,
+    filter: crate::vouchers::VoucherFilter,
+) -> Result<crate::vouchers::PaginatedResponse<crate::vouchers::VoucherSummary>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::list_drafts(state.db.pool(), &company_id, filter).await
+}
+
+#[tauri::command]
+pub async fn list_voucher_drafts(
+    state: tauri::State<'_, AppState>,
+    filter: crate::vouchers::VoucherFilter,
+) -> Result<crate::vouchers::PaginatedResponse<crate::vouchers::VoucherSummary>, OpenTallyError> {
+    exec_list_voucher_drafts(&state, filter).await
+}
+
+pub async fn exec_update_voucher_draft(
+    state: &AppState,
+    voucher_id: String,
+    req: crate::vouchers::UpdateVoucherDraftRequest,
+) -> Result<crate::vouchers::Voucher, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::update_draft_header(
+        state.db.pool(),
+        &company_id,
+        &voucher_id,
+        req,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn update_voucher_draft(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+    req: crate::vouchers::UpdateVoucherDraftRequest,
+) -> Result<crate::vouchers::Voucher, OpenTallyError> {
+    exec_update_voucher_draft(&state, voucher_id, req).await
+}
+
+pub async fn exec_delete_voucher_draft(
+    state: &AppState,
+    voucher_id: String,
+) -> Result<(), OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::delete_draft(state.db.pool(), &company_id, &voucher_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn delete_voucher_draft(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+) -> Result<(), OpenTallyError> {
+    exec_delete_voucher_draft(&state, voucher_id).await
+}
+
+pub async fn exec_add_voucher_line(
+    state: &AppState,
+    voucher_id: String,
+    req: crate::vouchers::AddVoucherLineRequest,
+) -> Result<crate::vouchers::VoucherLine, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::add_line(state.db.pool(), &company_id, &voucher_id, req)
+        .await
+}
+
+#[tauri::command]
+pub async fn add_voucher_line(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+    req: crate::vouchers::AddVoucherLineRequest,
+) -> Result<crate::vouchers::VoucherLine, OpenTallyError> {
+    exec_add_voucher_line(&state, voucher_id, req).await
+}
+
+pub async fn exec_update_voucher_line(
+    state: &AppState,
+    voucher_id: String,
+    line_id: String,
+    req: crate::vouchers::UpdateVoucherLineRequest,
+) -> Result<crate::vouchers::VoucherLine, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::update_line(
+        state.db.pool(),
+        &company_id,
+        &voucher_id,
+        &line_id,
+        req,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn update_voucher_line(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+    line_id: String,
+    req: crate::vouchers::UpdateVoucherLineRequest,
+) -> Result<crate::vouchers::VoucherLine, OpenTallyError> {
+    exec_update_voucher_line(&state, voucher_id, line_id, req).await
+}
+
+pub async fn exec_delete_voucher_line(
+    state: &AppState,
+    voucher_id: String,
+    line_id: String,
+) -> Result<(), OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::delete_line(
+        state.db.pool(),
+        &company_id,
+        &voucher_id,
+        &line_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_voucher_line(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+    line_id: String,
+) -> Result<(), OpenTallyError> {
+    exec_delete_voucher_line(&state, voucher_id, line_id).await
+}
+
+pub async fn exec_reorder_voucher_lines(
+    state: &AppState,
+    voucher_id: String,
+    req: crate::vouchers::ReorderVoucherLinesRequest,
+) -> Result<Vec<crate::vouchers::VoucherLine>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::reorder_lines(
+        state.db.pool(),
+        &company_id,
+        &voucher_id,
+        req,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn reorder_voucher_lines(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+    req: crate::vouchers::ReorderVoucherLinesRequest,
+) -> Result<Vec<crate::vouchers::VoucherLine>, OpenTallyError> {
+    exec_reorder_voucher_lines(&state, voucher_id, req).await
+}
+
+pub async fn exec_save_voucher_draft(
+    state: &AppState,
+    req: crate::vouchers::SaveVoucherDraftRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherDraftService::save_draft(state.db.pool(), &company_id, req).await
+}
+
+#[tauri::command]
+pub async fn save_voucher_draft(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::SaveVoucherDraftRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    exec_save_voucher_draft(&state, req).await
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 2 Stage 5B: Voucher Posting Engine IPC Command
+// ---------------------------------------------------------------------------
+
+pub async fn exec_post_voucher(
+    state: &AppState,
+    req: crate::vouchers::PostVoucherRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherPostingService::post_voucher(
+        state.db.pool(),
+        &company_id,
+        &req.voucher_id,
+        req.actor_id.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn post_voucher(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::PostVoucherRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    exec_post_voucher(&state, req).await
+}
+
+// ---------------------------------------------------------------------------
+// Voucher Cancellation, Reversal & Correction IPC Commands (Sprint 2 Stage 6)
+// ---------------------------------------------------------------------------
+
+pub async fn exec_cancel_voucher(
+    state: &AppState,
+    req: crate::vouchers::CancelVoucherRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherCancellationService::cancel_voucher(state.db.pool(), &company_id, req)
+        .await
+}
+
+#[tauri::command]
+pub async fn cancel_voucher(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::CancelVoucherRequest,
+) -> Result<crate::vouchers::VoucherWithLines, OpenTallyError> {
+    exec_cancel_voucher(&state, req).await
+}
+
+pub async fn exec_reverse_voucher(
+    state: &AppState,
+    req: crate::vouchers::ReverseVoucherRequest,
+) -> Result<crate::vouchers::ReversalResult, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherReversalService::reverse_voucher(state.db.pool(), &company_id, req)
+        .await
+}
+
+#[tauri::command]
+pub async fn reverse_voucher(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::ReverseVoucherRequest,
+) -> Result<crate::vouchers::ReversalResult, OpenTallyError> {
+    exec_reverse_voucher(&state, req).await
+}
+
+pub async fn exec_create_correction_draft(
+    state: &AppState,
+    req: crate::vouchers::CreateCorrectionDraftRequest,
+) -> Result<crate::vouchers::CorrectionResult, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherCorrectionService::create_correction_draft(
+        state.db.pool(),
+        &company_id,
+        req,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn create_correction_draft(
+    state: tauri::State<'_, AppState>,
+    req: crate::vouchers::CreateCorrectionDraftRequest,
+) -> Result<crate::vouchers::CorrectionResult, OpenTallyError> {
+    exec_create_correction_draft(&state, req).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -555,8 +1122,8 @@ mod tests {
         assert_eq!(report.app_name, "OpenTally");
         assert_eq!(report.status, "healthy");
         assert!(report.database.is_connected);
-        assert_eq!(report.database.foreign_keys_enabled, true);
-        assert_eq!(report.security.encryption_active, false);
+        assert!(report.database.foreign_keys_enabled);
+        assert!(!report.security.encryption_active);
         assert_eq!(report.subsystems[1].status, "specifications_documented");
         assert_eq!(report.subsystems.len(), 5);
     }
@@ -717,5 +1284,757 @@ mod tests {
         exec_delete_account_group(&state, updated_group.id.clone())
             .await
             .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_all_10_registered_voucher_masters_ipc_commands() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("cmd_voucher_test.db");
+        let db = DatabaseManager::init(&db_path).await.unwrap();
+        crate::database::migrations::run_sprint1_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_stage3_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_sprint2_migration(db.pool())
+            .await
+            .unwrap();
+
+        let config = AppConfig::default();
+        let state = AppState::new(config, Arc::new(db));
+
+        // Rejection when no active company
+        assert!(exec_list_voucher_types(&state).await.is_err());
+        assert!(exec_get_voucher_type(&state, "vt_sales".to_string())
+            .await
+            .is_err());
+        assert!(exec_list_voucher_series(&state, "vt_sales".to_string())
+            .await
+            .is_err());
+
+        // Create and select active company
+        let comp = crate::company::service::CompanyService::create_company(
+            state.db.pool(),
+            crate::company::model::CreateCompanyRequest {
+                name: "Voucher Master IPC Test Co".to_string(),
+                mailing_name: None,
+                country: None,
+                state: None,
+                financial_year_begins: "2026-04-01".to_string(),
+                books_beginning_from: None,
+                currency_symbol: None,
+                currency_formal_name: None,
+                currency_decimal_places: Some(2),
+            },
+        )
+        .await
+        .unwrap();
+
+        *state.active_company_id.write().unwrap() = Some(comp.id.clone());
+
+        // 1. exec_list_voucher_types
+        let types = exec_list_voucher_types(&state).await.unwrap();
+        assert_eq!(types.len(), 24);
+
+        // 2. exec_get_voucher_type
+        let vt = exec_get_voucher_type(&state, "vt_sales".to_string())
+            .await
+            .unwrap();
+        assert_eq!(vt.name, "Sales");
+
+        // 3. exec_create_voucher_series
+        let series = exec_create_voucher_series(
+            &state,
+            crate::vouchers::CreateVoucherSeriesRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_name: "Export Series".to_string(),
+                series_code: "EXP".to_string(),
+                numbering_method: "automatic".to_string(),
+                restart_period: "yearly".to_string(),
+                applicable_from: Some("2026-04-01".to_string()),
+                prefix: Some("EXP/{YY-YY}/".to_string()),
+                suffix: None,
+                start_number: Some(1),
+                width: Some(4),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(series.series_code, "EXP");
+
+        // 4. exec_list_voucher_series
+        let series_list = exec_list_voucher_series(&state, "vt_sales".to_string())
+            .await
+            .unwrap();
+        assert_eq!(series_list.len(), 1);
+        assert_eq!(series_list[0].id, series.id);
+
+        // 5. exec_get_voucher_series
+        let fetched_series = exec_get_voucher_series(&state, series.id.clone())
+            .await
+            .unwrap();
+        assert_eq!(fetched_series.series_name, "Export Series");
+
+        // 6. exec_update_voucher_series
+        let updated_series = exec_update_voucher_series(
+            &state,
+            series.id.clone(),
+            crate::vouchers::UpdateVoucherSeriesRequest {
+                series_name: Some("Overseas Export Series".to_string()),
+                is_active: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated_series.series_name, "Overseas Export Series");
+
+        // 7. exec_create_voucher_number_config
+        let config2 = exec_create_voucher_number_config(
+            &state,
+            series.id.clone(),
+            crate::vouchers::CreateVoucherNumberConfigRequest {
+                applicable_from: "2027-04-01".to_string(),
+                prefix: Some("EXP/{YY-YY}-V2/".to_string()),
+                suffix: None,
+                start_number: Some(1),
+                width: Some(4),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(config2.applicable_from, "2027-04-01");
+
+        // 8. exec_list_voucher_number_configs
+        let configs = exec_list_voucher_number_configs(&state, series.id.clone())
+            .await
+            .unwrap();
+        assert_eq!(configs.len(), 2);
+
+        // 9. exec_deactivate_voucher_series
+        let deactivated = exec_deactivate_voucher_series(&state, series.id.clone())
+            .await
+            .unwrap();
+        assert!(!deactivated.is_active);
+
+        // 10. exec_delete_voucher_series
+        exec_delete_voucher_series(&state, series.id.clone())
+            .await
+            .unwrap();
+        assert!(exec_get_voucher_series(&state, series.id.clone())
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_stage3_registered_voucher_ipc_commands() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("cmd_stage3_test.db");
+        let db = DatabaseManager::init(&db_path).await.unwrap();
+        crate::database::migrations::run_sprint1_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_stage3_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_sprint2_migration(db.pool())
+            .await
+            .unwrap();
+
+        let config = AppConfig::default();
+        let state = AppState::new(config, Arc::new(db));
+
+        let comp = crate::company::service::CompanyService::create_company(
+            state.db.pool(),
+            crate::company::model::CreateCompanyRequest {
+                name: "Stage 3 IPC Test Co".to_string(),
+                mailing_name: None,
+                country: None,
+                state: None,
+                financial_year_begins: "2026-04-01".to_string(),
+                books_beginning_from: None,
+                currency_symbol: None,
+                currency_formal_name: None,
+                currency_decimal_places: Some(2),
+            },
+        )
+        .await
+        .unwrap();
+
+        *state.active_company_id.write().unwrap() = Some(comp.id.clone());
+
+        let series = exec_create_voucher_series(
+            &state,
+            crate::vouchers::CreateVoucherSeriesRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_name: "Domestic Sales".to_string(),
+                series_code: "DOM".to_string(),
+                numbering_method: "automatic".to_string(),
+                restart_period: "yearly".to_string(),
+                applicable_from: Some("2026-04-01".to_string()),
+                prefix: Some("DOM/{YY-YY}/".to_string()),
+                suffix: None,
+                start_number: Some(1),
+                width: Some(4),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 1. exec_resolve_effective_voucher_config
+        let eff = exec_resolve_effective_voucher_config(
+            &state,
+            series.id.clone(),
+            "2026-08-15".to_string(),
+        )
+        .await
+        .unwrap();
+        assert_eq!(eff.prefix, "DOM/{YY-YY}/");
+        assert_eq!(eff.period_start, "2026-04-01");
+
+        // 2. exec_inspect_voucher_sequence
+        let insp = exec_inspect_voucher_sequence(
+            &state,
+            crate::vouchers::InspectSequenceRequest {
+                series_id: series.id.clone(),
+                period_start: "2026-04-01".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(insp.start_number_baseline, 1);
+        assert_eq!(insp.previous_next_number, 1);
+
+        // 3. exec_resync_voucher_sequence
+        let resync = exec_resync_voucher_sequence(
+            &state,
+            crate::vouchers::ResyncSequenceRequest {
+                series_id: series.id.clone(),
+                period_start: "2026-04-01".to_string(),
+                resolution_mode: "strict".to_string(),
+                resolution_reason: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(resync.new_next_number, 1);
+    }
+
+    #[tokio::test]
+    async fn test_stage4_registered_voucher_draft_ipc_commands() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("cmd_stage4_test.db");
+        let db = DatabaseManager::init(&db_path).await.unwrap();
+        crate::database::migrations::run_sprint1_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_stage3_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_sprint2_migration(db.pool())
+            .await
+            .unwrap();
+
+        let config = AppConfig::default();
+        let state = AppState::new(config, Arc::new(db));
+
+        // Create company & select as active
+        let company = crate::company::CompanyService::create_company(
+            state.db.pool(),
+            crate::company::CreateCompanyRequest {
+                name: "Stage 4 IPC Test Co".to_string(),
+                mailing_name: None,
+                country: None,
+                state: None,
+                financial_year_begins: "2026-04-01".to_string(),
+                books_beginning_from: None,
+                currency_symbol: None,
+                currency_formal_name: None,
+                currency_decimal_places: Some(2),
+            },
+        )
+        .await
+        .unwrap();
+
+        *state.active_company_id.write().unwrap() = Some(company.id.clone());
+
+        // Create a test series
+        let series = exec_create_voucher_series(
+            &state,
+            crate::vouchers::CreateVoucherSeriesRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_name: "Draft Series".to_string(),
+                series_code: "DFT".to_string(),
+                numbering_method: "automatic".to_string(),
+                restart_period: "yearly".to_string(),
+                applicable_from: Some("2026-04-01".to_string()),
+                prefix: Some("DFT/{YY-YY}/".to_string()),
+                suffix: None,
+                start_number: Some(1),
+                width: Some(4),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Create test ledger
+        let group_id = "grp_cmd_stage4".to_string();
+        sqlx::query(
+            "INSERT INTO account_groups (id, company_id, name, parent_id, nature, is_primary)
+             VALUES ($1, $2, 'Current Assets IPC', NULL, 'Assets', 1)",
+        )
+        .bind(&group_id)
+        .bind(&company.id)
+        .execute(state.db.pool())
+        .await
+        .unwrap();
+
+        let ledger1_id = "led1_cmd_stage4".to_string();
+        let ledger2_id = "led2_cmd_stage4".to_string();
+        sqlx::query(
+            "INSERT INTO ledgers (id, company_id, group_id, name, is_reserved, ledger_classification)
+             VALUES ($1, $2, $3, 'Cash Test', 0, 'standard'), ($4, $2, $3, 'Sales Test', 0, 'standard')",
+        )
+        .bind(&ledger1_id)
+        .bind(&company.id)
+        .bind(&group_id)
+        .bind(&ledger2_id)
+        .execute(state.db.pool())
+        .await
+        .unwrap();
+
+        // 1. exec_create_voucher_draft
+        let draft = exec_create_voucher_draft(
+            &state,
+            crate::vouchers::CreateVoucherDraftRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_id: series.id.clone(),
+                date: "2026-05-15".to_string(),
+                effective_date: None,
+                reference_no: Some("REF-001".to_string()),
+                reference_date: None,
+                narration: Some("Draft IPC test".to_string()),
+                lines: Some(vec![crate::vouchers::VoucherLineInput {
+                    id: None,
+                    ledger_id: ledger1_id.clone(),
+                    entry_type: "Dr".to_string(),
+                    amount: "2500.00".to_string(),
+                    narration: None,
+                }]),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(draft.voucher.status, "draft");
+        assert_eq!(draft.lines.len(), 1);
+
+        // 2. exec_get_voucher_draft
+        let fetched = exec_get_voucher_draft(&state, draft.voucher.id.clone())
+            .await
+            .unwrap();
+        assert_eq!(fetched.voucher.id, draft.voucher.id);
+
+        // 3. exec_list_voucher_drafts
+        let drafts_list =
+            exec_list_voucher_drafts(&state, crate::vouchers::VoucherFilter::default())
+                .await
+                .unwrap();
+        assert_eq!(drafts_list.items.len(), 1);
+
+        // 4. exec_update_voucher_draft
+        let updated_hdr = exec_update_voucher_draft(
+            &state,
+            draft.voucher.id.clone(),
+            crate::vouchers::UpdateVoucherDraftRequest {
+                narration: Some("Updated via IPC".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated_hdr.narration, Some("Updated via IPC".to_string()));
+
+        // 5. exec_add_voucher_line
+        let line2 = exec_add_voucher_line(
+            &state,
+            draft.voucher.id.clone(),
+            crate::vouchers::AddVoucherLineRequest {
+                ledger_id: ledger2_id.clone(),
+                entry_type: "Cr".to_string(),
+                amount: "2500.00".to_string(),
+                narration: None,
+                line_number: None,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(line2.line_number, 2);
+
+        // 6. exec_update_voucher_line
+        let line2_updated = exec_update_voucher_line(
+            &state,
+            draft.voucher.id.clone(),
+            line2.id.clone(),
+            crate::vouchers::UpdateVoucherLineRequest {
+                amount: Some("3000.00".to_string()),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(line2_updated.amount, "3000.00");
+
+        // 7. exec_reorder_voucher_lines
+        let line1_id = draft.lines[0].id.clone();
+        let reordered = exec_reorder_voucher_lines(
+            &state,
+            draft.voucher.id.clone(),
+            crate::vouchers::ReorderVoucherLinesRequest {
+                line_ids: vec![line2.id.clone(), line1_id.clone()],
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(reordered[0].id, line2.id);
+        assert_eq!(reordered[0].line_number, 1);
+
+        // 8. exec_delete_voucher_line
+        exec_delete_voucher_line(&state, draft.voucher.id.clone(), line2.id.clone())
+            .await
+            .unwrap();
+        let after_line_del = exec_get_voucher_draft(&state, draft.voucher.id.clone())
+            .await
+            .unwrap();
+        assert_eq!(after_line_del.lines.len(), 1);
+
+        // 9. exec_save_voucher_draft (atomic replace)
+        let saved = exec_save_voucher_draft(
+            &state,
+            crate::vouchers::SaveVoucherDraftRequest {
+                voucher_id: Some(draft.voucher.id.clone()),
+                voucher_type_id: "vt_sales".to_string(),
+                series_id: series.id.clone(),
+                date: "2026-05-20".to_string(),
+                effective_date: None,
+                reference_no: Some("REF-SAVED".to_string()),
+                reference_date: None,
+                narration: Some("Saved atomic".to_string()),
+                lines: vec![
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: ledger1_id.clone(),
+                        entry_type: "Dr".to_string(),
+                        amount: "5000.00".to_string(),
+                        narration: None,
+                    },
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: ledger2_id.clone(),
+                        entry_type: "Cr".to_string(),
+                        amount: "5000.00".to_string(),
+                        narration: None,
+                    },
+                ],
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(saved.lines.len(), 2);
+        assert!(saved.is_balanced);
+
+        // 10. exec_post_voucher
+        let posted = exec_post_voucher(
+            &state,
+            crate::vouchers::PostVoucherRequest {
+                voucher_id: saved.voucher.id.clone(),
+                actor_id: Some("operator_test".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(posted.voucher.status, "posted");
+        assert!(posted.voucher.sequence_number.is_some());
+
+        // 11. exec_delete_voucher_draft (deleting posted voucher is rejected)
+        assert!(exec_delete_voucher_draft(&state, draft.voucher.id.clone())
+            .await
+            .is_err());
+    }
+
+    #[tokio::test]
+    async fn test_stage6_registered_voucher_cancellation_reversal_correction_ipc_commands() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let db_path = temp_dir.path().join("cmd_stage6_test.db");
+        let db = DatabaseManager::init(&db_path).await.unwrap();
+        crate::database::migrations::run_sprint1_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_stage3_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_sprint2_migration(db.pool())
+            .await
+            .unwrap();
+        crate::database::migrations::run_sprint2_stage4_hardening_migration(db.pool())
+            .await
+            .unwrap();
+
+        let config = AppConfig::default();
+        let state = AppState::new(config, Arc::new(db));
+
+        // Create company & select as active
+        let company = crate::company::CompanyService::create_company(
+            state.db.pool(),
+            crate::company::CreateCompanyRequest {
+                name: "Stage 6 IPC Test Co".to_string(),
+                mailing_name: None,
+                country: None,
+                state: None,
+                financial_year_begins: "2026-04-01".to_string(),
+                books_beginning_from: None,
+                currency_symbol: None,
+                currency_formal_name: None,
+                currency_decimal_places: Some(2),
+            },
+        )
+        .await
+        .unwrap();
+
+        *state.active_company_id.write().unwrap() = Some(company.id.clone());
+
+        // Create Sales series
+        let sales_series = exec_create_voucher_series(
+            &state,
+            crate::vouchers::CreateVoucherSeriesRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_name: "Sales Primary".to_string(),
+                series_code: "SALES".to_string(),
+                numbering_method: "automatic".to_string(),
+                restart_period: "yearly".to_string(),
+                applicable_from: Some("2026-04-01".to_string()),
+                prefix: Some("SAL/{YY-YY}/".to_string()),
+                suffix: None,
+                start_number: Some(1),
+                width: Some(4),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Create Reversal series
+        exec_create_voucher_series(
+            &state,
+            crate::vouchers::CreateVoucherSeriesRequest {
+                voucher_type_id: "vt_reversing_journal".to_string(),
+                series_name: "Reversal Primary".to_string(),
+                series_code: "REV".to_string(),
+                numbering_method: "automatic".to_string(),
+                restart_period: "yearly".to_string(),
+                applicable_from: Some("2026-04-01".to_string()),
+                prefix: Some("REV/{YY-YY}/".to_string()),
+                suffix: None,
+                start_number: Some(1),
+                width: Some(4),
+            },
+        )
+        .await
+        .unwrap();
+
+        // Create Ledgers
+        let group_id = "grp_cmd_stage6".to_string();
+        sqlx::query(
+            "INSERT INTO account_groups (id, company_id, name, parent_id, nature, is_primary)
+             VALUES ($1, $2, 'Current Assets IPC 6', NULL, 'Assets', 1)",
+        )
+        .bind(&group_id)
+        .bind(&company.id)
+        .execute(state.db.pool())
+        .await
+        .unwrap();
+
+        let cash_id = "cash_cmd_stage6".to_string();
+        let sales_id = "sales_cmd_stage6".to_string();
+        sqlx::query(
+            "INSERT INTO ledgers (id, company_id, group_id, name, is_reserved, ledger_classification)
+             VALUES ($1, $2, $3, 'Cash Test 6', 0, 'standard'), ($4, $2, $3, 'Sales Test 6', 0, 'standard')",
+        )
+        .bind(&cash_id)
+        .bind(&company.id)
+        .bind(&group_id)
+        .bind(&sales_id)
+        .execute(state.db.pool())
+        .await
+        .unwrap();
+
+        // Post Voucher 1 for cancellation test
+        let draft1 = exec_create_voucher_draft(
+            &state,
+            crate::vouchers::CreateVoucherDraftRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_id: sales_series.id.clone(),
+                date: "2026-05-10".to_string(),
+                effective_date: None,
+                reference_no: Some("INV-001".to_string()),
+                reference_date: None,
+                narration: Some("To be cancelled".to_string()),
+                lines: Some(vec![
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: cash_id.clone(),
+                        entry_type: "Dr".to_string(),
+                        amount: "1000.00".to_string(),
+                        narration: None,
+                    },
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: sales_id.clone(),
+                        entry_type: "Cr".to_string(),
+                        amount: "1000.00".to_string(),
+                        narration: None,
+                    },
+                ]),
+            },
+        )
+        .await
+        .unwrap();
+
+        let posted1 = exec_post_voucher(
+            &state,
+            crate::vouchers::PostVoucherRequest {
+                voucher_id: draft1.voucher.id.clone(),
+                actor_id: Some("operator_ipc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 1. Test exec_cancel_voucher
+        let cancelled = exec_cancel_voucher(
+            &state,
+            crate::vouchers::CancelVoucherRequest {
+                voucher_id: posted1.voucher.id.clone(),
+                reason: "Customer cancelled transaction".to_string(),
+                actor_id: Some("operator_ipc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(cancelled.voucher.status, "cancelled");
+
+        // Post Voucher 2 for reversal test
+        let draft2 = exec_create_voucher_draft(
+            &state,
+            crate::vouchers::CreateVoucherDraftRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_id: sales_series.id.clone(),
+                date: "2026-05-12".to_string(),
+                effective_date: None,
+                reference_no: Some("INV-002".to_string()),
+                reference_date: None,
+                narration: Some("To be reversed".to_string()),
+                lines: Some(vec![
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: cash_id.clone(),
+                        entry_type: "Dr".to_string(),
+                        amount: "2000.00".to_string(),
+                        narration: None,
+                    },
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: sales_id.clone(),
+                        entry_type: "Cr".to_string(),
+                        amount: "2000.00".to_string(),
+                        narration: None,
+                    },
+                ]),
+            },
+        )
+        .await
+        .unwrap();
+
+        let posted2 = exec_post_voucher(
+            &state,
+            crate::vouchers::PostVoucherRequest {
+                voucher_id: draft2.voucher.id.clone(),
+                actor_id: Some("operator_ipc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 2. Test exec_reverse_voucher
+        let rev_result = exec_reverse_voucher(
+            &state,
+            crate::vouchers::ReverseVoucherRequest {
+                original_voucher_id: posted2.voucher.id.clone(),
+                reversal_date: "2026-05-15".to_string(),
+                reason: "Incorrect client charged".to_string(),
+                actor_id: Some("operator_ipc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(rev_result.original_voucher.voucher.status, "reversed");
+        assert_eq!(rev_result.reversing_voucher.voucher.status, "posted");
+
+        // Post Voucher 3 for correction draft test
+        let draft3 = exec_create_voucher_draft(
+            &state,
+            crate::vouchers::CreateVoucherDraftRequest {
+                voucher_type_id: "vt_sales".to_string(),
+                series_id: sales_series.id.clone(),
+                date: "2026-05-18".to_string(),
+                effective_date: None,
+                reference_no: Some("INV-003".to_string()),
+                reference_date: None,
+                narration: Some("To be corrected".to_string()),
+                lines: Some(vec![
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: cash_id.clone(),
+                        entry_type: "Dr".to_string(),
+                        amount: "3000.00".to_string(),
+                        narration: None,
+                    },
+                    crate::vouchers::VoucherLineInput {
+                        id: None,
+                        ledger_id: sales_id.clone(),
+                        entry_type: "Cr".to_string(),
+                        amount: "3000.00".to_string(),
+                        narration: None,
+                    },
+                ]),
+            },
+        )
+        .await
+        .unwrap();
+
+        let posted3 = exec_post_voucher(
+            &state,
+            crate::vouchers::PostVoucherRequest {
+                voucher_id: draft3.voucher.id.clone(),
+                actor_id: Some("operator_ipc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+        // 3. Test exec_create_correction_draft
+        let cor_result = exec_create_correction_draft(
+            &state,
+            crate::vouchers::CreateCorrectionDraftRequest {
+                original_voucher_id: posted3.voucher.id.clone(),
+                reversal_date: Some("2026-05-19".to_string()),
+                reversal_reason: "Price revised downward".to_string(),
+                actor_id: Some("operator_ipc".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(cor_result.original_voucher.voucher.status, "reversed");
+        assert_eq!(cor_result.reversing_voucher.voucher.status, "posted");
+        assert_eq!(cor_result.corrected_draft.voucher.status, "draft");
+        assert_eq!(cor_result.corrected_draft.lines.len(), 2);
     }
 }

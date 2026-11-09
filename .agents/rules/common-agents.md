@@ -25,8 +25,9 @@ Agent(subagent_type: "ecc:planner", prompt: "...")
 | ecc:doc-updater | Documentation | Updating docs |
 | ecc:rust-reviewer | Rust code review | Rust projects |
 | ecc:harmonyos-app-resolver | HarmonyOS app development | HarmonyOS/ArkTS projects |
+| ecc:frontman-engineer | Visual frontend development & live DOM editing | Visual layout, computed CSS, element-driven fixes |
 
-For the full roster of 69 agents, see `/ecc:ecc-guide`.
+For the full roster of 70 agents, see `/ecc:ecc-guide`.
 
 ## Immediate Agent Usage
 
@@ -35,6 +36,7 @@ No user prompt needed:
 2. Code just written/modified - Use **ecc:code-reviewer** agent
 3. Bug fix or new feature - Use **ecc:tdd-guide** agent
 4. Architectural decision - Use **ecc:architect** agent
+5. Visual frontend layout bug or live element edit - Use **ecc:frontman-engineer** agent
 
 ## Parallel Task Execution
 

@@ -1,5 +1,9 @@
 use crate::errors::OpenTallyError;
 pub mod migrations;
+#[cfg(test)]
+mod stage1_tests;
+#[cfg(test)]
+mod stage4_hardening_migration_tests;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
@@ -194,8 +198,8 @@ mod tests {
         let health = db.check_health().await.expect("Failed health check");
         assert!(health.is_connected);
         assert_eq!(health.schema_version, "0.1.0-sprint0");
-        assert_eq!(health.foreign_keys_enabled, true);
-        assert_eq!(health.encryption_enabled, false);
+        assert!(health.foreign_keys_enabled);
+        assert!(!health.encryption_enabled);
         assert!(!health.journal_mode.is_empty());
     }
 
@@ -211,9 +215,9 @@ mod tests {
         let health = db.check_health().await.expect("Failed health check");
         assert!(health.is_connected);
         assert_eq!(health.journal_mode.to_lowercase(), "wal");
-        assert_eq!(health.foreign_keys_enabled, true);
+        assert!(health.foreign_keys_enabled);
         assert_eq!(health.schema_version, "0.1.0-sprint0");
-        assert_eq!(health.encryption_enabled, false);
+        assert!(!health.encryption_enabled);
     }
 
     #[tokio::test]

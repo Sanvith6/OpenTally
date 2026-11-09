@@ -42,6 +42,9 @@ pub fn run() {
                 let m = DatabaseManager::init(&db_path).await?;
                 crate::database::migrations::run_sprint1_migration(m.pool()).await?;
                 crate::database::migrations::run_stage3_migration(m.pool()).await?;
+                crate::database::migrations::run_sprint2_migration(m.pool()).await?;
+                crate::database::migrations::run_sprint2_stage4_hardening_migration(m.pool())
+                    .await?;
                 Ok::<_, crate::errors::OpenTallyError>(m)
             })
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -71,7 +74,34 @@ pub fn run() {
             commands::create_ledger,
             commands::update_ledger,
             commands::delete_ledger,
-            commands::set_opening_balance
+            commands::set_opening_balance,
+            commands::list_voucher_types,
+            commands::get_voucher_type,
+            commands::create_voucher_series,
+            commands::list_voucher_series,
+            commands::get_voucher_series,
+            commands::update_voucher_series,
+            commands::deactivate_voucher_series,
+            commands::delete_voucher_series,
+            commands::create_voucher_number_config,
+            commands::list_voucher_number_configs,
+            commands::resolve_effective_voucher_config,
+            commands::inspect_voucher_sequence,
+            commands::resync_voucher_sequence,
+            commands::create_voucher_draft,
+            commands::get_voucher_draft,
+            commands::list_voucher_drafts,
+            commands::update_voucher_draft,
+            commands::delete_voucher_draft,
+            commands::add_voucher_line,
+            commands::update_voucher_line,
+            commands::delete_voucher_line,
+            commands::reorder_voucher_lines,
+            commands::save_voucher_draft,
+            commands::post_voucher,
+            commands::cancel_voucher,
+            commands::reverse_voucher,
+            commands::create_correction_draft
         ])
         .run(tauri::generate_context!())
         .expect("Error while running OpenTally desktop application");

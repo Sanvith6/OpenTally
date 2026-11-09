@@ -6,6 +6,8 @@ import { StatusBar } from './components/StatusBar';
 import { CompanyFormModal } from './components/CompanyFormModal';
 import { CompanySelectModal } from './components/CompanySelectModal';
 import { ChartOfAccountsView } from './components/ChartOfAccountsView';
+import { VoucherMastersView } from './components/VoucherMastersView';
+import { VoucherEntryView } from './components/vouchers/VoucherEntryView';
 import { fetchHealth, getActiveCompany } from './services/api';
 import { HealthResponse, Company } from './types';
 import './App.css';
@@ -19,10 +21,16 @@ export function App() {
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('view') === 'chart_of_accounts'
       ? 'chart_of_accounts'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'voucher_masters'
+      ? 'voucher_masters'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'voucher_entry'
+      ? 'voucher_entry'
       : 'gateway';
-  const [currentView, setCurrentView] = useState<'gateway' | 'chart_of_accounts'>(
-    initialView
-  );
+  const [currentView, setCurrentView] = useState<
+    'gateway' | 'chart_of_accounts' | 'voucher_masters' | 'voucher_entry'
+  >(initialView);
 
   // Company management state
   const initialModal =
@@ -129,11 +137,23 @@ export function App() {
         </div>
       )}
 
-      <main className="ot-workspace" style={currentView === 'chart_of_accounts' ? { padding: 0 } : undefined}>
+      <main className="ot-workspace" style={currentView !== 'gateway' ? { padding: 0 } : undefined}>
         {currentView === 'chart_of_accounts' ? (
           <ChartOfAccountsView
             activeCompany={activeCompany}
             onBackToGateway={() => setCurrentView('gateway')}
+          />
+        ) : currentView === 'voucher_masters' ? (
+          <VoucherMastersView
+            activeCompany={activeCompany}
+            onBackToGateway={() => setCurrentView('gateway')}
+            onSwitchToEntry={() => setCurrentView('voucher_entry')}
+          />
+        ) : currentView === 'voucher_entry' ? (
+          <VoucherEntryView
+            activeCompany={activeCompany}
+            onBackToGateway={() => setCurrentView('gateway')}
+            onSwitchToMasters={() => setCurrentView('voucher_masters')}
           />
         ) : (
           <div className="ot-workspace-grid">
@@ -174,6 +194,13 @@ export function App() {
                       setIsSelectModalOpen(true);
                     } else {
                       setCurrentView('chart_of_accounts');
+                    }
+                  } else if (item.id === 'vouchers') {
+                    if (!activeCompany) {
+                      showNotification('Please select or create an active company first (F3).');
+                      setIsSelectModalOpen(true);
+                    } else {
+                      setCurrentView('voucher_entry');
                     }
                   } else {
                     showNotification(

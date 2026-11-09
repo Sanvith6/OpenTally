@@ -184,3 +184,5 @@ export interface ChartOfAccountsTree {
   nodes: ChartOfAccountsTreeNode[];
   equilibrium: OpeningBalanceEquilibrium;
 }
+
+export * from './voucher';

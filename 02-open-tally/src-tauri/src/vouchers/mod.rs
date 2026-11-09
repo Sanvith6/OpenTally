@@ -1,19 +1,34 @@
-//! Voucher Engine Module (Sprint 0 Foundation)
+//! Voucher Engine Module (Sprint 2 Stage 2)
 //!
-//! Note on Voucher Invariants:
-//! - Hard deletion of posted vouchers is strictly prohibited.
-//! - Vouchers must transition to CANCELLED state or be offset by reversing entries.
-//! - All voucher postings must commit atomically across ledger, stock, and audit tables.
-//!
-//! Scope Notice:
-//! The 24 predefined voucher types, numbering series, and posting pipelines
-//! will be implemented in Phase 2, Sprint 2 in accordance with
+//! Handles Voucher Types and Numbering Series Masters according to
 //! `01-clean-room-specs/tallyprime/vouchers/`.
 
-/// Placeholder descriptor for the voucher subsystem.
-pub struct VoucherSubsystem;
+pub mod formatter;
+pub mod model;
+pub mod service;
+pub mod validator;
 
-impl VoucherSubsystem {
-    pub const MODULE_NAME: &'static str = "vouchers";
-    pub const STATUS: &'static str = "foundation_ready";
-}
+#[cfg(test)]
+pub mod stage3_tests;
+#[cfg(test)]
+pub mod stage4_tests;
+#[cfg(test)]
+pub mod stage5a_tests;
+#[cfg(test)]
+pub mod stage5b_tests;
+#[cfg(test)]
+pub mod stage6_tests;
+#[cfg(test)]
+pub mod stage7_domain_tests;
+#[cfg(test)]
+pub mod tests;
+
+pub use formatter::CanonicalVoucherFormatter;
+pub use model::*;
+pub use service::{
+    derive_period_start, validate_period_consistency, DoubleEntryValidator,
+    VoucherCancellationService, VoucherCorrectionService, VoucherDraftService,
+    VoucherPostingService, VoucherReversalService, VoucherSequenceService, VoucherSeriesService,
+    VoucherTypeService,
+};
+pub use validator::*;

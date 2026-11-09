@@ -14,6 +14,28 @@ import {
   SetOpeningBalanceInput,
   ChartOfAccountsTree,
   ChartOfAccountsTreeNode,
+  VoucherType,
+  VoucherNumberSeries,
+  VoucherNumberConfig,
+  CreateVoucherSeriesRequest,
+  UpdateVoucherSeriesRequest,
+  CreateVoucherNumberConfigRequest,
+  EffectiveNumberConfig,
+  SequenceRecoveryReport,
+  InspectSequenceRequest,
+  ResyncSequenceRequest,
+  Voucher,
+  VoucherLine,
+  VoucherWithLines,
+  VoucherSummary,
+  CreateVoucherDraftRequest,
+  UpdateVoucherDraftRequest,
+  AddVoucherLineRequest,
+  UpdateVoucherLineRequest,
+  ReorderVoucherLinesRequest,
+  SaveVoucherDraftRequest,
+  VoucherFilter,
+  PaginatedResponse,
 } from '../types';
 
 function getWebPreviewMock(): HealthResponse {
@@ -428,3 +450,643 @@ export async function setOpeningBalance(req: SetOpeningBalanceInput): Promise<Op
   }
   return await invoke<OpeningBalance | null>('set_opening_balance', { req });
 }
+
+// ---------------------------------------------------------------------------
+// Voucher Types & Series Masters (Sprint 2 Stage 2)
+// ---------------------------------------------------------------------------
+
+const MOCK_PREDEFINED_VOUCHER_TYPES: VoucherType[] = [
+  { id: 'vt_contra', company_id: 'cmp_demo_01', name: 'Contra', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_payment', company_id: 'cmp_demo_01', name: 'Payment', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_receipt', company_id: 'cmp_demo_01', name: 'Receipt', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_jnl', company_id: 'cmp_demo_01', name: 'Journal', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_sales', company_id: 'cmp_demo_01', name: 'Sales', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_pur', company_id: 'cmp_demo_01', name: 'Purchase', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_credit_note', company_id: 'cmp_demo_01', name: 'Credit Note', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_debit_note', company_id: 'cmp_demo_01', name: 'Debit Note', category: 'accounting', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_reversing_journal', company_id: 'cmp_demo_01', name: 'Reversing Journal', category: 'scenario', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_memorandum', company_id: 'cmp_demo_01', name: 'Memorandum', category: 'non_financial', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_sales_order', company_id: 'cmp_demo_01', name: 'Sales Order', category: 'order', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_purchase_order', company_id: 'cmp_demo_01', name: 'Purchase Order', category: 'order', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_delivery_note', company_id: 'cmp_demo_01', name: 'Delivery Note', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_receipt_note', company_id: 'cmp_demo_01', name: 'Receipt Note', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_rejections_in', company_id: 'cmp_demo_01', name: 'Rejections In', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_rejections_out', company_id: 'cmp_demo_01', name: 'Rejections Out', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_stock_journal', company_id: 'cmp_demo_01', name: 'Stock Journal', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_physical_stock', company_id: 'cmp_demo_01', name: 'Physical Stock', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_material_in', company_id: 'cmp_demo_01', name: 'Material In', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_material_out', company_id: 'cmp_demo_01', name: 'Material Out', category: 'inventory', parent_type: null, affects_ledger_balance: false, affects_inventory: true, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_job_work_in_order', company_id: 'cmp_demo_01', name: 'Job Work In Order', category: 'order', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_job_work_out_order', company_id: 'cmp_demo_01', name: 'Job Work Out Order', category: 'order', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_attendance', company_id: 'cmp_demo_01', name: 'Attendance', category: 'payroll', parent_type: null, affects_ledger_balance: false, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+  { id: 'vt_payroll', company_id: 'cmp_demo_01', name: 'Payroll', category: 'payroll', parent_type: null, affects_ledger_balance: true, affects_inventory: false, is_predefined: true, is_active: true, numbering_method: 'automatic', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+];
+
+let mockSeries: VoucherNumberSeries[] = [
+  {
+    id: 'ser_demo_sales_01',
+    company_id: 'cmp_demo_01',
+    voucher_type_id: 'vt_sales',
+    series_name: 'Main Tax Invoice',
+    series_code: 'TAX',
+    numbering_method: 'automatic',
+    restart_period: 'yearly',
+    is_active: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
+let mockConfigs: VoucherNumberConfig[] = [
+  {
+    id: 'cfg_demo_01',
+    company_id: 'cmp_demo_01',
+    voucher_type_id: 'vt_sales',
+    series_id: 'ser_demo_sales_01',
+    applicable_from: '2026-04-01',
+    prefix: 'INV/{YY-YY}/',
+    suffix: '',
+    start_number: 1,
+    width: 4,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
+
+export async function listVoucherTypes(): Promise<VoucherType[]> {
+  if (!isTauriEnv()) {
+    return [...MOCK_PREDEFINED_VOUCHER_TYPES];
+  }
+  return await invoke<VoucherType[]>('list_voucher_types');
+}
+
+export async function getVoucherType(id: string): Promise<VoucherType> {
+  if (!isTauriEnv()) {
+    const found = MOCK_PREDEFINED_VOUCHER_TYPES.find((vt) => vt.id === id);
+    if (!found) throw new Error(`Voucher type with id '${id}' not found`);
+    return found;
+  }
+  return await invoke<VoucherType>('get_voucher_type', { id });
+}
+
+export async function listVoucherSeries(voucherTypeId: string): Promise<VoucherNumberSeries[]> {
+  if (!isTauriEnv()) {
+    return mockSeries.filter((s) => s.voucher_type_id === voucherTypeId);
+  }
+  return await invoke<VoucherNumberSeries[]>('list_voucher_series', { voucherTypeId });
+}
+
+export async function getVoucherSeries(id: string): Promise<VoucherNumberSeries> {
+  if (!isTauriEnv()) {
+    const found = mockSeries.find((s) => s.id === id);
+    if (!found) throw new Error(`Voucher series '${id}' not found`);
+    return found;
+  }
+  return await invoke<VoucherNumberSeries>('get_voucher_series', { id });
+}
+
+export async function createVoucherSeries(req: CreateVoucherSeriesRequest): Promise<VoucherNumberSeries> {
+  if (!isTauriEnv()) {
+    const existing = mockSeries.find(
+      (s) => s.voucher_type_id === req.voucher_type_id && s.series_code.toUpperCase() === req.series_code.toUpperCase()
+    );
+    if (existing) {
+      throw new Error(`Series code '${req.series_code}' is already used in this voucher type`);
+    }
+    const newSeries: VoucherNumberSeries = {
+      id: `ser_${Date.now()}`,
+      company_id: mockActiveCompanyId || 'cmp_demo_01',
+      voucher_type_id: req.voucher_type_id,
+      series_name: req.series_name,
+      series_code: req.series_code.toUpperCase(),
+      numbering_method: req.numbering_method,
+      restart_period: req.restart_period,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockSeries.push(newSeries);
+
+    if (req.applicable_from) {
+      mockConfigs.push({
+        id: `cfg_${Date.now()}`,
+        company_id: mockActiveCompanyId || 'cmp_demo_01',
+        voucher_type_id: req.voucher_type_id,
+        series_id: newSeries.id,
+        applicable_from: req.applicable_from,
+        prefix: req.prefix || '',
+        suffix: req.suffix || '',
+        start_number: req.start_number || 1,
+        width: req.width || 4,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    return newSeries;
+  }
+  return await invoke<VoucherNumberSeries>('create_voucher_series', { req });
+}
+
+export async function updateVoucherSeries(id: string, req: UpdateVoucherSeriesRequest): Promise<VoucherNumberSeries> {
+  if (!isTauriEnv()) {
+    const idx = mockSeries.findIndex((s) => s.id === id);
+    if (idx === -1) throw new Error('Series not found');
+    if (req.series_name !== undefined) mockSeries[idx].series_name = req.series_name;
+    if (req.is_active !== undefined) mockSeries[idx].is_active = req.is_active;
+    mockSeries[idx].updated_at = new Date().toISOString();
+    return mockSeries[idx];
+  }
+  return await invoke<VoucherNumberSeries>('update_voucher_series', { id, req });
+}
+
+export async function deactivateVoucherSeries(id: string): Promise<VoucherNumberSeries> {
+  if (!isTauriEnv()) {
+    const idx = mockSeries.findIndex((s) => s.id === id);
+    if (idx === -1) throw new Error('Series not found');
+    mockSeries[idx].is_active = false;
+    mockSeries[idx].updated_at = new Date().toISOString();
+    return mockSeries[idx];
+  }
+  return await invoke<VoucherNumberSeries>('deactivate_voucher_series', { id });
+}
+
+export async function deleteVoucherSeries(id: string): Promise<void> {
+  if (!isTauriEnv()) {
+    const idx = mockSeries.findIndex((s) => s.id === id);
+    if (idx !== -1) mockSeries.splice(idx, 1);
+    mockConfigs = mockConfigs.filter((c) => c.series_id !== id);
+    return;
+  }
+  return await invoke<void>('delete_voucher_series', { id });
+}
+
+export async function createVoucherNumberConfig(
+  seriesId: string,
+  req: CreateVoucherNumberConfigRequest
+): Promise<VoucherNumberConfig> {
+  if (!isTauriEnv()) {
+    const series = mockSeries.find((s) => s.id === seriesId);
+    if (!series) throw new Error('Series not found');
+    const newCfg: VoucherNumberConfig = {
+      id: `cfg_${Date.now()}`,
+      company_id: series.company_id,
+      voucher_type_id: series.voucher_type_id,
+      series_id: seriesId,
+      applicable_from: req.applicable_from,
+      prefix: req.prefix || '',
+      suffix: req.suffix || '',
+      start_number: req.start_number || 1,
+      width: req.width || 4,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockConfigs.push(newCfg);
+    return newCfg;
+  }
+  return await invoke<VoucherNumberConfig>('create_voucher_number_config', { seriesId, req });
+}
+
+export async function listVoucherNumberConfigs(seriesId: string): Promise<VoucherNumberConfig[]> {
+  if (!isTauriEnv()) {
+    return mockConfigs.filter((c) => c.series_id === seriesId);
+  }
+  return await invoke<VoucherNumberConfig[]>('list_voucher_number_configs', { seriesId });
+}
+
+export async function resolveEffectiveVoucherConfig(
+  seriesId: string,
+  voucherDate: string
+): Promise<EffectiveNumberConfig> {
+  if (!isTauriEnv()) {
+    const series = mockSeries.find((s) => s.id === seriesId);
+    if (!series) throw new Error(`Series '${seriesId}' not found`);
+    const applicable = mockConfigs
+      .filter((c) => c.series_id === series.id && c.applicable_from <= voucherDate)
+      .sort((a, b) => b.applicable_from.localeCompare(a.applicable_from));
+    if (applicable.length === 0) {
+      throw new Error(`No effective configuration found for series '${seriesId}' on date '${voucherDate}'`);
+    }
+    const cfg = applicable[0];
+    return {
+      config_id: cfg.id,
+      voucher_type_id: series.voucher_type_id,
+      series_id: series.id,
+      prefix: cfg.prefix,
+      suffix: cfg.suffix,
+      width: cfg.width,
+      start_number: cfg.start_number,
+      restart_period: series.restart_period,
+      applicable_from: cfg.applicable_from,
+      period_start: '2026-04-01',
+    };
+  }
+  return await invoke<EffectiveNumberConfig>('resolve_effective_voucher_config', {
+    seriesId,
+    voucherDate,
+  });
+}
+
+export async function inspectVoucherSequence(req: InspectSequenceRequest): Promise<SequenceRecoveryReport> {
+  if (!isTauriEnv()) {
+    const series = mockSeries.find((s) => s.id === req.series_id);
+    return {
+      company_id: mockActiveCompanyId || 'cmp_demo_01',
+      voucher_type_id: series?.voucher_type_id || 'vt_sales',
+      series_id: req.series_id,
+      period_start: req.period_start,
+      start_number_baseline: 1,
+      previous_next_number: 1,
+      new_next_number: 1,
+      max_allocated: 0,
+      total_permanent_allocations: 0,
+      historical_gaps: [],
+      counter_tail_gaps: [],
+      counter_updated: false,
+      operator_id: 'browser_user',
+      resolution_mode: 'strict',
+      resolution_reason: null,
+    };
+  }
+  return await invoke<SequenceRecoveryReport>('inspect_voucher_sequence', { req });
+}
+
+export async function resyncVoucherSequence(req: ResyncSequenceRequest): Promise<SequenceRecoveryReport> {
+  if (!isTauriEnv()) {
+    const series = mockSeries.find((s) => s.id === req.series_id);
+    return {
+      company_id: mockActiveCompanyId || 'cmp_demo_01',
+      voucher_type_id: series?.voucher_type_id || 'vt_sales',
+      series_id: req.series_id,
+      period_start: req.period_start,
+      start_number_baseline: 1,
+      previous_next_number: 1,
+      new_next_number: 1,
+      max_allocated: 0,
+      total_permanent_allocations: 0,
+      historical_gaps: [],
+      counter_tail_gaps: [],
+      counter_updated: false,
+      operator_id: 'browser_user',
+      resolution_mode: req.resolution_mode,
+      resolution_reason: req.resolution_reason || null,
+    };
+  }
+  return await invoke<SequenceRecoveryReport>('resync_voucher_sequence', { req });
+}
+
+// ---------------------------------------------------------------------------
+// Voucher Creation & Draft Management API (Sprint 2 Stage 4)
+// ---------------------------------------------------------------------------
+
+let mockVouchers: Voucher[] = [];
+let mockVoucherLines: VoucherLine[] = [];
+
+function buildMockComposite(voucher: Voucher, lines: VoucherLine[]): VoucherWithLines {
+  let drTotal = 0;
+  let crTotal = 0;
+  for (const l of lines) {
+    const val = parseFloat(l.amount) || 0;
+    if (l.entry_type === 'Dr') drTotal += val;
+    else if (l.entry_type === 'Cr') crTotal += val;
+  }
+  const diff = Math.abs(drTotal - crTotal);
+  const isBalanced = drTotal === crTotal && lines.length > 0 && drTotal > 0;
+
+  return {
+    voucher,
+    lines,
+    debit_total: drTotal.toFixed(2),
+    credit_total: crTotal.toFixed(2),
+    difference: diff.toFixed(2),
+    is_balanced: isBalanced,
+  };
+}
+
+export async function createVoucherDraft(req: CreateVoucherDraftRequest): Promise<VoucherWithLines> {
+  if (!isTauriEnv()) {
+    const vid = `vch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const series = mockSeries.find((s) => s.id === req.series_id);
+    const voucher: Voucher = {
+      id: vid,
+      company_id: mockActiveCompanyId || 'cmp_demo_01',
+      voucher_type_id: req.voucher_type_id,
+      series_id: req.series_id,
+      numbering_method: series?.numbering_method || 'automatic',
+      period_start: null,
+      sequence_number: null,
+      voucher_number: `DRAFT-${vid.substring(4)}`,
+      date: req.date,
+      effective_date: req.effective_date || req.date,
+      status: 'draft',
+      reference_no: req.reference_no || null,
+      reference_date: req.reference_date || null,
+      narration: req.narration || null,
+      total_amount: null,
+      reversal_of_voucher_id: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockVouchers.push(voucher);
+
+    const lines: VoucherLine[] = [];
+    if (req.lines) {
+      req.lines.forEach((l, idx) => {
+        const lid = l.id || `line_${Date.now()}_${idx}`;
+        const line: VoucherLine = {
+          id: lid,
+          company_id: voucher.company_id,
+          voucher_id: vid,
+          line_number: idx + 1,
+          ledger_id: l.ledger_id,
+          entry_type: l.entry_type,
+          amount: parseFloat(l.amount).toFixed(2),
+          narration: l.narration || null,
+          created_at: new Date().toISOString(),
+        };
+        mockVoucherLines.push(line);
+        lines.push(line);
+      });
+    }
+
+    return buildMockComposite(voucher, lines);
+  }
+  return await invoke<VoucherWithLines>('create_voucher_draft', { req });
+}
+
+export async function getVoucherDraft(voucherId: string): Promise<VoucherWithLines> {
+  if (!isTauriEnv()) {
+    const v = mockVouchers.find((item) => item.id === voucherId);
+    if (!v) throw new Error(`Draft voucher '${voucherId}' not found`);
+    const lines = mockVoucherLines
+      .filter((l) => l.voucher_id === voucherId)
+      .sort((a, b) => a.line_number - b.line_number);
+    return buildMockComposite(v, lines);
+  }
+  return await invoke<VoucherWithLines>('get_voucher_draft', { voucherId });
+}
+
+export async function listVoucherDrafts(
+  filter: VoucherFilter = {}
+): Promise<PaginatedResponse<VoucherSummary>> {
+  if (!isTauriEnv()) {
+    let filtered = mockVouchers.filter((v) => v.status === (filter.status || 'draft'));
+    if (filter.voucher_type_id) {
+      filtered = filtered.filter((v) => v.voucher_type_id === filter.voucher_type_id);
+    }
+    if (filter.series_id) {
+      filtered = filtered.filter((v) => v.series_id === filter.series_id);
+    }
+    if (filter.date_from) {
+      filtered = filtered.filter((v) => v.date >= filter.date_from!);
+    }
+    if (filter.date_to) {
+      filtered = filtered.filter((v) => v.date <= filter.date_to!);
+    }
+
+    const page = filter.page || 1;
+    const pageSize = filter.page_size || 20;
+    const total = filtered.length;
+    const totalPages = total === 0 ? 1 : Math.ceil(total / pageSize);
+    const offset = (page - 1) * pageSize;
+    const pageItems = filtered.slice(offset, offset + pageSize);
+
+    const items: VoucherSummary[] = pageItems.map((v) => {
+      const vt = MOCK_PREDEFINED_VOUCHER_TYPES.find((t) => t.id === v.voucher_type_id);
+      const s = mockSeries.find((ser) => ser.id === v.series_id);
+      const lineCount = mockVoucherLines.filter((l) => l.voucher_id === v.id).length;
+      return {
+        id: v.id,
+        company_id: v.company_id,
+        voucher_type_id: v.voucher_type_id,
+        voucher_type_name: vt?.name || v.voucher_type_id,
+        series_id: v.series_id,
+        series_name: s?.series_name || v.series_id,
+        voucher_number: v.voucher_number,
+        date: v.date,
+        status: v.status,
+        total_amount: v.total_amount || null,
+        line_count: lineCount,
+        updated_at: v.updated_at,
+      };
+    });
+
+    return {
+      items,
+      total,
+      page,
+      page_size: pageSize,
+      total_pages: totalPages,
+    };
+  }
+  return await invoke<PaginatedResponse<VoucherSummary>>('list_voucher_drafts', { filter });
+}
+
+export async function updateVoucherDraft(
+  voucherId: string,
+  req: UpdateVoucherDraftRequest
+): Promise<Voucher> {
+  if (!isTauriEnv()) {
+    const idx = mockVouchers.findIndex((v) => v.id === voucherId);
+    if (idx === -1) throw new Error(`Draft voucher '${voucherId}' not found`);
+    const curr = mockVouchers[idx];
+    if (curr.status !== 'draft') throw new Error(`Voucher '${voucherId}' is not in draft status`);
+
+    mockVouchers[idx] = {
+      ...curr,
+      voucher_type_id: req.voucher_type_id || curr.voucher_type_id,
+      series_id: req.series_id || curr.series_id,
+      date: req.date || curr.date,
+      effective_date: req.effective_date || curr.effective_date,
+      reference_no: req.reference_no !== undefined ? req.reference_no : curr.reference_no,
+      reference_date: req.reference_date !== undefined ? req.reference_date : curr.reference_date,
+      narration: req.narration !== undefined ? req.narration : curr.narration,
+      updated_at: new Date().toISOString(),
+    };
+    return mockVouchers[idx];
+  }
+  return await invoke<Voucher>('update_voucher_draft', { voucherId, req });
+}
+
+export async function deleteVoucherDraft(voucherId: string): Promise<void> {
+  if (!isTauriEnv()) {
+    const idx = mockVouchers.findIndex((v) => v.id === voucherId);
+    if (idx === -1) throw new Error(`Draft voucher '${voucherId}' not found`);
+    if (mockVouchers[idx].status !== 'draft') {
+      throw new Error(`Cannot delete voucher with status '${mockVouchers[idx].status}'`);
+    }
+    mockVouchers.splice(idx, 1);
+    mockVoucherLines = mockVoucherLines.filter((l) => l.voucher_id !== voucherId);
+    return;
+  }
+  return await invoke<void>('delete_voucher_draft', { voucherId });
+}
+
+export async function addVoucherLine(
+  voucherId: string,
+  req: AddVoucherLineRequest
+): Promise<VoucherLine> {
+  if (!isTauriEnv()) {
+    const v = mockVouchers.find((item) => item.id === voucherId);
+    if (!v) throw new Error(`Draft voucher '${voucherId}' not found`);
+    if (v.status !== 'draft') throw new Error(`Cannot add lines to non-draft voucher`);
+
+    const existingLines = mockVoucherLines
+      .filter((l) => l.voucher_id === voucherId)
+      .sort((a, b) => a.line_number - b.line_number);
+    const maxLine = existingLines.length > 0 ? existingLines[existingLines.length - 1].line_number : 0;
+    const targetLineNum = req.line_number && req.line_number > 0 && req.line_number <= maxLine
+      ? req.line_number
+      : maxLine + 1;
+
+    if (req.line_number && req.line_number <= maxLine) {
+      existingLines.forEach((l) => {
+        if (l.line_number >= targetLineNum) {
+          l.line_number += 1;
+        }
+      });
+    }
+
+    const newLine: VoucherLine = {
+      id: `line_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      company_id: v.company_id,
+      voucher_id: voucherId,
+      line_number: targetLineNum,
+      ledger_id: req.ledger_id,
+      entry_type: req.entry_type,
+      amount: parseFloat(req.amount).toFixed(2),
+      narration: req.narration || null,
+      created_at: new Date().toISOString(),
+    };
+    mockVoucherLines.push(newLine);
+    return newLine;
+  }
+  return await invoke<VoucherLine>('add_voucher_line', { voucherId, req });
+}
+
+export async function updateVoucherLine(
+  voucherId: string,
+  lineId: string,
+  req: UpdateVoucherLineRequest
+): Promise<VoucherLine> {
+  if (!isTauriEnv()) {
+    const idx = mockVoucherLines.findIndex((l) => l.voucher_id === voucherId && l.id === lineId);
+    if (idx === -1) throw new Error(`Voucher line '${lineId}' not found`);
+    const curr = mockVoucherLines[idx];
+    mockVoucherLines[idx] = {
+      ...curr,
+      ledger_id: req.ledger_id || curr.ledger_id,
+      entry_type: req.entry_type || curr.entry_type,
+      amount: req.amount ? parseFloat(req.amount).toFixed(2) : curr.amount,
+      narration: req.narration !== undefined ? req.narration : curr.narration,
+    };
+    return mockVoucherLines[idx];
+  }
+  return await invoke<VoucherLine>('update_voucher_line', { voucherId, lineId, req });
+}
+
+export async function deleteVoucherLine(voucherId: string, lineId: string): Promise<void> {
+  if (!isTauriEnv()) {
+    const idx = mockVoucherLines.findIndex((l) => l.voucher_id === voucherId && l.id === lineId);
+    if (idx === -1) throw new Error(`Voucher line '${lineId}' not found`);
+    mockVoucherLines.splice(idx, 1);
+
+    const remaining = mockVoucherLines
+      .filter((l) => l.voucher_id === voucherId)
+      .sort((a, b) => a.line_number - b.line_number);
+    remaining.forEach((l, i) => {
+      l.line_number = i + 1;
+    });
+    return;
+  }
+  return await invoke<void>('delete_voucher_line', { voucherId, lineId });
+}
+
+export async function reorderVoucherLines(
+  voucherId: string,
+  req: ReorderVoucherLinesRequest
+): Promise<VoucherLine[]> {
+  if (!isTauriEnv()) {
+    const lines = mockVoucherLines.filter((l) => l.voucher_id === voucherId);
+    req.line_ids.forEach((lid, i) => {
+      const found = lines.find((l) => l.id === lid);
+      if (found) found.line_number = i + 1;
+    });
+    return mockVoucherLines
+      .filter((l) => l.voucher_id === voucherId)
+      .sort((a, b) => a.line_number - b.line_number);
+  }
+  return await invoke<VoucherLine[]>('reorder_voucher_lines', { voucherId, req });
+}
+
+export async function saveVoucherDraft(
+  req: SaveVoucherDraftRequest
+): Promise<VoucherWithLines> {
+  if (!isTauriEnv()) {
+    let voucher: Voucher;
+    if (req.voucher_id) {
+      const idx = mockVouchers.findIndex((v) => v.id === req.voucher_id);
+      if (idx === -1) throw new Error(`Draft voucher '${req.voucher_id}' not found`);
+      mockVouchers[idx] = {
+        ...mockVouchers[idx],
+        voucher_type_id: req.voucher_type_id,
+        series_id: req.series_id,
+        date: req.date,
+        effective_date: req.effective_date || req.date,
+        reference_no: req.reference_no || null,
+        reference_date: req.reference_date || null,
+        narration: req.narration || null,
+        updated_at: new Date().toISOString(),
+      };
+      voucher = mockVouchers[idx];
+      mockVoucherLines = mockVoucherLines.filter((l) => l.voucher_id !== req.voucher_id);
+    } else {
+      const vid = `vch_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+      const series = mockSeries.find((s) => s.id === req.series_id);
+      voucher = {
+        id: vid,
+        company_id: mockActiveCompanyId || 'cmp_demo_01',
+        voucher_type_id: req.voucher_type_id,
+        series_id: req.series_id,
+        numbering_method: series?.numbering_method || 'automatic',
+        period_start: null,
+        sequence_number: null,
+        voucher_number: `DRAFT-${vid.substring(4)}`,
+        date: req.date,
+        effective_date: req.effective_date || req.date,
+        status: 'draft',
+        reference_no: req.reference_no || null,
+        reference_date: req.reference_date || null,
+        narration: req.narration || null,
+        total_amount: null,
+        reversal_of_voucher_id: null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      mockVouchers.push(voucher);
+    }
+
+    const lines: VoucherLine[] = req.lines.map((l, idx) => {
+      const lid = l.id || `line_${Date.now()}_${idx}`;
+      const line: VoucherLine = {
+        id: lid,
+        company_id: voucher.company_id,
+        voucher_id: voucher.id,
+        line_number: idx + 1,
+        ledger_id: l.ledger_id,
+        entry_type: l.entry_type,
+        amount: parseFloat(l.amount).toFixed(2),
+        narration: l.narration || null,
+        created_at: new Date().toISOString(),
+      };
+      mockVoucherLines.push(line);
+      return line;
+    });
+
+    return buildMockComposite(voucher, lines);
+  }
+  return await invoke<VoucherWithLines>('save_voucher_draft', { req });
+}
+
+
+

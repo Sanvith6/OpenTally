@@ -219,7 +219,11 @@ pub async fn run_sprint1_migration_with_payload(
             .await?;
 
     if current_version != "0.1.0-sprint0" {
-        if current_version == "0.2.0-sprint1" || current_version == "0.2.1-sprint1" {
+        if current_version == "0.2.0-sprint1"
+            || current_version == "0.2.1-sprint1"
+            || current_version == "0.3.0-sprint2"
+            || current_version == "0.3.1-sprint2"
+        {
             // Already migrated
             return Ok(());
         }
@@ -341,7 +345,10 @@ pub async fn run_stage3_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyEr
             .fetch_one(&mut *conn)
             .await?;
 
-    if current_version == "0.2.1-sprint1" {
+    if current_version == "0.2.1-sprint1"
+        || current_version == "0.3.0-sprint2"
+        || current_version == "0.3.1-sprint2"
+    {
         return Ok(());
     }
 
@@ -397,6 +404,1762 @@ pub async fn run_stage3_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyEr
                 e
             );
             Err(e)
+        }
+    }
+}
+
+/// Sprint 2 Database DDL Definition (v2.9.5)
+/// Defines voucher_types, voucher_number_series, voucher_number_configs,
+/// voucher_number_sequences, vouchers, and voucher_lines
+pub const SPRINT2_DDL: &str = r#"
+-- 1. VOUCHER TYPES MASTER
+CREATE TABLE voucher_types (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    name TEXT NOT NULL COLLATE NOCASE,
+    category TEXT NOT NULL CHECK (category IN ('accounting', 'trading', 'order', 'inventory', 'payroll', 'scenario', 'non_financial')),
+    parent_type TEXT,
+    affects_ledger_balance INTEGER NOT NULL DEFAULT 1 CHECK (affects_ledger_balance IN (0, 1)),
+    affects_inventory INTEGER NOT NULL DEFAULT 0 CHECK (affects_inventory IN (0, 1)),
+    is_predefined INTEGER NOT NULL DEFAULT 0 CHECK (is_predefined IN (0, 1)),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    numbering_method TEXT NOT NULL DEFAULT 'automatic' CHECK (numbering_method IN ('automatic', 'manual', 'multi_series')),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    CONSTRAINT uq_voucher_types_company UNIQUE (company_id, id),
+    UNIQUE (company_id, name),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+);
+
+-- 2. VOUCHER NUMBERING SERIES MASTER
+CREATE TABLE voucher_number_series (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_type_id TEXT NOT NULL,
+    series_name TEXT NOT NULL COLLATE NOCASE,
+    series_code TEXT NOT NULL COLLATE NOCASE,
+    numbering_method TEXT NOT NULL DEFAULT 'automatic' CHECK (numbering_method IN ('automatic', 'manual')),
+    restart_period TEXT NOT NULL CHECK (restart_period IN ('yearly', 'monthly', 'daily', 'never')),
+    is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    CONSTRAINT uq_series_company_id UNIQUE (company_id, id),
+    CONSTRAINT uq_series_name UNIQUE (company_id, voucher_type_id, series_name),
+    CONSTRAINT uq_series_code UNIQUE (company_id, voucher_type_id, series_code),
+    CONSTRAINT uq_series_type_ownership UNIQUE (company_id, voucher_type_id, id),
+    CONSTRAINT uq_series_full_ownership UNIQUE (company_id, voucher_type_id, id, numbering_method),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id, voucher_type_id) REFERENCES voucher_types(company_id, id) ON DELETE CASCADE
+);
+
+-- 2b. VOUCHER NUMBERING CONFIGURATIONS
+CREATE TABLE voucher_number_configs (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_type_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    applicable_from TEXT NOT NULL,
+    prefix TEXT NOT NULL DEFAULT '',
+    suffix TEXT NOT NULL DEFAULT '',
+    start_number INTEGER NOT NULL DEFAULT 1 CHECK (start_number > 0),
+    width INTEGER NOT NULL DEFAULT 4 CHECK (width BETWEEN 1 AND 10),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    CONSTRAINT uq_config_series_date UNIQUE (company_id, series_id, applicable_from),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id, voucher_type_id, series_id) REFERENCES voucher_number_series(company_id, voucher_type_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_type_id) REFERENCES voucher_types(company_id, id) ON DELETE CASCADE
+);
+
+-- 2c. VOUCHER NUMBERING SEQUENCES
+CREATE TABLE voucher_number_sequences (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_type_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    period_start TEXT NOT NULL,
+    next_number INTEGER NOT NULL CHECK (next_number > 0),
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    CONSTRAINT uq_seq_period UNIQUE (company_id, series_id, period_start),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id, voucher_type_id, series_id) REFERENCES voucher_number_series(company_id, voucher_type_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_type_id) REFERENCES voucher_types(company_id, id) ON DELETE CASCADE
+);
+
+-- 3. VOUCHER HEADERS MASTER
+CREATE TABLE vouchers (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_type_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    numbering_method TEXT NOT NULL DEFAULT 'automatic' CHECK (numbering_method IN ('automatic', 'manual')),
+    period_start TEXT,
+    sequence_number INTEGER,
+    voucher_number TEXT NOT NULL,
+    date TEXT NOT NULL,
+    effective_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'posted', 'cancelled', 'reversed')),
+    reference_no TEXT,
+    reference_date TEXT,
+    narration TEXT,
+    total_amount TEXT,
+    reversal_of_voucher_id TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_type_id) REFERENCES voucher_types(company_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_type_id, series_id, numbering_method) REFERENCES voucher_number_series(company_id, voucher_type_id, id, numbering_method) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, reversal_of_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_no_self_reversal CHECK (reversal_of_voucher_id IS NULL OR reversal_of_voucher_id != id),
+    CONSTRAINT chk_voucher_date CHECK (
+        date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(date) IS NOT NULL
+        AND date(date) = date
+    ),
+    CONSTRAINT chk_effective_date CHECK (
+        effective_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(effective_date) IS NOT NULL
+        AND date(effective_date) = effective_date
+    ),
+    CONSTRAINT chk_voucher_sequence_metadata CHECK (
+        (status = 'draft' AND period_start IS NULL AND sequence_number IS NULL)
+        OR
+        (
+            status IN ('posted', 'cancelled', 'reversed')
+            AND
+            (
+                (numbering_method = 'automatic' AND period_start IS NOT NULL AND sequence_number > 0)
+                OR
+                (numbering_method = 'manual' AND sequence_number IS NULL)
+            )
+        )
+    ),
+    CONSTRAINT chk_voucher_total_amount_canonical CHECK (
+        (
+            status = 'draft' 
+            AND (
+                total_amount IS NULL
+                OR
+                (
+                    length(total_amount) >= 1
+                    AND length(total_amount) <= 25
+                    AND total_amount NOT GLOB '*[^0-9.]*'
+                    AND total_amount NOT GLOB '*..*'
+                    AND total_amount NOT GLOB '.*'
+                    AND total_amount NOT GLOB '*.'
+                    AND (
+                        (
+                            instr(total_amount, '.') > 0
+                            AND length(substr(total_amount, instr(total_amount, '.') + 1)) BETWEEN 1 AND 4
+                            AND instr(substr(total_amount, instr(total_amount, '.') + 1), '.') = 0
+                            AND (
+                                (substr(total_amount, 1, instr(total_amount, '.') - 1) = '0' 
+                                 AND substr(total_amount, instr(total_amount, '.') + 1) GLOB '*[1-9]*')
+                                OR
+                                (substr(total_amount, 1, instr(total_amount, '.') - 1) GLOB '[1-9]*')
+                            )
+                        )
+                        OR
+                        (
+                            instr(total_amount, '.') = 0
+                            AND total_amount GLOB '[1-9]*'
+                        )
+                    )
+                )
+            )
+        )
+        OR
+        (
+            status IN ('posted', 'reversed', 'cancelled')
+            AND total_amount IS NOT NULL
+            AND length(total_amount) >= 1
+            AND length(total_amount) <= 25
+            AND total_amount NOT GLOB '*[^0-9.]*'
+            AND total_amount NOT GLOB '*..*'
+            AND total_amount NOT GLOB '.*'
+            AND total_amount NOT GLOB '*.'
+            AND (
+                (
+                    instr(total_amount, '.') > 0
+                    AND length(substr(total_amount, instr(total_amount, '.') + 1)) BETWEEN 1 AND 4
+                    AND instr(substr(total_amount, instr(total_amount, '.') + 1), '.') = 0
+                    AND (
+                        (substr(total_amount, 1, instr(total_amount, '.') - 1) = '0' 
+                         AND substr(total_amount, instr(total_amount, '.') + 1) GLOB '*[1-9]*')
+                        OR
+                        (substr(total_amount, 1, instr(total_amount, '.') - 1) GLOB '[1-9]*')
+                    )
+                )
+                OR
+                (
+                    instr(total_amount, '.') = 0
+                    AND total_amount GLOB '[1-9]*'
+                )
+            )
+        )
+    )
+);
+
+CREATE INDEX idx_vouchers_date ON vouchers(company_id, date);
+CREATE INDEX idx_vouchers_type_status ON vouchers(company_id, voucher_type_id, status);
+CREATE INDEX idx_voucher_number_series_type ON voucher_number_series(company_id, voucher_type_id);
+CREATE INDEX idx_voucher_number_configs_series ON voucher_number_configs(company_id, voucher_type_id, series_id);
+CREATE INDEX idx_voucher_number_sequences_series ON voucher_number_sequences(company_id, voucher_type_id, series_id);
+CREATE INDEX idx_vouchers_series_ownership ON vouchers(company_id, voucher_type_id, series_id, numbering_method);
+CREATE UNIQUE INDEX uq_vouchers_permanent_number ON vouchers(company_id, voucher_type_id, voucher_number) WHERE status != 'draft';
+CREATE UNIQUE INDEX uq_vouchers_series_sequence ON vouchers(company_id, series_id, period_start, sequence_number) WHERE status != 'draft' AND sequence_number IS NOT NULL;
+CREATE UNIQUE INDEX uq_vouchers_reversal ON vouchers(company_id, reversal_of_voucher_id) WHERE reversal_of_voucher_id IS NOT NULL;
+
+-- 4. VOUCHER LINE ITEMS
+CREATE TABLE voucher_lines (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_id TEXT NOT NULL,
+    line_number INTEGER NOT NULL CHECK (line_number > 0),
+    ledger_id TEXT NOT NULL,
+    entry_type TEXT NOT NULL CHECK (entry_type IN ('Dr', 'Cr')),
+    amount TEXT NOT NULL,
+    narration TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    UNIQUE (company_id, voucher_id, line_number),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id, ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_voucher_line_amount_canonical CHECK (
+        amount IS NOT NULL
+        AND length(amount) >= 1
+        AND length(amount) <= 25
+        AND amount NOT GLOB '*[^0-9.]*'
+        AND amount NOT GLOB '*..*'
+        AND amount NOT GLOB '.*'
+        AND amount NOT GLOB '*.'
+        AND (
+            (
+                instr(amount, '.') > 0
+                AND length(substr(amount, instr(amount, '.') + 1)) BETWEEN 1 AND 4
+                AND instr(substr(amount, instr(amount, '.') + 1), '.') = 0
+                AND (
+                    (substr(amount, 1, instr(amount, '.') - 1) = '0' 
+                     AND substr(amount, instr(amount, '.') + 1) GLOB '*[1-9]*')
+                    OR
+                    (substr(amount, 1, instr(amount, '.') - 1) GLOB '[1-9]*')
+                )
+            )
+            OR
+            (
+                instr(amount, '.') = 0
+                AND amount GLOB '[1-9]*'
+            )
+        )
+    )
+);
+
+CREATE INDEX idx_voucher_lines_ledger ON voucher_lines(company_id, ledger_id);
+"#;
+
+/// Sprint 2 Triggers
+pub const SPRINT2_TRIGGERS: &str = r#"
+-- Trigger 1: Enforce Posted/Cancelled/Reversed Voucher Header Immutability & Reversal Freeze
+CREATE TRIGGER trg_prevent_posted_voucher_mutation
+BEFORE UPDATE ON vouchers
+FOR EACH ROW
+WHEN OLD.status IN ('posted', 'cancelled', 'reversed')
+BEGIN
+    SELECT RAISE(ABORT, 'Illegal voucher lifecycle transition. Cancelled and reversed vouchers are permanently frozen.')
+    WHERE (OLD.status = 'cancelled' OR OLD.status = 'reversed');
+
+    SELECT RAISE(ABORT, 'Illegal voucher lifecycle transition from posted status. Posted vouchers can only transition to CANCELLED or REVERSED.')
+    WHERE OLD.status = 'posted' AND NEW.status NOT IN ('posted', 'cancelled', 'reversed');
+
+    SELECT RAISE(ABORT, 'Core financial, reference, and numbering fields of a posted voucher are strictly immutable.')
+    WHERE (NEW.company_id IS NOT OLD.company_id)
+       OR (NEW.voucher_type_id IS NOT OLD.voucher_type_id)
+       OR (NEW.series_id IS NOT OLD.series_id)
+       OR (NEW.numbering_method IS NOT OLD.numbering_method)
+       OR (NEW.period_start IS NOT OLD.period_start)
+       OR (NEW.sequence_number IS NOT OLD.sequence_number)
+       OR (NEW.voucher_number IS NOT OLD.voucher_number)
+       OR (NEW.date IS NOT OLD.date)
+       OR (NEW.effective_date IS NOT OLD.effective_date)
+       OR (NEW.reference_no IS NOT OLD.reference_no)
+       OR (NEW.reference_date IS NOT OLD.reference_date)
+       OR (NEW.narration IS NOT OLD.narration)
+       OR (NEW.total_amount IS NOT OLD.total_amount)
+       OR (NEW.reversal_of_voucher_id IS NOT OLD.reversal_of_voucher_id)
+       OR (NEW.created_at IS NOT OLD.created_at);
+
+    SELECT RAISE(ABORT, 'Cannot cancel a reversing voucher. Reversing vouchers are permanently immutable to preserve ledger equilibrium.')
+    WHERE OLD.reversal_of_voucher_id IS NOT NULL AND NEW.status = 'cancelled';
+
+    SELECT RAISE(ABORT, 'Cannot mark voucher as REVERSED without an existing POSTED reversing voucher referencing it.')
+    WHERE OLD.status = 'posted' AND NEW.status = 'reversed'
+      AND NOT EXISTS (
+          SELECT 1 FROM vouchers rev
+          WHERE rev.company_id = NEW.company_id
+            AND rev.reversal_of_voucher_id = NEW.id
+            AND rev.status = 'posted'
+      );
+END;
+
+-- Trigger 1b: Validate Reversing Voucher Target Eligibility on Promotion to POSTED
+CREATE TRIGGER trg_validate_reversal_target_on_post
+BEFORE UPDATE OF status ON vouchers
+FOR EACH ROW
+WHEN NEW.reversal_of_voucher_id IS NOT NULL 
+ AND NEW.status = 'posted' 
+ AND OLD.status = 'draft'
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot post reversing voucher: Referenced original voucher must exist in the same company with status POSTED.')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM vouchers orig
+        WHERE orig.company_id = NEW.company_id
+          AND orig.id = NEW.reversal_of_voucher_id
+          AND orig.status = 'posted'
+    );
+END;
+
+-- Trigger 2: Prohibit Illegal Direct Draft Transitions
+CREATE TRIGGER trg_prevent_illegal_draft_transitions
+BEFORE UPDATE ON vouchers
+FOR EACH ROW
+WHEN OLD.status = 'draft'
+BEGIN
+    SELECT RAISE(ABORT, 'Draft vouchers cannot transition directly to cancelled or reversed status. Drafts must be posted first or deleted/purged.')
+    WHERE NEW.status NOT IN ('draft', 'posted');
+END;
+
+-- Trigger 3: Prohibit Hard Deletion of Non-Draft Vouchers (Unconditional)
+CREATE TRIGGER trg_prevent_posted_voucher_deletion
+BEFORE DELETE ON vouchers
+FOR EACH ROW
+WHEN OLD.status IN ('posted', 'cancelled', 'reversed')
+BEGIN
+    SELECT RAISE(ABORT, 'Hard deletion of financial vouchers is strictly prohibited. Posted, cancelled, and reversed vouchers cannot be deleted, even via company cascade.');
+END;
+
+-- Trigger 4: Prohibit Inserting Lines into Non-Draft Vouchers
+CREATE TRIGGER trg_prevent_posted_voucher_lines_insert
+BEFORE INSERT ON voucher_lines
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers 
+    WHERE company_id = NEW.company_id 
+      AND id = NEW.voucher_id 
+      AND status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot insert line items into a posted, cancelled, or reversed voucher.');
+END;
+
+-- Trigger 5: Prohibit Mutating or Reassigning Lines Belonging to or Assigned to Non-Draft Vouchers
+CREATE TRIGGER trg_prevent_posted_voucher_lines_mutation
+BEFORE UPDATE ON voucher_lines
+FOR EACH ROW
+WHEN (
+    EXISTS (
+        SELECT 1 FROM vouchers 
+        WHERE company_id = OLD.company_id 
+          AND id = OLD.voucher_id 
+          AND status IN ('posted', 'cancelled', 'reversed')
+    )
+    OR EXISTS (
+        SELECT 1 FROM vouchers 
+        WHERE company_id = NEW.company_id 
+          AND id = NEW.voucher_id 
+          AND status IN ('posted', 'cancelled', 'reversed')
+    )
+    OR (NEW.company_id IS NOT OLD.company_id)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Voucher line items belonging to or assigned to a posted, cancelled, or reversed voucher cannot be modified or reassigned.');
+END;
+
+-- Trigger 6: Prohibit Deleting Lines Belonging to Non-Draft Vouchers
+CREATE TRIGGER trg_prevent_posted_voucher_lines_deletion
+BEFORE DELETE ON voucher_lines
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers 
+    WHERE company_id = OLD.company_id 
+      AND id = OLD.voucher_id 
+      AND status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Voucher line items belonging to a posted, cancelled, or reversed voucher cannot be deleted.');
+END;
+
+-- Trigger 7: Prevent Deleting Ledgers Referenced in Vouchers
+CREATE TRIGGER trg_prevent_ledger_delete_with_vouchers
+BEFORE DELETE ON ledgers
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM companies WHERE id = OLD.company_id)
+  AND EXISTS (SELECT 1 FROM voucher_lines WHERE company_id = OLD.company_id AND ledger_id = OLD.id)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete ledger: it is referenced in existing voucher lines.');
+END;
+
+-- Trigger 8: Prohibit Hard Deletion of Companies Containing Financial Vouchers
+CREATE TRIGGER trg_prevent_company_delete_with_financial_vouchers
+BEFORE DELETE ON companies
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers 
+    WHERE company_id = OLD.id 
+      AND status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete company: Company contains financial accounting records. As an application-level financial-history protection mechanism (subject to professional legal and statutory review), companies with financial records cannot be deleted and must be soft-archived.');
+END;
+
+-- Trigger 8a: Prohibit Mutating Series Code or Numbering Method on Active Series
+CREATE TRIGGER trg_prevent_series_code_mutation
+BEFORE UPDATE OF series_code, numbering_method ON voucher_number_series
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.id
+      AND v.status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify series_code or numbering_method: permanent vouchers exist in this series.');
+END;
+
+-- Trigger 8b: Prohibit Deleting Series Referencing Permanent Vouchers
+CREATE TRIGGER trg_prevent_series_deletion_with_vouchers
+BEFORE DELETE ON voucher_number_series
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.id
+      AND v.status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete series: permanent vouchers exist in this series.');
+END;
+
+-- Trigger 9a: Prohibit Modifying Configuration Effective Date
+CREATE TRIGGER trg_prevent_config_applicable_from_mutation
+BEFORE UPDATE OF applicable_from ON voucher_number_configs
+FOR EACH ROW
+WHEN NEW.applicable_from != OLD.applicable_from
+BEGIN
+    SELECT RAISE(ABORT, 'Configuration effective date (applicable_from) is immutable once created. Delete the unreferenced configuration and re-insert if no vouchers exist.');
+END;
+
+-- Trigger 9b: Series-Scoped Immutability on UPDATE for Active Configurations
+CREATE TRIGGER trg_prevent_active_config_mutation
+BEFORE UPDATE ON voucher_number_configs
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.series_id
+      AND v.status IN ('posted', 'reversed', 'cancelled')
+      AND v.date >= OLD.applicable_from
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify active numbering configuration: permanent vouchers exist in this series governed by this configuration. Append a new configuration row with a future applicable_from date instead.');
+END;
+
+-- Trigger 10: Series-Scoped Immutability on DELETE
+CREATE TRIGGER trg_prevent_active_config_deletion
+BEFORE DELETE ON voucher_number_configs
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.series_id
+      AND v.status IN ('posted', 'reversed', 'cancelled')
+      AND v.date >= OLD.applicable_from
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete active numbering configuration: permanent vouchers exist in this series governed by this configuration.');
+END;
+
+-- Trigger 11: Prohibit Retroactive Numbering Configuration INSERT
+CREATE TRIGGER trg_prevent_retroactive_config_insert
+BEFORE INSERT ON voucher_number_configs
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = NEW.company_id
+      AND v.series_id = NEW.series_id
+      AND v.status IN ('posted', 'reversed', 'cancelled')
+      AND v.date >= NEW.applicable_from
+      AND (
+          NOT EXISTS (
+              SELECT 1 FROM voucher_number_configs c
+              WHERE c.company_id = NEW.company_id
+                AND c.series_id = NEW.series_id
+                AND c.applicable_from > NEW.applicable_from
+                AND v.date >= c.applicable_from
+          )
+      )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot insert retroactive numbering configuration: permanent vouchers already exist in this series governed by the proposed effective period.');
+END;
+
+-- Trigger 12: Prevent Mutation of Series Restart Period
+CREATE TRIGGER trg_prevent_series_restart_period_mutation
+BEFORE UPDATE OF restart_period ON voucher_number_series
+FOR EACH ROW
+WHEN NEW.restart_period IS NOT OLD.restart_period
+BEGIN
+    SELECT RAISE(ABORT, 'Series restart_period is permanently immutable; changing reset frequency requires creating a new numbering series');
+END;
+
+-- Trigger 13: Seed Predefined Voucher Types on Company Insert
+CREATE TRIGGER trg_seed_predefined_voucher_types_on_company_insert
+AFTER INSERT ON companies
+FOR EACH ROW
+BEGIN
+    INSERT OR IGNORE INTO voucher_types (id, company_id, name, category, parent_type, affects_ledger_balance, affects_inventory, is_predefined, is_active, numbering_method)
+    VALUES
+        ('vt_contra', NEW.id, 'Contra', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_payment', NEW.id, 'Payment', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_receipt', NEW.id, 'Receipt', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_jnl', NEW.id, 'Journal', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_sales', NEW.id, 'Sales', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_pur', NEW.id, 'Purchase', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_credit_note', NEW.id, 'Credit Note', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_debit_note', NEW.id, 'Debit Note', 'accounting', NULL, 1, 0, 1, 1, 'automatic'),
+        ('vt_reversing_journal', NEW.id, 'Reversing Journal', 'scenario', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_memorandum', NEW.id, 'Memorandum', 'non_financial', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_sales_order', NEW.id, 'Sales Order', 'order', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_purchase_order', NEW.id, 'Purchase Order', 'order', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_delivery_note', NEW.id, 'Delivery Note', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_receipt_note', NEW.id, 'Receipt Note', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_rejections_in', NEW.id, 'Rejections In', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_rejections_out', NEW.id, 'Rejections Out', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_stock_journal', NEW.id, 'Stock Journal', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_physical_stock', NEW.id, 'Physical Stock', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_material_in', NEW.id, 'Material In', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_material_out', NEW.id, 'Material Out', 'inventory', NULL, 0, 1, 1, 1, 'automatic'),
+        ('vt_job_work_in_order', NEW.id, 'Job Work In Order', 'order', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_job_work_out_order', NEW.id, 'Job Work Out Order', 'order', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_attendance', NEW.id, 'Attendance', 'payroll', NULL, 0, 0, 1, 1, 'automatic'),
+        ('vt_payroll', NEW.id, 'Payroll', 'payroll', NULL, 1, 0, 1, 1, 'automatic');
+END;
+"#;
+
+/// Seed query to populate 24 canonical predefined voucher types for all existing companies
+pub const SPRINT2_VOUCHER_TYPES_SEED: &str = r#"
+INSERT OR IGNORE INTO voucher_types (id, company_id, name, category, parent_type, affects_ledger_balance, affects_inventory, is_predefined, is_active, numbering_method)
+SELECT vdef.id, c.id, vdef.name, vdef.category, vdef.parent_type, vdef.affects_ledger_balance, vdef.affects_inventory, 1, 1, 'automatic'
+FROM companies c
+CROSS JOIN (
+    SELECT 'vt_contra' as id, 'Contra' as name, 'accounting' as category, NULL as parent_type, 1 as affects_ledger_balance, 0 as affects_inventory UNION ALL
+    SELECT 'vt_payment', 'Payment', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_receipt', 'Receipt', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_jnl', 'Journal', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_sales', 'Sales', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_pur', 'Purchase', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_credit_note', 'Credit Note', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_debit_note', 'Debit Note', 'accounting', NULL, 1, 0 UNION ALL
+    SELECT 'vt_reversing_journal', 'Reversing Journal', 'scenario', NULL, 0, 0 UNION ALL
+    SELECT 'vt_memorandum', 'Memorandum', 'non_financial', NULL, 0, 0 UNION ALL
+    SELECT 'vt_sales_order', 'Sales Order', 'order', NULL, 0, 0 UNION ALL
+    SELECT 'vt_purchase_order', 'Purchase Order', 'order', NULL, 0, 0 UNION ALL
+    SELECT 'vt_delivery_note', 'Delivery Note', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_receipt_note', 'Receipt Note', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_rejections_in', 'Rejections In', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_rejections_out', 'Rejections Out', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_stock_journal', 'Stock Journal', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_physical_stock', 'Physical Stock', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_material_in', 'Material In', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_material_out', 'Material Out', 'inventory', NULL, 0, 1 UNION ALL
+    SELECT 'vt_job_work_in_order', 'Job Work In Order', 'order', NULL, 0, 0 UNION ALL
+    SELECT 'vt_job_work_out_order', 'Job Work Out Order', 'order', NULL, 0, 0 UNION ALL
+    SELECT 'vt_attendance', 'Attendance', 'payroll', NULL, 0, 0 UNION ALL
+    SELECT 'vt_payroll', 'Payroll', 'payroll', NULL, 1, 0
+) vdef;
+"#;
+
+/// Execute the Sprint 2 migration (0.2.1-sprint1 -> 0.3.0-sprint2).
+/// Follows the authoritative 12-step pinned-connection lifecycle with 4-exit-state safety.
+pub async fn run_sprint2_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    // STEP 1: Dedicated connection checked out from the pool
+    let mut conn = pool.acquire().await.map_err(OpenTallyError::Database)?;
+
+    // STEP 2: Read and verify source schema version BEFORE touching foreign keys
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+    if current_version == "0.3.0-sprint2" || current_version == "0.3.1-sprint2" {
+        tracing::info!(
+            "Database already at schema version 0.3.0-sprint2 or later; migration skipped (idempotent)."
+        );
+        return Ok(());
+    }
+
+    if current_version != "0.2.1-sprint1" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.2.1-sprint1' for Sprint 2 migration, found '{}'",
+            current_version
+        )));
+    }
+
+    // Track foreign key and transaction state across the execution scope
+    let mut fk_disabled = false;
+    let mut in_transaction = false;
+
+    // Guarded execution block: Every operation from PRAGMA foreign_keys = OFF onwards runs here
+    let migration_res: Result<(), OpenTallyError> = async {
+        // STEP 3: Disable foreign keys OUTSIDE any transaction & verify status
+        sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        fk_disabled = true;
+
+        let fk_status: i64 = sqlx::query_scalar("PRAGMA foreign_keys;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        if fk_status != 0 {
+            return Err(OpenTallyError::Migration(
+                "Failed to disable foreign keys prior to migration table recreation (status != 0)".into()
+            ));
+        }
+
+        // STEP 4: Begin immediate exclusive write transaction (WAL write lock)
+        sqlx::raw_sql("BEGIN IMMEDIATE;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        in_transaction = true;
+
+        // STEP 5: Create target temporary audit table (audit_log_dg_tmp)
+        sqlx::raw_sql(
+            "CREATE TABLE audit_log_dg_tmp (
+                id TEXT PRIMARY KEY,
+                company_id TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                ledger_id TEXT,
+                financial_year_begins TEXT,
+                action TEXT NOT NULL CHECK (action IN ('CREATE', 'UPDATE', 'CLEAR', 'DELETE', 'POST', 'CANCEL', 'REVERSE')),
+                old_values TEXT,
+                new_values TEXT,
+                performed_by TEXT NOT NULL,
+                timestamp TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT
+            );"
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // STEP 6: Copy 100% of existing Sprint 1 audit records
+        sqlx::raw_sql(
+            "INSERT INTO audit_log_dg_tmp (
+                id, company_id, entity_type, entity_id, ledger_id, financial_year_begins, action, old_values, new_values, performed_by, timestamp
+            )
+            SELECT id, company_id, entity_type, entity_id, ledger_id, financial_year_begins, action, old_values, new_values, performed_by, timestamp
+            FROM audit_log;"
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // STEP 7: Verify source and destination record counts
+        let src_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_log;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        let dst_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM audit_log_dg_tmp;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        if src_count != dst_count {
+            return Err(OpenTallyError::Migration(format!(
+                "Audit log record count mismatch during migration: source={}, destination={}",
+                src_count, dst_count
+            )));
+        }
+
+        // STEP 8: Drop old table and rename temporary table to canonical name
+        sqlx::raw_sql("DROP TABLE audit_log;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        sqlx::raw_sql("ALTER TABLE audit_log_dg_tmp RENAME TO audit_log;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        // STEP 9: Recreate canonical indexes & triggers; apply Sprint 2 DDL & seeds
+        sqlx::raw_sql(
+            "CREATE INDEX IF NOT EXISTS idx_audit_log_entity ON audit_log(company_id, entity_type, entity_id);
+             CREATE INDEX IF NOT EXISTS idx_audit_log_timestamp ON audit_log(company_id, timestamp);
+             CREATE TRIGGER trg_prevent_audit_log_mutation
+             BEFORE UPDATE ON audit_log
+             FOR EACH ROW BEGIN SELECT RAISE(ABORT, 'Audit log entries are immutable and cannot be updated'); END;
+             CREATE TRIGGER trg_prevent_audit_log_deletion
+             BEFORE DELETE ON audit_log
+             FOR EACH ROW WHEN EXISTS (SELECT 1 FROM companies WHERE id = OLD.company_id)
+             BEGIN SELECT RAISE(ABORT, 'Audit log entries are permanent and cannot be deleted'); END;"
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // Execute Sprint 2 core DDL, triggers, and voucher type seeding
+        sqlx::raw_sql(SPRINT2_DDL).execute(&mut *conn).await.map_err(OpenTallyError::Database)?;
+        sqlx::raw_sql(SPRINT2_TRIGGERS).execute(&mut *conn).await.map_err(OpenTallyError::Database)?;
+        sqlx::raw_sql(SPRINT2_VOUCHER_TYPES_SEED).execute(&mut *conn).await.map_err(OpenTallyError::Database)?;
+
+        // Update metadata schema version
+        let app_version = env!("CARGO_PKG_VERSION");
+        sqlx::query(
+            "UPDATE _opentally_metadata 
+             SET schema_version = '0.3.0-sprint2', app_version = $1
+             WHERE id = 1"
+        )
+        .bind(app_version)
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // STEP 10: Run PRAGMA foreign_key_check and verify zero violations
+        let violations = sqlx::query(
+            "PRAGMA foreign_key_check;"
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if !violations.is_empty() {
+            return Err(OpenTallyError::Migration(format!(
+                "Foreign key integrity check failed with {} violation(s) after Sprint 2 migration",
+                violations.len()
+            )));
+        }
+
+        // STEP 11a: Commit write transaction
+        sqlx::raw_sql("COMMIT;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        in_transaction = false;
+
+        Ok(())
+    }.await;
+
+    // STEP 11b & 12: Unconditional Cleanup & Connection State Management Scope
+    // Handle rollback if migration execution failed while transaction was active
+    if in_transaction {
+        tracing::warn!("Migration transaction active upon exit; issuing ROLLBACK;");
+        match sqlx::raw_sql("ROLLBACK;").execute(&mut *conn).await {
+            Ok(_) => {
+                tracing::info!(
+                    "State B: ROLLBACK; executed successfully; transaction aborted cleanly."
+                );
+            }
+            Err(rb_err) => {
+                // State C: ROLLBACK FAILED! Transaction state is indeterminate.
+                tracing::error!(
+                    "State C: CRITICAL - ROLLBACK failed ({:?})! Transaction state is indeterminate. Closing and discarding connection immediately.",
+                    rb_err
+                );
+                let _ = conn.close().await; // DISCARD CONNECTION - never return to pool
+                return Err(OpenTallyError::Migration(format!(
+                    "Fatal migration error: ROLLBACK failed ({:?}); connection closed and discarded to prevent returning indeterminate transaction state to pool",
+                    rb_err
+                )));
+            }
+        }
+    }
+
+    // Step 11b: Restore foreign keys OUTSIDE transaction (NO `?` operator used)
+    if fk_disabled {
+        let restore_res = sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+            .execute(&mut *conn)
+            .await;
+        let verify_status: Result<i64, _> = sqlx::query_scalar("PRAGMA foreign_keys;")
+            .fetch_one(&mut *conn)
+            .await;
+
+        let fk_re_enabled = restore_res.is_ok() && matches!(verify_status, Ok(1));
+
+        if !fk_re_enabled {
+            // State D: Post-Commit Connection Cleanup Failure!
+            tracing::error!(
+                "State D: CRITICAL - Failed to restore or verify foreign keys (status: {:?})! Closing and discarding connection immediately.",
+                verify_status
+            );
+            let _ = conn.close().await; // DISCARD CONNECTION - never return to pool
+            return Err(OpenTallyError::Migration(format!(
+                "Fatal migration error: Foreign keys could not be restored to ON (1) (status: {:?}); connection closed and discarded to protect pool integrity",
+                verify_status
+            )));
+        }
+    }
+
+    // Step 12: Verify final schema version and return healthy connection
+    match migration_res {
+        Ok(()) => {
+            let final_version: String =
+                sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+                    .fetch_one(&mut *conn)
+                    .await
+                    .map_err(OpenTallyError::Database)?;
+
+            if final_version != "0.3.0-sprint2" {
+                let _ = conn.close().await;
+                return Err(OpenTallyError::Migration(format!(
+                    "Final schema version verification failed: expected '0.3.0-sprint2', found '{}'",
+                    final_version
+                )));
+            }
+
+            // State A: Clean Success
+            tracing::info!("State A: Migration 0.3.0-sprint2 completed successfully. Connection verified healthy (foreign_keys = 1, autocommit active).");
+            Ok(())
+        }
+        Err(err) => {
+            // State B: Clean Rollback
+            tracing::info!("State B: Migration 0.3.0-sprint2 failed and rolled back cleanly. Connection verified healthy (foreign_keys = 1, autocommit active).");
+            Err(err)
+        }
+    }
+}
+
+/// Stage 4 Hardening DDL for temporary vouchers table with hardened chk_voucher_sequence_metadata
+pub const STAGE4_HARDENING_VOUCHERS_TABLE_TMP_DDL: &str = r#"
+CREATE TABLE vouchers_dg_tmp (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_type_id TEXT NOT NULL,
+    series_id TEXT NOT NULL,
+    numbering_method TEXT NOT NULL DEFAULT 'automatic' CHECK (numbering_method IN ('automatic', 'manual')),
+    period_start TEXT,
+    sequence_number INTEGER,
+    voucher_number TEXT NOT NULL,
+    date TEXT NOT NULL,
+    effective_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'posted', 'cancelled', 'reversed')),
+    reference_no TEXT,
+    reference_date TEXT,
+    narration TEXT,
+    total_amount TEXT,
+    reversal_of_voucher_id TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_type_id) REFERENCES voucher_types(company_id, id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_type_id, series_id, numbering_method) REFERENCES voucher_number_series(company_id, voucher_type_id, id, numbering_method) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, reversal_of_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_no_self_reversal CHECK (reversal_of_voucher_id IS NULL OR reversal_of_voucher_id != id),
+    CONSTRAINT chk_voucher_date CHECK (
+        date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(date) IS NOT NULL
+        AND date(date) = date
+    ),
+    CONSTRAINT chk_effective_date CHECK (
+        effective_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+        AND date(effective_date) IS NOT NULL
+        AND date(effective_date) = effective_date
+    ),
+    CONSTRAINT chk_voucher_sequence_metadata CHECK (
+        CASE
+            WHEN status = 'draft' THEN (
+                period_start IS NULL
+                AND sequence_number IS NULL
+            )
+            WHEN status IN ('posted', 'cancelled', 'reversed') AND numbering_method = 'automatic' THEN (
+                period_start IS NOT NULL
+                AND period_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                AND date(period_start) IS NOT NULL
+                AND date(period_start) = period_start
+                AND sequence_number IS NOT NULL
+                AND sequence_number > 0
+            )
+            WHEN status IN ('posted', 'cancelled', 'reversed') AND numbering_method = 'manual' THEN (
+                sequence_number IS NULL
+                AND (
+                    period_start IS NULL
+                    OR (
+                        period_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                        AND date(period_start) IS NOT NULL
+                        AND date(period_start) = period_start
+                    )
+                )
+            )
+            ELSE 0
+        END = 1
+    ),
+    CONSTRAINT chk_voucher_total_amount_canonical CHECK (
+        (
+            status = 'draft' 
+            AND (
+                total_amount IS NULL
+                OR
+                (
+                    length(total_amount) >= 1
+                    AND length(total_amount) <= 25
+                    AND total_amount NOT GLOB '*[^0-9.]*'
+                    AND total_amount NOT GLOB '*..*'
+                    AND total_amount NOT GLOB '.*'
+                    AND total_amount NOT GLOB '*.'
+                    AND (
+                        (
+                            instr(total_amount, '.') > 0
+                            AND length(substr(total_amount, instr(total_amount, '.') + 1)) BETWEEN 1 AND 4
+                            AND instr(substr(total_amount, instr(total_amount, '.') + 1), '.') = 0
+                            AND (
+                                (substr(total_amount, 1, instr(total_amount, '.') - 1) = '0' 
+                                 AND substr(total_amount, instr(total_amount, '.') + 1) GLOB '*[1-9]*')
+                                OR
+                                (substr(total_amount, 1, instr(total_amount, '.') - 1) GLOB '[1-9]*')
+                            )
+                        )
+                        OR
+                        (
+                            instr(total_amount, '.') = 0
+                            AND total_amount GLOB '[1-9]*'
+                        )
+                    )
+                )
+            )
+        )
+        OR
+        (
+            status IN ('posted', 'reversed', 'cancelled')
+            AND total_amount IS NOT NULL
+            AND length(total_amount) >= 1
+            AND length(total_amount) <= 25
+            AND total_amount NOT GLOB '*[^0-9.]*'
+            AND total_amount NOT GLOB '*..*'
+            AND total_amount NOT GLOB '.*'
+            AND total_amount NOT GLOB '*.'
+            AND (
+                (
+                    instr(total_amount, '.') > 0
+                    AND length(substr(total_amount, instr(total_amount, '.') + 1)) BETWEEN 1 AND 4
+                    AND instr(substr(total_amount, instr(total_amount, '.') + 1), '.') = 0
+                    AND (
+                        (substr(total_amount, 1, instr(total_amount, '.') - 1) = '0' 
+                         AND substr(total_amount, instr(total_amount, '.') + 1) GLOB '*[1-9]*')
+                        OR
+                        (substr(total_amount, 1, instr(total_amount, '.') - 1) GLOB '[1-9]*')
+                    )
+                )
+                OR
+                (
+                    instr(total_amount, '.') = 0
+                    AND total_amount GLOB '[1-9]*'
+                )
+            )
+        )
+    )
+);
+"#;
+
+/// Stage 4 Hardening DDL for temporary voucher lines table with chk_voucher_line_number_bounds
+pub const STAGE4_HARDENING_VOUCHER_LINES_TABLE_TMP_DDL: &str = r#"
+CREATE TABLE voucher_lines_dg_tmp (
+    id TEXT NOT NULL,
+    company_id TEXT NOT NULL,
+    voucher_id TEXT NOT NULL,
+    line_number INTEGER NOT NULL CHECK (line_number > 0),
+    ledger_id TEXT NOT NULL,
+    entry_type TEXT NOT NULL CHECK (entry_type IN ('Dr', 'Cr')),
+    amount TEXT NOT NULL,
+    narration TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (company_id, id),
+    UNIQUE (company_id, voucher_id, line_number),
+    FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
+    FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+    FOREIGN KEY (company_id, ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+    CONSTRAINT chk_voucher_line_number_bounds CHECK (
+        (line_number BETWEEN 1 AND 10000)
+        OR
+        (line_number BETWEEN 1000001 AND 1010000)
+    ),
+    CONSTRAINT chk_voucher_line_amount_canonical CHECK (
+        amount IS NOT NULL
+        AND length(amount) >= 1
+        AND length(amount) <= 25
+        AND amount NOT GLOB '*[^0-9.]*'
+        AND amount NOT GLOB '*..*'
+        AND amount NOT GLOB '.*'
+        AND amount NOT GLOB '*.'
+        AND (
+            (
+                instr(amount, '.') > 0
+                AND length(substr(amount, instr(amount, '.') + 1)) BETWEEN 1 AND 4
+                AND instr(substr(amount, instr(amount, '.') + 1), '.') = 0
+                AND (
+                    (substr(amount, 1, instr(amount, '.') - 1) = '0' 
+                     AND substr(amount, instr(amount, '.') + 1) GLOB '*[1-9]*')
+                    OR
+                    (substr(amount, 1, instr(amount, '.') - 1) GLOB '[1-9]*')
+                )
+            )
+            OR
+            (
+                instr(amount, '.') = 0
+                AND amount GLOB '[1-9]*'
+            )
+        )
+    )
+);
+"#;
+
+/// Canonical inventory of the 14 triggers directly or indirectly dependent on vouchers and voucher_lines
+pub const CANONICAL_STAGE4_DEPENDENT_TRIGGERS: [&str; 14] = [
+    "trg_prevent_posted_voucher_mutation",
+    "trg_validate_reversal_target_on_post",
+    "trg_prevent_illegal_draft_transitions",
+    "trg_prevent_posted_voucher_deletion",
+    "trg_prevent_posted_voucher_lines_insert",
+    "trg_prevent_posted_voucher_lines_mutation",
+    "trg_prevent_posted_voucher_lines_deletion",
+    "trg_prevent_ledger_delete_with_vouchers",
+    "trg_prevent_company_delete_with_financial_vouchers",
+    "trg_prevent_series_code_mutation",
+    "trg_prevent_series_deletion_with_vouchers",
+    "trg_prevent_active_config_mutation",
+    "trg_prevent_active_config_deletion",
+    "trg_prevent_retroactive_config_insert",
+];
+
+/// Stage 4 Hardening DDL for recreating canonical indexes and triggers on vouchers & lines
+pub const STAGE4_HARDENING_INDEXES_AND_TRIGGERS_DDL: &str = r#"
+CREATE INDEX IF NOT EXISTS idx_vouchers_date ON vouchers(company_id, date);
+CREATE INDEX IF NOT EXISTS idx_vouchers_type_status ON vouchers(company_id, voucher_type_id, status);
+CREATE INDEX IF NOT EXISTS idx_vouchers_series_ownership ON vouchers(company_id, voucher_type_id, series_id, numbering_method);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_permanent_number ON vouchers(company_id, voucher_type_id, voucher_number) WHERE status != 'draft';
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_series_sequence ON vouchers(company_id, series_id, period_start, sequence_number) WHERE status != 'draft' AND sequence_number IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_vouchers_reversal ON vouchers(company_id, reversal_of_voucher_id) WHERE reversal_of_voucher_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_voucher_lines_ledger ON voucher_lines(company_id, ledger_id);
+
+-- Trigger 1: Enforce Posted/Cancelled/Reversed Voucher Header Immutability & Reversal Freeze
+CREATE TRIGGER IF NOT EXISTS trg_prevent_posted_voucher_mutation
+BEFORE UPDATE ON vouchers
+FOR EACH ROW
+WHEN OLD.status IN ('posted', 'cancelled', 'reversed')
+BEGIN
+    SELECT RAISE(ABORT, 'Illegal voucher lifecycle transition. Cancelled and reversed vouchers are permanently frozen.')
+    WHERE (OLD.status = 'cancelled' OR OLD.status = 'reversed');
+
+    SELECT RAISE(ABORT, 'Illegal voucher lifecycle transition from posted status. Posted vouchers can only transition to CANCELLED or REVERSED.')
+    WHERE OLD.status = 'posted' AND NEW.status NOT IN ('posted', 'cancelled', 'reversed');
+
+    SELECT RAISE(ABORT, 'Core financial, reference, and numbering fields of a posted voucher are strictly immutable.')
+    WHERE (NEW.company_id IS NOT OLD.company_id)
+       OR (NEW.voucher_type_id IS NOT OLD.voucher_type_id)
+       OR (NEW.series_id IS NOT OLD.series_id)
+       OR (NEW.numbering_method IS NOT OLD.numbering_method)
+       OR (NEW.period_start IS NOT OLD.period_start)
+       OR (NEW.sequence_number IS NOT OLD.sequence_number)
+       OR (NEW.voucher_number IS NOT OLD.voucher_number)
+       OR (NEW.date IS NOT OLD.date)
+       OR (NEW.effective_date IS NOT OLD.effective_date)
+       OR (NEW.reference_no IS NOT OLD.reference_no)
+       OR (NEW.reference_date IS NOT OLD.reference_date)
+       OR (NEW.narration IS NOT OLD.narration)
+       OR (NEW.total_amount IS NOT OLD.total_amount)
+       OR (NEW.reversal_of_voucher_id IS NOT OLD.reversal_of_voucher_id)
+       OR (NEW.created_at IS NOT OLD.created_at);
+
+    SELECT RAISE(ABORT, 'Cannot cancel a reversing voucher. Reversing vouchers are permanently immutable to preserve ledger equilibrium.')
+    WHERE OLD.reversal_of_voucher_id IS NOT NULL AND NEW.status = 'cancelled';
+
+    SELECT RAISE(ABORT, 'Cannot mark voucher as REVERSED without an existing POSTED reversing voucher referencing it.')
+    WHERE OLD.status = 'posted' AND NEW.status = 'reversed'
+      AND NOT EXISTS (
+          SELECT 1 FROM vouchers rev
+          WHERE rev.company_id = NEW.company_id
+            AND rev.reversal_of_voucher_id = NEW.id
+            AND rev.status = 'posted'
+      );
+END;
+
+-- Trigger 1b: Validate Reversing Voucher Target Eligibility on Promotion to POSTED
+CREATE TRIGGER IF NOT EXISTS trg_validate_reversal_target_on_post
+BEFORE UPDATE OF status ON vouchers
+FOR EACH ROW
+WHEN NEW.reversal_of_voucher_id IS NOT NULL 
+ AND NEW.status = 'posted' 
+ AND OLD.status = 'draft'
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot post reversing voucher: Referenced original voucher must exist in the same company with status POSTED.')
+    WHERE NOT EXISTS (
+        SELECT 1 FROM vouchers orig
+        WHERE orig.company_id = NEW.company_id
+          AND orig.id = NEW.reversal_of_voucher_id
+          AND orig.status = 'posted'
+    );
+END;
+
+-- Trigger 2: Prohibit Illegal Direct Draft Transitions
+CREATE TRIGGER IF NOT EXISTS trg_prevent_illegal_draft_transitions
+BEFORE UPDATE ON vouchers
+FOR EACH ROW
+WHEN OLD.status = 'draft'
+BEGIN
+    SELECT RAISE(ABORT, 'Draft vouchers cannot transition directly to cancelled or reversed status. Drafts must be posted first or deleted/purged.')
+    WHERE NEW.status NOT IN ('draft', 'posted');
+END;
+
+-- Trigger 3: Prohibit Hard Deletion of Non-Draft Vouchers (Unconditional)
+CREATE TRIGGER IF NOT EXISTS trg_prevent_posted_voucher_deletion
+BEFORE DELETE ON vouchers
+FOR EACH ROW
+WHEN OLD.status IN ('posted', 'cancelled', 'reversed')
+BEGIN
+    SELECT RAISE(ABORT, 'Hard deletion of financial vouchers is strictly prohibited. Posted, cancelled, and reversed vouchers cannot be deleted, even via company cascade.');
+END;
+
+-- Trigger 4: Prohibit Inserting Lines into Non-Draft Vouchers
+CREATE TRIGGER IF NOT EXISTS trg_prevent_posted_voucher_lines_insert
+BEFORE INSERT ON voucher_lines
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers 
+    WHERE company_id = NEW.company_id 
+      AND id = NEW.voucher_id 
+      AND status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot insert line items into a posted, cancelled, or reversed voucher.');
+END;
+
+-- Trigger 5: Prohibit Mutating or Reassigning Lines Belonging to or Assigned to Non-Draft Vouchers
+CREATE TRIGGER IF NOT EXISTS trg_prevent_posted_voucher_lines_mutation
+BEFORE UPDATE ON voucher_lines
+FOR EACH ROW
+WHEN (
+    EXISTS (
+        SELECT 1 FROM vouchers 
+        WHERE company_id = OLD.company_id 
+          AND id = OLD.voucher_id 
+          AND status IN ('posted', 'cancelled', 'reversed')
+    )
+    OR EXISTS (
+        SELECT 1 FROM vouchers 
+        WHERE company_id = NEW.company_id 
+          AND id = NEW.voucher_id 
+          AND status IN ('posted', 'cancelled', 'reversed')
+    )
+    OR (NEW.company_id IS NOT OLD.company_id)
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Voucher line items belonging to or assigned to a posted, cancelled, or reversed voucher cannot be modified or reassigned.');
+END;
+
+-- Trigger 6: Prohibit Deleting Lines Belonging to Non-Draft Vouchers
+CREATE TRIGGER IF NOT EXISTS trg_prevent_posted_voucher_lines_deletion
+BEFORE DELETE ON voucher_lines
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers 
+    WHERE company_id = OLD.company_id 
+      AND id = OLD.voucher_id 
+      AND status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Voucher line items belonging to a posted, cancelled, or reversed voucher cannot be deleted.');
+END;
+
+-- Trigger 7: Prevent Deleting Ledgers Referenced in Vouchers
+CREATE TRIGGER IF NOT EXISTS trg_prevent_ledger_delete_with_vouchers
+BEFORE DELETE ON ledgers
+FOR EACH ROW
+WHEN EXISTS (SELECT 1 FROM companies WHERE id = OLD.company_id)
+  AND EXISTS (SELECT 1 FROM voucher_lines WHERE company_id = OLD.company_id AND ledger_id = OLD.id)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete ledger: it is referenced in existing voucher lines.');
+END;
+
+-- Trigger 8: Prohibit Hard Deletion of Companies Containing Financial Vouchers
+CREATE TRIGGER IF NOT EXISTS trg_prevent_company_delete_with_financial_vouchers
+BEFORE DELETE ON companies
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers 
+    WHERE company_id = OLD.id 
+      AND status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete company: Company contains financial accounting records. As an application-level financial-history protection mechanism (subject to professional legal and statutory review), companies with financial records cannot be deleted and must be soft-archived.');
+END;
+
+-- Trigger 8a: Prohibit Mutating Series Code or Numbering Method on Active Series
+CREATE TRIGGER IF NOT EXISTS trg_prevent_series_code_mutation
+BEFORE UPDATE OF series_code, numbering_method ON voucher_number_series
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.id
+      AND v.status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify series_code or numbering_method: permanent vouchers exist in this series.');
+END;
+
+-- Trigger 8b: Prohibit Deleting Series Referencing Permanent Vouchers
+CREATE TRIGGER IF NOT EXISTS trg_prevent_series_deletion_with_vouchers
+BEFORE DELETE ON voucher_number_series
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.id
+      AND v.status IN ('posted', 'cancelled', 'reversed')
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete series: permanent vouchers exist in this series.');
+END;
+
+-- Trigger 9b: Series-Scoped Immutability on UPDATE for Active Configurations
+CREATE TRIGGER IF NOT EXISTS trg_prevent_active_config_mutation
+BEFORE UPDATE ON voucher_number_configs
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.series_id
+      AND v.status IN ('posted', 'reversed', 'cancelled')
+      AND v.date >= OLD.applicable_from
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot modify active numbering configuration: permanent vouchers exist in this series governed by this configuration. Append a new configuration row with a future applicable_from date instead.');
+END;
+
+-- Trigger 10: Series-Scoped Immutability on DELETE
+CREATE TRIGGER IF NOT EXISTS trg_prevent_active_config_deletion
+BEFORE DELETE ON voucher_number_configs
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = OLD.company_id
+      AND v.series_id = OLD.series_id
+      AND v.status IN ('posted', 'reversed', 'cancelled')
+      AND v.date >= OLD.applicable_from
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot delete active numbering configuration: permanent vouchers exist in this series governed by this configuration.');
+END;
+
+-- Trigger 11: Prohibit Retroactive Numbering Configuration INSERT
+CREATE TRIGGER IF NOT EXISTS trg_prevent_retroactive_config_insert
+BEFORE INSERT ON voucher_number_configs
+FOR EACH ROW
+WHEN EXISTS (
+    SELECT 1 FROM vouchers v
+    WHERE v.company_id = NEW.company_id
+      AND v.series_id = NEW.series_id
+      AND v.status IN ('posted', 'reversed', 'cancelled')
+      AND v.date >= NEW.applicable_from
+      AND (
+          NOT EXISTS (
+              SELECT 1 FROM voucher_number_configs c
+              WHERE c.company_id = NEW.company_id
+                AND c.series_id = NEW.series_id
+                AND c.applicable_from > NEW.applicable_from
+                AND v.date >= c.applicable_from
+          )
+      )
+)
+BEGIN
+    SELECT RAISE(ABORT, 'Cannot insert retroactive numbering configuration: permanent vouchers already exist in this series governed by the proposed effective period.');
+END;
+"#;
+
+/// Execute the Stage 4 Hardening Forward Migration (0.3.0-sprint2 -> 0.3.1-sprint2).
+/// Upgrades vouchers table with hardened chk_voucher_sequence_metadata and voucher_lines
+/// with chk_voucher_line_number_bounds using the 12-step table-rebuild pattern.
+pub async fn run_sprint2_stage4_hardening_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    // STEP 1: Dedicated connection checked out from the pool
+    let mut conn = pool.acquire().await.map_err(OpenTallyError::Database)?;
+
+    // STEP 2: Read and verify source schema version
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+    if current_version == "0.3.1-sprint2" {
+        tracing::info!(
+            "Database already at schema version 0.3.1-sprint2; Stage 4 hardening migration skipped (idempotent)."
+        );
+        return Ok(());
+    }
+
+    if current_version != "0.3.0-sprint2" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.3.0-sprint2' for Stage 4 hardening migration, found '{}'",
+            current_version
+        )));
+    }
+
+    let mut fk_disabled = false;
+    let mut in_transaction = false;
+
+    let migration_res: Result<(), OpenTallyError> = async {
+        // STEP 3: Disable foreign keys OUTSIDE any transaction & verify status
+        sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        fk_disabled = true;
+
+        let fk_status: i64 = sqlx::query_scalar("PRAGMA foreign_keys;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        if fk_status != 0 {
+            return Err(OpenTallyError::Migration(
+                "Failed to disable foreign keys prior to Stage 4 hardening table rebuild (status != 0)".into(),
+            ));
+        }
+
+        // STEP 4: Begin immediate exclusive write transaction (WAL write lock)
+        sqlx::raw_sql("BEGIN IMMEDIATE;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        in_transaction = true;
+
+        // STEP 5: Pre-migration fail-closed integrity validation
+        // 5a. Validate voucher line bounds (Fail-closed on ANY committed line outside active [1, 10000])
+        let corrupted_lines_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM voucher_lines
+             WHERE COALESCE(line_number BETWEEN 1 AND 10000, 0) <> 1;",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if corrupted_lines_count > 0 {
+            let sample_lines = sqlx::query_as::<_, (String, String, String, i64)>(
+                "SELECT company_id, voucher_id, id, line_number
+                 FROM voucher_lines
+                 WHERE COALESCE(line_number BETWEEN 1 AND 10000, 0) <> 1
+                 LIMIT 10;",
+            )
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+            return Err(OpenTallyError::IntegrityViolation(format!(
+                "Pre-migration validation failed: found {} corrupted/staging voucher line(s) outside supported active range [1, 10000]. Sample: {:?}",
+                corrupted_lines_count,
+                sample_lines
+            )));
+        }
+
+        // 5b. Validate voucher sequence metadata
+        let invalid_vouchers = sqlx::query_as::<_, (String, String, String, String, Option<String>, Option<i64>)>(
+            "SELECT company_id, id, status, numbering_method, period_start, sequence_number
+             FROM vouchers
+             WHERE COALESCE(
+                 CASE
+                     WHEN status = 'draft' THEN (
+                         period_start IS NULL
+                         AND sequence_number IS NULL
+                     )
+                     WHEN status IN ('posted', 'cancelled', 'reversed') AND numbering_method = 'automatic' THEN (
+                         period_start IS NOT NULL
+                         AND period_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                         AND date(period_start) IS NOT NULL
+                         AND date(period_start) = period_start
+                         AND sequence_number IS NOT NULL
+                         AND sequence_number > 0
+                     )
+                     WHEN status IN ('posted', 'cancelled', 'reversed') AND numbering_method = 'manual' THEN (
+                         sequence_number IS NULL
+                         AND (
+                             period_start IS NULL
+                             OR (
+                                 period_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+                                 AND date(period_start) IS NOT NULL
+                                 AND date(period_start) = period_start
+                             )
+                         )
+                     )
+                     ELSE 0
+                 END, 0
+             ) != 1
+             LIMIT 10;",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if !invalid_vouchers.is_empty() {
+            return Err(OpenTallyError::IntegrityViolation(format!(
+                "Pre-migration validation failed: found {} voucher(s) with invalid sequence metadata. Sample: {:?}",
+                invalid_vouchers.len(),
+                invalid_vouchers
+            )));
+        }
+
+        // 5c. Validate voucher dates
+        let invalid_dates = sqlx::query_as::<_, (String, String, String, String)>(
+            "SELECT company_id, id, date, effective_date
+             FROM vouchers
+             WHERE COALESCE(date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(date) IS NOT NULL AND date(date) = date, 0) != 1
+                OR COALESCE(effective_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(effective_date) IS NOT NULL AND date(effective_date) = effective_date, 0) != 1
+             LIMIT 10;",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if !invalid_dates.is_empty() {
+            return Err(OpenTallyError::IntegrityViolation(format!(
+                "Pre-migration validation failed: found {} voucher(s) with invalid calendar dates. Sample: {:?}",
+                invalid_dates.len(),
+                invalid_dates
+            )));
+        }
+
+        // STEP 6: Enumerate and drop dependent triggers from sqlite_master
+        // Account for:
+        // - Triggers attached to vouchers
+        // - Triggers attached to voucher_lines
+        // - Triggers attached to other tables referencing vouchers
+        // - Triggers attached to other tables referencing voucher_lines
+        let dynamic_triggers = sqlx::query_as::<_, (String,)>(
+            "SELECT name FROM sqlite_master 
+             WHERE type = 'trigger' 
+               AND (tbl_name IN ('vouchers', 'voucher_lines') OR sql LIKE '%vouchers%' OR sql LIKE '%voucher_lines%');",
+        )
+        .fetch_all(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        let mut triggers_to_drop = std::collections::BTreeSet::new();
+        for (name,) in dynamic_triggers {
+            triggers_to_drop.insert(name);
+        }
+        for trg in CANONICAL_STAGE4_DEPENDENT_TRIGGERS {
+            triggers_to_drop.insert(trg.to_string());
+        }
+
+        for trg_name in &triggers_to_drop {
+            let drop_sql = format!("DROP TRIGGER IF EXISTS {};", trg_name);
+            sqlx::raw_sql(&drop_sql)
+                .execute(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?;
+        }
+
+        // STEP 7: Rebuild vouchers table
+        sqlx::raw_sql(STAGE4_HARDENING_VOUCHERS_TABLE_TMP_DDL)
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        sqlx::raw_sql(
+            "INSERT INTO vouchers_dg_tmp (
+                id, company_id, voucher_type_id, series_id, numbering_method,
+                period_start, sequence_number, voucher_number, date, effective_date,
+                status, reference_no, reference_date, narration, total_amount,
+                reversal_of_voucher_id, created_at, updated_at
+            )
+            SELECT 
+                id, company_id, voucher_type_id, series_id, numbering_method,
+                period_start, sequence_number, voucher_number, date, effective_date,
+                status, reference_no, reference_date, narration, total_amount,
+                reversal_of_voucher_id, created_at, updated_at
+            FROM vouchers;",
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // Verify voucher row counts
+        let vch_src: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vouchers;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        let vch_dst: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM vouchers_dg_tmp;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        if vch_src != vch_dst {
+            return Err(OpenTallyError::Migration(format!(
+                "Voucher count mismatch during Stage 4 hardening: source={}, destination={}",
+                vch_src, vch_dst
+            )));
+        }
+
+        // Bidirectional EXCEPT difference verification for vouchers
+        let vch_diff_fwd: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+                SELECT id, company_id, voucher_type_id, series_id, numbering_method, period_start, sequence_number, voucher_number, date, effective_date, status, reference_no, reference_date, narration, total_amount, reversal_of_voucher_id, created_at, updated_at FROM vouchers
+                EXCEPT
+                SELECT id, company_id, voucher_type_id, series_id, numbering_method, period_start, sequence_number, voucher_number, date, effective_date, status, reference_no, reference_date, narration, total_amount, reversal_of_voucher_id, created_at, updated_at FROM vouchers_dg_tmp
+            );",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        let vch_diff_rev: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+                SELECT id, company_id, voucher_type_id, series_id, numbering_method, period_start, sequence_number, voucher_number, date, effective_date, status, reference_no, reference_date, narration, total_amount, reversal_of_voucher_id, created_at, updated_at FROM vouchers_dg_tmp
+                EXCEPT
+                SELECT id, company_id, voucher_type_id, series_id, numbering_method, period_start, sequence_number, voucher_number, date, effective_date, status, reference_no, reference_date, narration, total_amount, reversal_of_voucher_id, created_at, updated_at FROM vouchers
+            );",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if vch_diff_fwd != 0 || vch_diff_rev != 0 {
+            return Err(OpenTallyError::Migration(format!(
+                "Bidirectional data difference detected for vouchers: forward={}, reverse={}",
+                vch_diff_fwd, vch_diff_rev
+            )));
+        }
+
+        sqlx::raw_sql("DROP TABLE vouchers;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        sqlx::raw_sql("ALTER TABLE vouchers_dg_tmp RENAME TO vouchers;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        // STEP 8: Rebuild voucher_lines table
+        sqlx::raw_sql(STAGE4_HARDENING_VOUCHER_LINES_TABLE_TMP_DDL)
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        sqlx::raw_sql(
+            "INSERT INTO voucher_lines_dg_tmp (
+                id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration, created_at
+            )
+            SELECT 
+                id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration, created_at
+            FROM voucher_lines;",
+        )
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // Verify voucher_lines row counts
+        let vl_src: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM voucher_lines;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        let vl_dst: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM voucher_lines_dg_tmp;")
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        if vl_src != vl_dst {
+            return Err(OpenTallyError::Migration(format!(
+                "Voucher lines count mismatch during Stage 4 hardening: source={}, destination={}",
+                vl_src, vl_dst
+            )));
+        }
+
+        // Bidirectional EXCEPT difference verification for voucher_lines
+        let vl_diff_fwd: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+                SELECT id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration, created_at FROM voucher_lines
+                EXCEPT
+                SELECT id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration, created_at FROM voucher_lines_dg_tmp
+            );",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        let vl_diff_rev: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM (
+                SELECT id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration, created_at FROM voucher_lines_dg_tmp
+                EXCEPT
+                SELECT id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration, created_at FROM voucher_lines
+            );",
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if vl_diff_fwd != 0 || vl_diff_rev != 0 {
+            return Err(OpenTallyError::Migration(format!(
+                "Bidirectional data difference detected for voucher lines: forward={}, reverse={}",
+                vl_diff_fwd, vl_diff_rev
+            )));
+        }
+
+        sqlx::raw_sql("DROP TABLE voucher_lines;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        sqlx::raw_sql("ALTER TABLE voucher_lines_dg_tmp RENAME TO voucher_lines;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        // STEP 9: Recreate indexes and triggers
+        sqlx::raw_sql(STAGE4_HARDENING_INDEXES_AND_TRIGGERS_DDL)
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        // Explicit post-rebuild verification: Ensure all 14 canonical triggers were successfully restored
+        for trg in CANONICAL_STAGE4_DEPENDENT_TRIGGERS {
+            let exists: bool = sqlx::query_scalar(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'trigger' AND name = $1;",
+            )
+            .bind(trg)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+            if !exists {
+                return Err(OpenTallyError::Migration(format!(
+                    "Post-rebuild verification failed: canonical trigger '{}' was not restored",
+                    trg
+                )));
+            }
+        }
+
+        // STEP 10: Update schema version in _opentally_metadata
+        let app_version = env!("CARGO_PKG_VERSION");
+        sqlx::query(
+            "UPDATE _opentally_metadata 
+             SET schema_version = '0.3.1-sprint2', app_version = $1
+             WHERE id = 1;",
+        )
+        .bind(app_version)
+        .execute(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        // STEP 11: Verify Foreign Key Integrity
+        let violations = sqlx::query("PRAGMA foreign_key_check;")
+            .fetch_all(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+        if !violations.is_empty() {
+            return Err(OpenTallyError::Migration(format!(
+                "Foreign key integrity check failed with {} violation(s) after Stage 4 hardening migration",
+                violations.len()
+            )));
+        }
+
+        // STEP 12: Commit transaction
+        sqlx::raw_sql("COMMIT;")
+            .execute(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        in_transaction = false;
+
+        Ok(())
+    }
+    .await;
+
+    // STEP 13 & 14: Connection Cleanup and Rollback Handling (4 Exit States)
+    if in_transaction {
+        tracing::warn!("Migration 0.3.1-sprint2 transaction active upon exit; issuing ROLLBACK;");
+        match sqlx::raw_sql("ROLLBACK;").execute(&mut *conn).await {
+            Ok(_) => {
+                tracing::info!(
+                    "State B: ROLLBACK executed successfully; transaction aborted cleanly."
+                );
+            }
+            Err(rb_err) => {
+                // State C: Critical rollback failure
+                tracing::error!(
+                    "State C: CRITICAL - ROLLBACK failed ({:?})! Closing and discarding connection.",
+                    rb_err
+                );
+                let _ = conn.close().await;
+                return Err(OpenTallyError::Migration(format!(
+                    "Fatal migration error: ROLLBACK failed ({:?}); connection closed and discarded",
+                    rb_err
+                )));
+            }
+        }
+    }
+
+    if fk_disabled {
+        let restore_res = sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+            .execute(&mut *conn)
+            .await;
+        let verify_status: Result<i64, _> = sqlx::query_scalar("PRAGMA foreign_keys;")
+            .fetch_one(&mut *conn)
+            .await;
+        let fk_re_enabled = restore_res.is_ok() && matches!(verify_status, Ok(1));
+
+        if !fk_re_enabled {
+            // State D: Foreign key restoration failure
+            tracing::error!(
+                "State D: CRITICAL - Failed to restore or verify foreign keys (status: {:?})! Discarding connection.",
+                verify_status
+            );
+            let _ = conn.close().await;
+            return Err(OpenTallyError::Migration(format!(
+                "Fatal migration error: Foreign keys could not be restored to ON (status: {:?}); connection closed and discarded",
+                verify_status
+            )));
+        }
+    }
+
+    match migration_res {
+        Ok(()) => {
+            let final_version: String =
+                sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+                    .fetch_one(&mut *conn)
+                    .await
+                    .map_err(OpenTallyError::Database)?;
+
+            if final_version != "0.3.1-sprint2" {
+                let _ = conn.close().await;
+                return Err(OpenTallyError::Migration(format!(
+                    "Final schema version verification failed: expected '0.3.1-sprint2', found '{}'",
+                    final_version
+                )));
+            }
+
+            // State A: Clean Success
+            tracing::info!("State A: Migration 0.3.1-sprint2 completed successfully.");
+            Ok(())
+        }
+        Err(err) => {
+            // State B: Clean Rollback
+            tracing::info!("State B: Migration 0.3.1-sprint2 failed and rolled back cleanly.");
+            Err(err)
         }
     }
 }

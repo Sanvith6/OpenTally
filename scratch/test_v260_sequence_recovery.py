@@ -20,9 +20,7 @@ def setup_db():
     );
     """)
 
-    c.execute("""
-    CREATE TABLE voucher_number_sequences (
-        id TEXT PRIMARY KEY,
+    c.execute("""+
         company_id TEXT NOT NULL,
         voucher_type_id TEXT NOT NULL,
         series_name TEXT NOT NULL,

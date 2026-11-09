@@ -19,8 +19,17 @@ pub enum OpenTallyError {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    #[error("Not found: {0}")]
+    NotFound(String),
+
     #[error("Migration error: {0}")]
     Migration(String),
+
+    #[error("Integrity violation: {0}")]
+    IntegrityViolation(String),
+
+    #[error("Voucher number collision: {0}")]
+    VoucherNumberCollision(String),
 
     #[error("Internal system error: {0}")]
     Internal(String),
