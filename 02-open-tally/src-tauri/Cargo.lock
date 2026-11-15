@@ -2663,6 +2663,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "futures-util",
  "rust_decimal",
  "serde",
  "serde_json",
@@ -2676,6 +2677,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

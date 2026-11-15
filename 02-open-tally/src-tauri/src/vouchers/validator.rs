@@ -629,33 +629,7 @@ pub fn validate_search_filter(
     }
 
     // 4. Pagination validation & checked arithmetic
-    if let Some(page) = filter.page {
-        if page == 0 {
-            return Err(OpenTallyError::Validation(
-                "Page number must be greater than or equal to 1".to_string(),
-            ));
-        }
-    }
-    if let Some(page_size) = filter.page_size {
-        if page_size == 0 {
-            return Err(OpenTallyError::Validation(
-                "Page size must be greater than or equal to 1".to_string(),
-            ));
-        }
-        if page_size > 100 {
-            return Err(OpenTallyError::Validation(format!(
-                "Page size {} exceeds maximum permitted limit of 100",
-                page_size
-            )));
-        }
-    }
-    let page = filter.page.unwrap_or(1);
-    let page_size = filter.page_size.unwrap_or(20);
-    if (page - 1).checked_mul(page_size).is_none() {
-        return Err(OpenTallyError::Validation(
-            "Pagination offset calculation overflows u32 range".to_string(),
-        ));
-    }
+    let _ = validate_pagination_params(filter.page, filter.page_size)?;
 
     // 5. Identifier validation
     if let Some(ref id) = filter.voucher_type_id {
@@ -697,4 +671,40 @@ pub fn validate_search_filter(
     }
 
     Ok(())
+}
+
+/// Validate pagination arguments using checked arithmetic and return `(page, page_size, offset)`.
+///
+/// Enforces:
+/// - `page >= 1` (default `1`)
+/// - `1 <= page_size <= 100` (default `20`)
+/// - `(page - 1) * page_size` fits within `u32` (safely widening to `i64` for SQLite `OFFSET`)
+pub fn validate_pagination_params(
+    page: Option<u32>,
+    page_size: Option<u32>,
+) -> Result<(u32, u32, i64), OpenTallyError> {
+    let page = page.unwrap_or(1);
+    let page_size = page_size.unwrap_or(20);
+
+    let page_index = page.checked_sub(1).ok_or_else(|| {
+        OpenTallyError::Validation("Page number must be greater than or equal to 1".to_string())
+    })?;
+
+    if page_size == 0 {
+        return Err(OpenTallyError::Validation(
+            "Page size must be greater than or equal to 1".to_string(),
+        ));
+    }
+    if page_size > 100 {
+        return Err(OpenTallyError::Validation(format!(
+            "Page size {} exceeds maximum permitted limit of 100",
+            page_size
+        )));
+    }
+
+    let offset_u32 = page_index.checked_mul(page_size).ok_or_else(|| {
+        OpenTallyError::Validation("Pagination offset calculation overflows u32 range".to_string())
+    })?;
+
+    Ok((page, page_size, i64::from(offset_u32)))
 }

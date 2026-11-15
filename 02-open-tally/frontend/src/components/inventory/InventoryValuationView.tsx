@@ -1,0 +1,14 @@
+import { useEffect, useState } from 'react';
+import { Company, ValuationConfig, ValuationRow } from '../../types';
+import { getStockValuation, getValuationConfig, setValuationMethod } from '../../services/api';
+import '../reports/Reports.css';
+
+export function InventoryValuationView({ activeCompany, onBack }: { activeCompany: Company|null; onBack:()=>void }) {
+  const [date,setDate]=useState(new Date().toISOString().slice(0,10));
+  const [config,setConfig]=useState<ValuationConfig|null>(null); const [rows,setRows]=useState<ValuationRow[]>([]);
+  const [method,setMethod]=useState<'fifo'|'weighted_average'>('fifo'); const [search,setSearch]=useState(''); const [error,setError]=useState<string|null>(null); const [loading,setLoading]=useState(false);
+  const load=async()=>{if(!activeCompany)return;setLoading(true);setError(null);try{const [c,r]=await Promise.all([getValuationConfig(),getStockValuation({as_of_date:date,search:search||null,include_zero:true})]);setConfig(c);setMethod(c.valuation_method);setRows(r);}catch(e){setError(e instanceof Error?e.message:String(e));}finally{setLoading(false);}};
+  useEffect(()=>{void load();},[activeCompany,date]);
+  const change=async()=>{try{const c=await setValuationMethod(method);setConfig(c);await load();}catch(e){setError(e instanceof Error?e.message:String(e));}};
+  return <section className="ot-report-screen"><div className="ot-report-header"><div><h2>Inventory Valuation</h2><p>{activeCompany?.name||'Select an active company'}</p></div><button className="ot-report-back" onClick={onBack}>Back to Gateway</button></div><div className="ot-report-card"><div className="ot-inventory-toolbar"><label>As of <input type="date" value={date} onChange={e=>setDate(e.target.value)}/></label><input aria-label="Search valuation" placeholder="Search items" value={search} onChange={e=>setSearch(e.target.value)} /><button onClick={()=>void load()}>Refresh</button></div>{error&&<div className="ot-report-error" role="alert">{error}</div>}<div className="ot-inventory-toolbar"><label>Method <select value={method} onChange={e=>setMethod(e.target.value as 'fifo'|'weighted_average')}><option value="fifo">FIFO</option><option value="weighted_average">Weighted Average Cost</option></select></label><button onClick={()=>void change()} disabled={!config}>Save Method</button></div>{loading?<div className="ot-report-loading">Loading…</div>:rows.length===0?<div className="ot-report-empty">No valued stock found.</div>:<table className="ot-report-table"><thead><tr><th>Item</th><th>Quantity</th><th>Method</th><th>Unit Cost</th><th>Total Value</th></tr></thead><tbody>{rows.map(r=><tr key={r.stock_item_id}><td>{r.item_name}</td><td>{r.quantity}</td><td>{r.valuation_method}</td><td>{r.unit_cost}</td><td>{r.total_value}</td></tr>)}</tbody></table>}</div></section>;
+}

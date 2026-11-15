@@ -21,14 +21,22 @@ pub mod stage6_tests;
 #[cfg(test)]
 pub mod stage7_domain_tests;
 #[cfg(test)]
+pub mod stage7_export_tests;
+#[cfg(test)]
+pub mod stage7_hardening_tests;
+#[cfg(test)]
+pub mod stage7_repository_tests;
+#[cfg(test)]
 pub mod tests;
 
 pub use formatter::CanonicalVoucherFormatter;
 pub use model::*;
 pub use service::{
-    derive_period_start, validate_period_consistency, DoubleEntryValidator,
+    derive_period_start, escape_rfc4180, execute_read_only_query, sanitize_text_cell,
+    validate_period_consistency, DoubleEntryValidator, SqliteVoucherSearchRepository,
     VoucherCancellationService, VoucherCorrectionService, VoucherDraftService,
-    VoucherPostingService, VoucherReversalService, VoucherSequenceService, VoucherSeriesService,
-    VoucherTypeService,
+    VoucherExportService, VoucherPostingService, VoucherReversalService, VoucherSearchRepository,
+    VoucherSearchService, VoucherSequenceService, VoucherSeriesService, VoucherTypeService,
+    CANONICAL_AMOUNT_SQL, CSV_DETAILED_HEADERS, CSV_SUMMARY_HEADERS, UTF8_BOM,
 };
 pub use validator::*;

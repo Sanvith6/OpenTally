@@ -223,6 +223,13 @@ pub async fn run_sprint1_migration_with_payload(
             || current_version == "0.2.1-sprint1"
             || current_version == "0.3.0-sprint2"
             || current_version == "0.3.1-sprint2"
+            || current_version == "0.4.0-sprint4"
+            || current_version == "0.4.1-sprint4"
+            || current_version == "0.4.2-sprint4"
+            || current_version == "0.4.3-sprint5"
+            || current_version == "0.4.4-sprint5"
+            || current_version == "0.4.5-sprint6"
+            || current_version == "0.4.6-sprint6"
         {
             // Already migrated
             return Ok(());
@@ -348,6 +355,13 @@ pub async fn run_stage3_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyEr
     if current_version == "0.2.1-sprint1"
         || current_version == "0.3.0-sprint2"
         || current_version == "0.3.1-sprint2"
+        || current_version == "0.4.0-sprint4"
+        || current_version == "0.4.1-sprint4"
+        || current_version == "0.4.2-sprint4"
+        || current_version == "0.4.3-sprint5"
+        || current_version == "0.4.4-sprint5"
+        || current_version == "0.4.5-sprint6"
+        || current_version == "0.4.6-sprint6"
     {
         return Ok(());
     }
@@ -998,7 +1012,18 @@ pub async fn run_sprint2_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyE
             .await
             .map_err(OpenTallyError::Database)?;
 
-    if current_version == "0.3.0-sprint2" || current_version == "0.3.1-sprint2" {
+    if matches!(
+        current_version.as_str(),
+        "0.3.0-sprint2"
+            | "0.3.1-sprint2"
+            | "0.4.0-sprint4"
+            | "0.4.1-sprint4"
+            | "0.4.2-sprint4"
+            | "0.4.3-sprint5"
+            | "0.4.4-sprint5"
+            | "0.4.5-sprint6"
+            | "0.4.6-sprint6"
+    ) {
         tracing::info!(
             "Database already at schema version 0.3.0-sprint2 or later; migration skipped (idempotent)."
         );
@@ -1705,7 +1730,17 @@ pub async fn run_sprint2_stage4_hardening_migration(
             .await
             .map_err(OpenTallyError::Database)?;
 
-    if current_version == "0.3.1-sprint2" {
+    if matches!(
+        current_version.as_str(),
+        "0.3.1-sprint2"
+            | "0.4.0-sprint4"
+            | "0.4.1-sprint4"
+            | "0.4.2-sprint4"
+            | "0.4.3-sprint5"
+            | "0.4.4-sprint5"
+            | "0.4.5-sprint6"
+            | "0.4.6-sprint6"
+    ) {
         tracing::info!(
             "Database already at schema version 0.3.1-sprint2; Stage 4 hardening migration skipped (idempotent)."
         );
@@ -2162,6 +2197,589 @@ pub async fn run_sprint2_stage4_hardening_migration(
             Err(err)
         }
     }
+}
+
+/// Execute the Sprint 4 inventory-foundation migration (0.3.1-sprint2 -> 0.4.0-sprint4).
+/// Master data is intentionally isolated from vouchers and stock movements; later stages
+/// may add transaction tables without changing these master contracts.
+pub async fn run_sprint4_inventory_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+
+    if matches!(
+        current.as_str(),
+        "0.4.0-sprint4"
+            | "0.4.1-sprint4"
+            | "0.4.2-sprint4"
+            | "0.4.3-sprint5"
+            | "0.4.4-sprint5"
+            | "0.4.5-sprint6"
+            | "0.4.6-sprint6"
+    ) {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.3.1-sprint2" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.3.1-sprint2' for Sprint 4 inventory migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE stock_groups (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            parent_id TEXT,
+            description TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, parent_id) REFERENCES stock_groups(company_id, id) ON DELETE RESTRICT,
+            CHECK (parent_id IS NULL OR parent_id <> id)
+        );
+        CREATE INDEX idx_stock_groups_parent ON stock_groups(company_id, parent_id);
+        CREATE TABLE stock_categories (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            description TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        CREATE TABLE units (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            symbol TEXT NOT NULL COLLATE NOCASE,
+            formal_name TEXT NOT NULL COLLATE NOCASE,
+            unit_type TEXT NOT NULL DEFAULT 'simple' CHECK (unit_type IN ('simple', 'compound')),
+            base_unit_id TEXT,
+            secondary_unit_id TEXT,
+            conversion_factor TEXT,
+            decimal_precision INTEGER NOT NULL DEFAULT 2 CHECK (decimal_precision BETWEEN 0 AND 4),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, symbol),
+            UNIQUE (company_id, formal_name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, base_unit_id) REFERENCES units(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, secondary_unit_id) REFERENCES units(company_id, id) ON DELETE RESTRICT,
+            CHECK ((unit_type = 'simple' AND base_unit_id IS NULL AND secondary_unit_id IS NULL AND conversion_factor IS NULL)
+                OR (unit_type = 'compound' AND base_unit_id IS NOT NULL AND secondary_unit_id IS NOT NULL
+                    AND base_unit_id <> secondary_unit_id AND conversion_factor IS NOT NULL))
+        );
+        CREATE TABLE godowns (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            parent_id TEXT,
+            description TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, parent_id) REFERENCES godowns(company_id, id) ON DELETE RESTRICT,
+            CHECK (parent_id IS NULL OR parent_id <> id)
+        );
+        CREATE INDEX idx_godowns_parent ON godowns(company_id, parent_id);
+        CREATE TABLE stock_items (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            stock_group_id TEXT NOT NULL,
+            stock_category_id TEXT,
+            base_unit_id TEXT NOT NULL,
+            alternate_unit_id TEXT,
+            sku TEXT COLLATE NOCASE,
+            description TEXT,
+            opening_quantity TEXT NOT NULL DEFAULT '0',
+            opening_rate TEXT NOT NULL DEFAULT '0',
+            opening_value TEXT NOT NULL DEFAULT '0',
+            reorder_level TEXT NOT NULL DEFAULT '0',
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, name),
+            UNIQUE (company_id, sku),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_group_id) REFERENCES stock_groups(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, stock_category_id) REFERENCES stock_categories(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, base_unit_id) REFERENCES units(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, alternate_unit_id) REFERENCES units(company_id, id) ON DELETE RESTRICT,
+            CHECK (opening_quantity NOT GLOB '*[^0-9.]*' AND opening_quantity NOT GLOB '*.*.*' AND length(opening_quantity) > 0),
+            CHECK (opening_rate NOT GLOB '*[^0-9.]*' AND opening_rate NOT GLOB '*.*.*' AND length(opening_rate) > 0),
+            CHECK (opening_value NOT GLOB '*[^0-9.]*' AND opening_value NOT GLOB '*.*.*' AND length(opening_value) > 0),
+            CHECK (reorder_level NOT GLOB '*[^0-9.]*' AND reorder_level NOT GLOB '*.*.*' AND length(reorder_level) > 0)
+        );
+        CREATE INDEX idx_stock_items_group ON stock_items(company_id, stock_group_id);
+        CREATE INDEX idx_stock_items_category ON stock_items(company_id, stock_category_id);
+        CREATE INDEX idx_stock_items_active_name ON stock_items(company_id, is_active, name);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query("UPDATE _opentally_metadata SET schema_version = '0.4.0-sprint4', app_version = ? WHERE id = 1")
+        .bind(env!("CARGO_PKG_VERSION"))
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Execute the Sprint 4 Stage 11 stock-voucher migration.
+pub async fn run_sprint4_stage11_stock_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if matches!(
+        current.as_str(),
+        "0.4.1-sprint4"
+            | "0.4.2-sprint4"
+            | "0.4.3-sprint5"
+            | "0.4.4-sprint5"
+            | "0.4.5-sprint6"
+            | "0.4.6-sprint6"
+    ) {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.0-sprint4" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.0-sprint4' for Stage 11 migration, found '{}'",
+            current
+        )));
+    }
+    sqlx::raw_sql(r#"
+        CREATE TABLE stock_vouchers (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, voucher_number TEXT NOT NULL,
+            voucher_type TEXT NOT NULL CHECK (voucher_type IN ('receipt','delivery','transfer','adjustment')),
+            voucher_date TEXT NOT NULL, reference_no TEXT, narration TEXT,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','posted','cancelled','reversed')),
+            reversal_of_voucher_id TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id,id), UNIQUE (company_id,voucher_number),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id,reversal_of_voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE RESTRICT,
+            CHECK (voucher_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(voucher_date) IS NOT NULL)
+        );
+        CREATE TABLE stock_voucher_lines (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, voucher_id TEXT NOT NULL, line_number INTEGER NOT NULL,
+            stock_item_id TEXT NOT NULL, unit_id TEXT NOT NULL, godown_id TEXT,
+            source_godown_id TEXT, destination_godown_id TEXT, quantity TEXT NOT NULL,
+            system_quantity TEXT, physical_quantity TEXT, difference_quantity TEXT,
+            description TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id,id), UNIQUE (company_id,voucher_id,line_number),
+            FOREIGN KEY (company_id,voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id,stock_item_id) REFERENCES stock_items(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,unit_id) REFERENCES units(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,godown_id) REFERENCES godowns(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,source_godown_id) REFERENCES godowns(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,destination_godown_id) REFERENCES godowns(company_id,id) ON DELETE RESTRICT,
+            CHECK (length(quantity) > 0 AND quantity NOT GLOB '*[^0-9.]*' AND quantity NOT GLOB '*.*.*')
+        );
+        CREATE TABLE stock_movements (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, stock_item_id TEXT NOT NULL, godown_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL, voucher_line_id TEXT NOT NULL, movement_date TEXT NOT NULL,
+            movement_type TEXT NOT NULL CHECK (movement_type IN ('receipt','delivery','transfer_in','transfer_out','adjustment')),
+            signed_quantity TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id,id), UNIQUE (company_id,voucher_line_id,godown_id,movement_type),
+            FOREIGN KEY (company_id,stock_item_id) REFERENCES stock_items(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,godown_id) REFERENCES godowns(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,voucher_line_id) REFERENCES stock_voucher_lines(company_id,id) ON DELETE RESTRICT,
+            CHECK (length(signed_quantity) > 0 AND signed_quantity NOT GLOB '*[^0-9.-]*' AND signed_quantity NOT GLOB '*.*.*'),
+            CHECK (movement_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(movement_date) IS NOT NULL)
+        );
+        CREATE INDEX idx_stock_vouchers_company_date ON stock_vouchers(company_id,voucher_date,id);
+        CREATE INDEX idx_stock_vouchers_status ON stock_vouchers(company_id,status,voucher_date);
+        CREATE INDEX idx_stock_lines_item ON stock_voucher_lines(company_id,stock_item_id,voucher_id);
+        CREATE INDEX idx_stock_movements_item_godown_date ON stock_movements(company_id,stock_item_id,godown_id,movement_date,id);
+        CREATE INDEX idx_stock_movements_voucher ON stock_movements(company_id,voucher_id);
+    "#).execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version='0.4.1-sprint4', app_version=? WHERE id=1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Sprint 4 Stage 12 inventory valuation schema. Additive and backwards compatible.
+pub async fn run_sprint4_stage12_valuation_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id=1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if matches!(
+        current.as_str(),
+        "0.4.2-sprint4" | "0.4.3-sprint5" | "0.4.4-sprint5" | "0.4.5-sprint6" | "0.4.6-sprint6"
+    ) {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.1-sprint4" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.1-sprint4' for Stage 12 migration, found '{}'",
+            current
+        )));
+    }
+    sqlx::raw_sql(r#"
+        ALTER TABLE stock_voucher_lines ADD COLUMN unit_cost TEXT;
+        ALTER TABLE stock_voucher_lines ADD COLUMN line_value TEXT;
+        CREATE TABLE inventory_valuation_config (
+            company_id TEXT PRIMARY KEY NOT NULL,
+            valuation_method TEXT NOT NULL DEFAULT 'fifo' CHECK (valuation_method IN ('fifo','weighted_average')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        INSERT INTO inventory_valuation_config(company_id) SELECT id FROM companies;
+        CREATE TABLE inventory_cost_layers (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, stock_item_id TEXT NOT NULL,
+            godown_id TEXT NOT NULL, source_voucher_id TEXT, source_line_id TEXT,
+            receipt_date TEXT NOT NULL, original_quantity TEXT NOT NULL,
+            remaining_quantity TEXT NOT NULL, unit_cost TEXT NOT NULL,
+            original_value TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(company_id,id),
+            FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY(company_id,stock_item_id) REFERENCES stock_items(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,godown_id) REFERENCES godowns(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,source_voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,source_line_id) REFERENCES stock_voucher_lines(company_id,id) ON DELETE RESTRICT
+        );
+        CREATE TABLE inventory_valuation_consumptions (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, movement_id TEXT NOT NULL,
+            layer_id TEXT NOT NULL, quantity TEXT NOT NULL, unit_cost TEXT NOT NULL,
+            value TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(company_id,id), UNIQUE(company_id,movement_id,layer_id),
+            FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY(company_id,layer_id) REFERENCES inventory_cost_layers(company_id,id) ON DELETE RESTRICT
+        );
+        CREATE INDEX idx_inventory_layers_item_date ON inventory_cost_layers(company_id,stock_item_id,receipt_date,id);
+        CREATE INDEX idx_inventory_consumptions_movement ON inventory_valuation_consumptions(company_id,movement_id);
+    "#).execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version='0.4.2-sprint4', app_version=? WHERE id=1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Sprint 5 Stage 14 durable inventory/accounting integration state.
+pub async fn run_sprint5_stage14_integration_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id=1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if matches!(
+        current.as_str(),
+        "0.4.3-sprint5" | "0.4.4-sprint5" | "0.4.5-sprint6" | "0.4.6-sprint6"
+    ) {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.2-sprint4" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.2-sprint4' for Stage 14 migration, found '{}'",
+            current
+        )));
+    }
+    sqlx::raw_sql(r#"
+        CREATE TABLE inventory_account_mappings (
+            company_id TEXT PRIMARY KEY NOT NULL,
+            inventory_asset_ledger_id TEXT NOT NULL,
+            adjustment_expense_ledger_id TEXT NOT NULL,
+            adjustment_gain_ledger_id TEXT,
+            cogs_ledger_id TEXT NOT NULL,
+            receipt_offset_ledger_id TEXT NOT NULL,
+            journal_series_id TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0,1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id,inventory_asset_ledger_id) REFERENCES ledgers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,adjustment_expense_ledger_id) REFERENCES ledgers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,adjustment_gain_ledger_id) REFERENCES ledgers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,cogs_ledger_id) REFERENCES ledgers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,receipt_offset_ledger_id) REFERENCES ledgers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id,journal_series_id) REFERENCES voucher_number_series(company_id,id) ON DELETE RESTRICT
+        );
+        CREATE TABLE inventory_accounting_integrations (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, stock_voucher_id TEXT NOT NULL,
+            stock_voucher_type TEXT NOT NULL, accounting_voucher_id TEXT,
+            status TEXT NOT NULL CHECK (status IN ('pending','integrated','failed')),
+            valuation_method TEXT, integrated_amount TEXT NOT NULL DEFAULT '0',
+            attempt_count INTEGER NOT NULL DEFAULT 0 CHECK (attempt_count >= 0),
+            error_details TEXT, created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY(company_id,id), UNIQUE(company_id,stock_voucher_id),
+            FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY(company_id,stock_voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,accounting_voucher_id) REFERENCES vouchers(company_id,id) ON DELETE RESTRICT
+        );
+        CREATE INDEX idx_inventory_integrations_status ON inventory_accounting_integrations(company_id,status,updated_at);
+    "#).execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version='0.4.3-sprint5', app_version=? WHERE id=1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Sprint 5 Stage 15 immutable per-voucher valuation attribution.
+pub async fn run_sprint5_stage15_valuation_attribution_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id=1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "0.4.4-sprint5" {
+        sqlx::raw_sql(r#"
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_attr_no_update BEFORE UPDATE ON inventory_valuation_attributions BEGIN SELECT RAISE(ABORT,'valuation attribution is immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_attr_no_delete BEFORE DELETE ON inventory_valuation_attributions BEGIN SELECT RAISE(ABORT,'valuation attribution is immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_attr_layer_no_update BEFORE UPDATE ON inventory_valuation_layer_uses BEGIN SELECT RAISE(ABORT,'valuation layer use is immutable'); END;
+            CREATE TRIGGER IF NOT EXISTS trg_inventory_attr_layer_no_delete BEFORE DELETE ON inventory_valuation_layer_uses BEGIN SELECT RAISE(ABORT,'valuation layer use is immutable'); END;
+        "#).execute(&mut *tx).await?;
+        tx.commit().await?;
+        return Ok(());
+    }
+    if matches!(current.as_str(), "0.4.5-sprint6" | "0.4.6-sprint6") {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.3-sprint5" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.3-sprint5' for Stage 15 migration, found '{}'",
+            current
+        )));
+    }
+    sqlx::raw_sql(r#"
+        CREATE TABLE inventory_valuation_attributions (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, stock_voucher_id TEXT NOT NULL,
+            voucher_type TEXT NOT NULL, voucher_line_id TEXT NOT NULL, stock_item_id TEXT NOT NULL,
+            stock_movement_id TEXT NOT NULL, valuation_method TEXT NOT NULL,
+            quantity TEXT NOT NULL, unit_cost TEXT NOT NULL, total_value TEXT NOT NULL,
+            context TEXT NOT NULL, posting_timestamp TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            reversal_of_attribution_id TEXT,
+            PRIMARY KEY(company_id,id), UNIQUE(company_id,stock_movement_id),
+            FOREIGN KEY(company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY(company_id,stock_voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,voucher_line_id) REFERENCES stock_voucher_lines(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,stock_item_id) REFERENCES stock_items(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,stock_movement_id) REFERENCES stock_movements(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,reversal_of_attribution_id) REFERENCES inventory_valuation_attributions(company_id,id) ON DELETE RESTRICT
+        );
+        CREATE TABLE inventory_valuation_layer_uses (
+            id TEXT NOT NULL, company_id TEXT NOT NULL, attribution_id TEXT NOT NULL,
+            source_movement_id TEXT, source_voucher_id TEXT, quantity TEXT NOT NULL,
+            unit_cost TEXT NOT NULL, total_value TEXT NOT NULL,
+            PRIMARY KEY(company_id,id), UNIQUE(company_id,attribution_id,source_movement_id,quantity,unit_cost),
+            FOREIGN KEY(company_id,attribution_id) REFERENCES inventory_valuation_attributions(company_id,id) ON DELETE CASCADE,
+            FOREIGN KEY(company_id,source_movement_id) REFERENCES stock_movements(company_id,id) ON DELETE RESTRICT,
+            FOREIGN KEY(company_id,source_voucher_id) REFERENCES stock_vouchers(company_id,id) ON DELETE RESTRICT
+        );
+        CREATE INDEX idx_inventory_attr_voucher ON inventory_valuation_attributions(company_id,stock_voucher_id,voucher_line_id);
+        CREATE INDEX idx_inventory_attr_item ON inventory_valuation_attributions(company_id,stock_item_id,posting_timestamp);
+        CREATE INDEX idx_inventory_attr_layer ON inventory_valuation_layer_uses(company_id,attribution_id);
+        CREATE TRIGGER trg_inventory_attr_no_update BEFORE UPDATE ON inventory_valuation_attributions BEGIN SELECT RAISE(ABORT,'valuation attribution is immutable'); END;
+        CREATE TRIGGER trg_inventory_attr_no_delete BEFORE DELETE ON inventory_valuation_attributions BEGIN SELECT RAISE(ABORT,'valuation attribution is immutable'); END;
+        CREATE TRIGGER trg_inventory_attr_layer_no_update BEFORE UPDATE ON inventory_valuation_layer_uses BEGIN SELECT RAISE(ABORT,'valuation layer use is immutable'); END;
+        CREATE TRIGGER trg_inventory_attr_layer_no_delete BEFORE DELETE ON inventory_valuation_layer_uses BEGIN SELECT RAISE(ABORT,'valuation layer use is immutable'); END;
+    "#).execute(&mut *tx).await?;
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version='0.4.4-sprint5',app_version=? WHERE id=1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Additive Stage 17 Party Masters migration. Party roles are extension metadata;
+/// the existing ledger classification CHECK constraint is intentionally unchanged.
+pub async fn run_sprint6_stage17_party_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if matches!(current.as_str(), "0.4.5-sprint6" | "0.4.6-sprint6") {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.4-sprint5" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.4-sprint5' for Stage 17, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql(
+        "CREATE TABLE party_profiles (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            ledger_id TEXT NOT NULL,
+            party_code TEXT NOT NULL COLLATE NOCASE,
+            display_name TEXT NOT NULL COLLATE NOCASE,
+            customer_enabled INTEGER NOT NULL DEFAULT 0 CHECK (customer_enabled IN (0,1)),
+            supplier_enabled INTEGER NOT NULL DEFAULT 0 CHECK (supplier_enabled IN (0,1)),
+            contact_person TEXT,
+            email TEXT,
+            phone TEXT,
+            billing_address TEXT,
+            shipping_address TEXT,
+            notes TEXT,
+            credit_period_days INTEGER NOT NULL DEFAULT 0 CHECK (credit_period_days >= 0),
+            credit_limit TEXT NOT NULL DEFAULT '0',
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0,1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, party_code),
+            UNIQUE (company_id, ledger_id),
+            FOREIGN KEY (company_id, ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            CHECK (customer_enabled = 1 OR supplier_enabled = 1)
+        );
+        CREATE INDEX idx_party_profiles_company_name
+            ON party_profiles(company_id, display_name, is_active);
+        CREATE INDEX idx_party_profiles_company_roles
+            ON party_profiles(company_id, customer_enabled, supplier_enabled, is_active);")
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = '0.4.5-sprint6', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Additive Stage 18 sales-document foundation. The existing voucher draft is
+/// the lifecycle and future numbering source of truth; these tables hold only
+/// sales-specific document and line metadata.
+pub async fn run_sprint6_stage18_sales_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "0.4.6-sprint6" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.5-sprint6" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.5-sprint6' for Stage 18, found '{}'",
+            current
+        )));
+    }
+    sqlx::raw_sql(
+        "CREATE TABLE sales_documents (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            party_id TEXT NOT NULL,
+            invoice_date TEXT NOT NULL,
+            document_reference TEXT,
+            due_date TEXT NOT NULL,
+            due_date_source TEXT NOT NULL CHECK (due_date_source IN ('party_default','explicit_override')),
+            due_date_override_reason TEXT,
+            narration TEXT,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft')),
+            subtotal TEXT NOT NULL DEFAULT '0',
+            discount_total TEXT NOT NULL DEFAULT '0',
+            additional_charges TEXT NOT NULL DEFAULT '0',
+            net_total TEXT NOT NULL DEFAULT '0',
+            tax_status TEXT NOT NULL DEFAULT 'inactive' CHECK (tax_status = 'inactive'),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, voucher_id),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_id) REFERENCES party_profiles(company_id, id) ON DELETE RESTRICT
+        );
+        CREATE TABLE sales_document_lines (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            sales_document_id TEXT NOT NULL,
+            line_number INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            stock_item_id TEXT,
+            unit_id TEXT,
+            godown_id TEXT,
+            quantity TEXT NOT NULL,
+            rate TEXT NOT NULL,
+            discount_kind TEXT NOT NULL CHECK (discount_kind IN ('none','amount','percentage')),
+            discount_value TEXT NOT NULL,
+            discount_amount TEXT NOT NULL,
+            line_amount TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, sales_document_id, line_number),
+            FOREIGN KEY (company_id, sales_document_id) REFERENCES sales_documents(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, unit_id) REFERENCES units(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, godown_id) REFERENCES godowns(company_id, id) ON DELETE RESTRICT
+        );
+        CREATE INDEX idx_sales_documents_company_date ON sales_documents(company_id, invoice_date, updated_at);
+        CREATE INDEX idx_sales_documents_party ON sales_documents(company_id, party_id, invoice_date);
+        CREATE INDEX idx_sales_lines_document ON sales_document_lines(company_id, sales_document_id, line_number);")
+    .execute(&mut *tx)
+    .await?;
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = '0.4.6-sprint6', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+    tx.commit().await?;
+    Ok(())
 }
 
 #[cfg(test)]

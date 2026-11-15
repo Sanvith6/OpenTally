@@ -663,3 +663,91 @@ pub struct VoucherLineageResponse {
     pub has_exceeded_depth_limit: bool,
     pub max_depth_reached: u32,
 }
+
+// ============================================================================
+// Sprint 2 Stage 7A: Voucher Export Foundation Models & DTOs
+// ============================================================================
+
+/// Supported export formats for voucher registers.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExportFormat {
+    /// Summary Day Book format (13 columns, one row per voucher).
+    CsvSummary,
+    /// Detailed Audit Dump format (15 columns, one row per voucher line).
+    CsvDetailed,
+    /// Complete structured JSON format matching Draft-07 JSON Schema v1.0.
+    Json,
+}
+
+/// Request parameters for exporting vouchers to a file destination.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherExportFileRequest {
+    pub filter: VoucherSearchFilter,
+    pub format: ExportFormat,
+    pub target_path: Option<String>,
+    pub overwrite: Option<bool>,
+    pub include_bom: Option<bool>,
+}
+
+/// Result returned following a successful file export operation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherExportFileResult {
+    pub format: ExportFormat,
+    pub file_path: String,
+    pub filename: String,
+    pub file_size_bytes: u64,
+    pub record_count: usize,
+    pub exported_at: String,
+}
+
+/// Request parameters for generating an in-memory preview of exported data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherExportPreviewRequest {
+    pub filter: VoucherSearchFilter,
+    pub format: ExportFormat,
+    pub include_bom: Option<bool>,
+}
+
+/// Result containing the in-memory content of an exported voucher dataset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherExportPreviewResult {
+    pub format: ExportFormat,
+    pub content: String,
+    pub record_count: usize,
+    pub exported_at: String,
+}
+
+/// Single line item representation matching Draft-07 JSON Schema v1.0.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherExportLineItem {
+    pub line_number: i64,
+    pub ledger_id: String,
+    pub ledger_name: String,
+    pub entry_type: String,
+    pub amount: String,
+    pub narration: Option<String>,
+}
+
+/// Complete voucher export item matching Draft-07 JSON Schema v1.0.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherCompositeExportItem {
+    pub id: String,
+    pub voucher_number: String,
+    pub voucher_type_id: String,
+    pub voucher_type_name: String,
+    pub series_id: String,
+    pub series_name: String,
+    pub date: String,
+    pub effective_date: String,
+    pub status: String,
+    pub reference_no: Option<String>,
+    pub reference_date: Option<String>,
+    pub narration: Option<String>,
+    pub total_amount: Option<String>,
+    pub cancellation_reason: Option<String>,
+    pub reversal_of_voucher_id: Option<String>,
+    pub reversal_voucher_id: Option<String>,
+    pub created_at: String,
+    pub lines: Vec<VoucherExportLineItem>,
+}

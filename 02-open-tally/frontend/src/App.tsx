@@ -8,6 +8,19 @@ import { CompanySelectModal } from './components/CompanySelectModal';
 import { ChartOfAccountsView } from './components/ChartOfAccountsView';
 import { VoucherMastersView } from './components/VoucherMastersView';
 import { VoucherEntryView } from './components/vouchers/VoucherEntryView';
+import { DayBookView } from './components/reports/DayBookView';
+import { LedgerReportView } from './components/reports/LedgerReportView';
+import { TrialBalanceView } from './components/reports/TrialBalanceView';
+import { ProfitAndLossView } from './components/reports/ProfitAndLossView';
+import { BalanceSheetView } from './components/reports/BalanceSheetView';
+import { CashFlowView } from './components/reports/CashFlowView';
+import { InventoryView } from './components/inventory/InventoryView';
+import { InventoryTransactionsView } from './components/inventory/InventoryTransactionsView';
+import { InventoryValuationView } from './components/inventory/InventoryValuationView';
+import { InventoryReportsView } from './components/inventory/InventoryReportsView';
+import { InventoryAccountingView } from './components/inventory/InventoryAccountingView';
+import { PartyManagementView } from './components/party/PartyManagementView';
+import { SalesVoucherView } from './components/sales/SalesVoucherView';
 import { fetchHealth, getActiveCompany } from './services/api';
 import { HealthResponse, Company } from './types';
 import './App.css';
@@ -27,9 +40,36 @@ export function App() {
       : typeof window !== 'undefined' &&
         new URLSearchParams(window.location.search).get('view') === 'voucher_entry'
       ? 'voucher_entry'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'day_book'
+      ? 'day_book'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'ledger_report'
+      ? 'ledger_report'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'trial_balance'
+      ? 'trial_balance'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'profit_and_loss'
+      ? 'profit_and_loss'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'balance_sheet'
+      ? 'balance_sheet'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'cash_flow'
+      ? 'cash_flow'
+      : typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).get('view') === 'inventory'
+      ? 'inventory'
+      : typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'inventory_transactions'
+      ? 'inventory_transactions'
+      : typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'party_management'
+      ? 'party_management'
+      : typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('view') === 'sales_vouchers'
+      ? 'sales_vouchers'
       : 'gateway';
   const [currentView, setCurrentView] = useState<
-    'gateway' | 'chart_of_accounts' | 'voucher_masters' | 'voucher_entry'
+    'gateway' | 'chart_of_accounts' | 'voucher_masters' | 'voucher_entry' | 'day_book' | 'ledger_report' | 'trial_balance' | 'profit_and_loss' | 'balance_sheet' | 'cash_flow' | 'inventory' | 'inventory_transactions' | 'inventory_valuation' | 'inventory_reports' | 'inventory_accounting' | 'party_management' | 'sales_vouchers'
   >(initialView);
 
   // Company management state
@@ -155,6 +195,32 @@ export function App() {
             onBackToGateway={() => setCurrentView('gateway')}
             onSwitchToMasters={() => setCurrentView('voucher_masters')}
           />
+        ) : currentView === 'day_book' ? (
+          <DayBookView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'ledger_report' ? (
+          <LedgerReportView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'trial_balance' ? (
+          <TrialBalanceView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'profit_and_loss' ? (
+          <ProfitAndLossView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'balance_sheet' ? (
+          <BalanceSheetView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'cash_flow' ? (
+          <CashFlowView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'inventory' ? (
+          <InventoryView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'inventory_transactions' ? (
+          <InventoryTransactionsView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'inventory_valuation' ? (
+          <InventoryValuationView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'inventory_reports' ? (
+          <InventoryReportsView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'inventory_accounting' ? (
+          <InventoryAccountingView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'party_management' ? (
+          <PartyManagementView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
+        ) : currentView === 'sales_vouchers' ? (
+          <SalesVoucherView activeCompany={activeCompany} onBack={() => setCurrentView('gateway')} />
         ) : (
           <div className="ot-workspace-grid">
             <section className="ot-col-company">
@@ -202,6 +268,33 @@ export function App() {
                     } else {
                       setCurrentView('voucher_entry');
                     }
+                  } else if (item.id === 'day_book' || item.id === 'ledger_report' || item.id === 'trial_balance' || item.id === 'profit_and_loss' || item.id === 'balance_sheet' || item.id === 'cash_flow') {
+                    if (!activeCompany) {
+                      showNotification('Please select or create an active company first (F3).');
+                      setIsSelectModalOpen(true);
+                    } else {
+                      setCurrentView(item.id as 'day_book' | 'ledger_report' | 'trial_balance' | 'profit_and_loss' | 'balance_sheet' | 'cash_flow');
+                    }
+                  } else if (item.id === 'inv_masters') {
+                    if (!activeCompany) { showNotification('Please select or create an active company first (F3).'); setIsSelectModalOpen(true); }
+                    else setCurrentView('inventory');
+                  } else if (item.id === 'party_masters') {
+                    if (!activeCompany) { showNotification('Please select or create an active company first (F3).'); setIsSelectModalOpen(true); }
+                    else setCurrentView('party_management');
+                  } else if (item.id === 'sales_vouchers') {
+                    if (!activeCompany) { showNotification('Please select or create an active company first (F3).'); setIsSelectModalOpen(true); }
+                    else setCurrentView('sales_vouchers');
+                  } else if (item.id === 'inv_transactions') {
+                    if (!activeCompany) { showNotification('Please select or create an active company first (F3).'); setIsSelectModalOpen(true); }
+                    else setCurrentView('inventory_transactions');
+                  } else if (item.id === 'inv_valuation') {
+                    setCurrentView('inventory_valuation');
+                  } else if (item.id === 'inv_reports') {
+                    if (!activeCompany) { showNotification('Please select or create an active company first (F3).'); setIsSelectModalOpen(true); }
+                    else setCurrentView('inventory_reports');
+                  } else if (item.id === 'inv_accounting') {
+                    if (!activeCompany) { showNotification('Please select or create an active company first (F3).'); setIsSelectModalOpen(true); }
+                    else setCurrentView('inventory_accounting');
                   } else {
                     showNotification(
                       `Selected [${item.hotkey}] ${item.label} (${item.sprint}): ${item.description}`
