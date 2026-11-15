@@ -36,6 +36,30 @@ import {
   SaveVoucherDraftRequest,
   VoucherFilter,
   PaginatedResponse,
+  DayBookRequest,
+  DayBookEntry,
+  LedgerReportRequest,
+  LedgerReport,
+  TrialBalanceRequest,
+  TrialBalanceReport,
+  ProfitAndLossRequest,
+  ProfitAndLossReport,
+  BalanceSheetRequest,
+  BalanceSheetReport,
+  CashFlowRequest,
+  CashFlowReport,
+  ReportPage,
+  ExportFormat,
+  VoucherSearchFilter,
+  VoucherExportPreviewResult,
+  StockGroup, StockCategory, Unit, StockItem, Godown,
+  StockGroupRequest, StockCategoryRequest, UnitRequest, StockItemRequest, GodownRequest,
+  StockVoucher, StockVoucherLine, StockVoucherRequest, StockVoucherListFilter, StockBalanceRequest, StockBalanceRow,
+  ValuationConfig, ValuationRequest, ValuationRow, FifoLayer, ValuationHistoryRow,
+  InventoryReportFilter, StockSummaryReport, StockRegisterReport, StockLedgerReport, ReconciliationFinding, InventoryValuationAttribution, InventoryValuationAttributionDetails,
+  InventoryAccountMapping, InventoryAccountMappingRequest, InventoryAccountingPreview, InventoryAccountingIntegration,
+  PartyProfile, PartyRequest,
+  SalesDocument, SalesDocumentRequest, SalesDocumentWithLines,
 } from '../types';
 
 function getWebPreviewMock(): HealthResponse {
@@ -368,6 +392,116 @@ export async function listLedgers(groupId?: string, searchQuery?: string): Promi
     return result;
   }
   return await invoke<Ledger[]>('list_ledgers', { groupId, searchQuery });
+}
+
+export async function listParties(search?: string): Promise<PartyProfile[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<PartyProfile[]>('list_parties', { search: search || null });
+}
+export async function createParty(request: PartyRequest): Promise<PartyProfile> {
+  if (!isTauriEnv()) throw new Error('Party management requires the native OpenTally application');
+  return invoke<PartyProfile>('create_party', { request });
+}
+export async function updateParty(id: string, request: PartyRequest): Promise<PartyProfile> {
+  if (!isTauriEnv()) throw new Error('Party management requires the native OpenTally application');
+  return invoke<PartyProfile>('update_party', { id, request });
+}
+export async function setPartyActive(id: string, active: boolean): Promise<PartyProfile> {
+  if (!isTauriEnv()) throw new Error('Party management requires the native OpenTally application');
+  return invoke<PartyProfile>('set_party_active', { id, active });
+}
+
+export async function listSalesDrafts(search?: string): Promise<SalesDocument[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<SalesDocument[]>('list_sales_drafts', { search: search || null });
+}
+export async function getSalesDraft(id: string): Promise<SalesDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Sales drafts require the native OpenTally application');
+  return invoke<SalesDocumentWithLines>('get_sales_draft', { id });
+}
+export async function createSalesDraft(request: SalesDocumentRequest): Promise<SalesDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Sales drafts require the native OpenTally application');
+  return invoke<SalesDocumentWithLines>('create_sales_draft', { request });
+}
+export async function updateSalesDraft(id: string, request: SalesDocumentRequest): Promise<SalesDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Sales drafts require the native OpenTally application');
+  return invoke<SalesDocumentWithLines>('update_sales_draft', { id, request });
+}
+export async function deleteSalesDraft(id: string): Promise<void> {
+  if (!isTauriEnv()) throw new Error('Sales drafts require the native OpenTally application');
+  return invoke<void>('delete_sales_draft', { id });
+}
+export async function reorderSalesLines(id: string, lineIds: string[]): Promise<SalesDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Sales drafts require the native OpenTally application');
+  return invoke<SalesDocumentWithLines>('reorder_sales_lines', { id, lineIds });
+}
+
+export async function getDayBook(request: DayBookRequest): Promise<ReportPage<DayBookEntry>> {
+  if (!isTauriEnv()) {
+    return { items: [], total: 0, page: request.page.page, page_size: request.page.page_size, total_pages: 0 };
+  }
+  return invoke<ReportPage<DayBookEntry>>('day_book', { request });
+}
+
+export async function getLedgerReport(request: LedgerReportRequest): Promise<LedgerReport> {
+  if (!isTauriEnv()) {
+    throw new Error('Ledger reports require the native OpenTally application');
+  }
+  return invoke<LedgerReport>('ledger_report', { request });
+}
+
+export async function getTrialBalance(request: TrialBalanceRequest): Promise<TrialBalanceReport> {
+  if (!isTauriEnv()) {
+    return { as_of_date: request.as_of_date, rows: [], total_debit: '0', total_credit: '0', difference: '0', ledger_count: 0 };
+  }
+  return invoke<TrialBalanceReport>('trial_balance', { request });
+}
+
+export async function getProfitAndLoss(request: ProfitAndLossRequest): Promise<ProfitAndLossReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: mockActiveCompanyId || 'cmp_demo_01', date_from: request.period.date_from, date_to: request.period.date_to,
+      direct_income_rows: [], direct_income_subtotal: '0', direct_expense_rows: [], direct_expense_subtotal: '0',
+      gross_profit_or_loss: '0', gross_result_type: 'Profit', indirect_income_rows: [], indirect_income_subtotal: '0',
+      indirect_expense_rows: [], indirect_expense_subtotal: '0', net_profit_or_loss: '0', net_result_type: 'Profit',
+      ledger_count: 0, warnings: [],
+    };
+  }
+  return invoke<ProfitAndLossReport>('profit_and_loss', { request });
+}
+
+export async function getBalanceSheet(request: BalanceSheetRequest): Promise<BalanceSheetReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: mockActiveCompanyId || 'cmp_demo_01', as_of_date: request.as_of_date,
+      asset_rows: [], total_assets: '0', liability_rows: [], total_liabilities: '0', equity_rows: [],
+      current_period_profit_or_loss: '0', current_period_result_type: 'Profit', total_equity: '0',
+      total_liabilities_and_equity: '0', balance_difference: '0', is_balanced: true, ledger_count: 0, warnings: [],
+    };
+  }
+  return invoke<BalanceSheetReport>('balance_sheet', { request });
+}
+
+export async function getCashFlow(request: CashFlowRequest): Promise<CashFlowReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: mockActiveCompanyId || 'cmp_demo_01', date_from: request.period.date_from, date_to: request.period.date_to,
+      opening_cash_balance: '0', operating_rows: [], operating_subtotal: '0', investing_rows: [], investing_subtotal: '0',
+      financing_rows: [], financing_subtotal: '0', net_change_in_cash: '0', closing_cash_balance: '0', actual_closing_cash_balance: '0',
+      reconciliation_difference: '0', is_reconciled: true, ledger_count: 0, warnings: [],
+    };
+  }
+  return invoke<CashFlowReport>('cash_flow', { request });
+}
+
+export async function exportReportPreview(
+  filter: VoucherSearchFilter,
+  format: ExportFormat = 'csv_summary',
+): Promise<VoucherExportPreviewResult> {
+  if (!isTauriEnv()) throw new Error('Report export requires the native OpenTally application');
+  return invoke<VoucherExportPreviewResult>('export_report_preview', {
+    request: { filter, format, include_bom: false },
+  });
 }
 
 export async function getLedger(id: string): Promise<Ledger> {
@@ -1087,6 +1221,61 @@ export async function saveVoucherDraft(
   }
   return await invoke<VoucherWithLines>('save_voucher_draft', { req });
 }
+
+// Inventory master-data API. Browser preview intentionally returns empty collections because
+// inventory persistence belongs to the native SQLite/Tauri runtime.
+const inventoryList = async <T>(command:string, search?:string):Promise<T[]> => isTauriEnv() ? invoke<T[]>(command, { search: search || null }) : [];
+const inventoryMutate = async <T>(command:string, args:Record<string, unknown>):Promise<T> => { if (!isTauriEnv()) throw new Error('Inventory editing requires the native OpenTally application'); return invoke<T>(command,args); };
+export const listStockGroups = (search?:string) => inventoryList<StockGroup>('list_stock_groups',search);
+export const createStockGroup = (req:StockGroupRequest) => inventoryMutate<StockGroup>('create_stock_group',{req});
+export const updateStockGroup = (id:string,req:StockGroupRequest) => inventoryMutate<StockGroup>('update_stock_group',{id,req});
+export const setStockGroupActive = (id:string,active:boolean) => inventoryMutate<StockGroup>('set_stock_group_active',{id,active});
+export const deleteStockGroup = (id:string) => inventoryMutate<void>('delete_stock_group',{id});
+export const listStockCategories = (search?:string) => inventoryList<StockCategory>('list_stock_categories',search);
+export const createStockCategory = (req:StockCategoryRequest) => inventoryMutate<StockCategory>('create_stock_category',{req});
+export const updateStockCategory = (id:string,req:StockCategoryRequest) => inventoryMutate<StockCategory>('update_stock_category',{id,req});
+export const setStockCategoryActive = (id:string,active:boolean) => inventoryMutate<StockCategory>('set_stock_category_active',{id,active});
+export const deleteStockCategory = (id:string) => inventoryMutate<void>('delete_stock_category',{id});
+export const listUnits = (search?:string) => inventoryList<Unit>('list_units',search);
+export const createUnit = (req:UnitRequest) => inventoryMutate<Unit>('create_unit',{req});
+export const updateUnit = (id:string,req:UnitRequest) => inventoryMutate<Unit>('update_unit',{id,req});
+export const setUnitActive = (id:string,active:boolean) => inventoryMutate<Unit>('set_unit_active',{id,active});
+export const deleteUnit = (id:string) => inventoryMutate<void>('delete_unit',{id});
+export const listStockItems = (search?:string) => inventoryList<StockItem>('list_stock_items',search);
+export const createStockItem = (req:StockItemRequest) => inventoryMutate<StockItem>('create_stock_item',{req});
+export const updateStockItem = (id:string,req:StockItemRequest) => inventoryMutate<StockItem>('update_stock_item',{id,req});
+export const setStockItemActive = (id:string,active:boolean) => inventoryMutate<StockItem>('set_stock_item_active',{id,active});
+export const deleteStockItem = (id:string) => inventoryMutate<void>('delete_stock_item',{id});
+export const listGodowns = (search?:string) => inventoryList<Godown>('list_godowns',search);
+export const createGodown = (req:GodownRequest) => inventoryMutate<Godown>('create_godown',{req});
+export const updateGodown = (id:string,req:GodownRequest) => inventoryMutate<Godown>('update_godown',{id,req});
+export const setGodownActive = (id:string,active:boolean) => inventoryMutate<Godown>('set_godown_active',{id,active});
+export const deleteGodown = (id:string) => inventoryMutate<void>('delete_godown',{id});
+export async function createStockVoucher(request:StockVoucherRequest):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('create_stock_voucher',{request});}
+export async function updateStockVoucher(id:string,request:StockVoucherRequest):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('update_stock_voucher',{id,request});}
+export async function getStockVoucher(id:string):Promise<{0:StockVoucher;1:StockVoucherLine[]}>{if(!isTauriEnv())throw new Error('Stock vouchers require the native application');return invoke<{0:StockVoucher;1:StockVoucherLine[]}>('get_stock_voucher',{id});}
+export async function listStockVouchers(filter:StockVoucherListFilter):Promise<StockVoucher[]>{if(!isTauriEnv())return [];return invoke<StockVoucher[]>('list_stock_vouchers',{filter});}
+export async function postStockVoucher(id:string):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('post_stock_voucher',{id});}
+export async function cancelStockVoucher(id:string):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('cancel_stock_voucher',{id});}
+export async function reverseStockVoucher(id:string):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('reverse_stock_voucher',{id});}
+export async function getStockBalance(request:StockBalanceRequest,overall:boolean):Promise<StockBalanceRow[]>{if(!isTauriEnv())return [];return invoke<StockBalanceRow[]>('get_stock_balance',{request,overall});}
+export async function getValuationConfig():Promise<ValuationConfig>{if(!isTauriEnv())return {company_id:'',valuation_method:'fifo'};return invoke<ValuationConfig>('get_inventory_valuation_config');}
+export async function setValuationMethod(method:'fifo'|'weighted_average'):Promise<ValuationConfig>{return inventoryMutate<ValuationConfig>('set_inventory_valuation_method',{method});}
+export async function getStockValuation(request:ValuationRequest):Promise<ValuationRow[]>{if(!isTauriEnv())return [];return invoke<ValuationRow[]>('get_stock_valuation',{request});}
+export async function getFifoLayers(request:ValuationRequest):Promise<FifoLayer[]>{if(!isTauriEnv())return [];return invoke<FifoLayer[]>('get_fifo_layers',{request});}
+export async function getValuationHistory(request:ValuationRequest):Promise<ValuationHistoryRow[]>{if(!isTauriEnv())return [];return invoke<ValuationHistoryRow[]>('get_valuation_history',{request});}
+export async function getStockSummaryReport(filter:InventoryReportFilter):Promise<StockSummaryReport>{if(!isTauriEnv())return {as_of_date:filter.as_of_date||filter.date_to||'',rows:[]};return invoke<StockSummaryReport>('get_stock_summary_report',{filter});}
+export async function getStockMovementRegister(filter:InventoryReportFilter):Promise<StockRegisterReport>{if(!isTauriEnv())return {total:0,page:1,page_size:filter.page_size||100,rows:[]};return invoke<StockRegisterReport>('get_stock_movement_register',{filter});}
+export async function getStockLedgerReport(filter:InventoryReportFilter):Promise<StockLedgerReport>{if(!isTauriEnv())return {stock_item_id:filter.stock_item_id||'',godown_id:filter.godown_id||null,opening_quantity:'0',closing_quantity:'0',rows:[]};return invoke<StockLedgerReport>('get_stock_ledger_report',{filter});}
+export async function getInventoryReconciliation(filter:InventoryReportFilter):Promise<ReconciliationFinding[]>{if(!isTauriEnv())return [];return invoke<ReconciliationFinding[]>('get_inventory_reconciliation',{filter});}
+export async function getInventoryAccountMapping():Promise<InventoryAccountMapping|null>{if(!isTauriEnv())return null;return invoke<InventoryAccountMapping|null>('get_inventory_account_mapping');}
+export async function configureInventoryAccountMapping(request:InventoryAccountMappingRequest):Promise<InventoryAccountMapping>{return inventoryMutate<InventoryAccountMapping>('configure_inventory_account_mapping',{request});}
+export async function previewInventoryAccounting(stockVoucherId:string):Promise<InventoryAccountingPreview>{if(!isTauriEnv())throw new Error('Inventory accounting requires the native application');return invoke<InventoryAccountingPreview>('preview_inventory_accounting',{stockVoucherId});}
+export async function integrateInventoryAccounting(stockVoucherId:string):Promise<InventoryAccountingIntegration>{return inventoryMutate<InventoryAccountingIntegration>('integrate_inventory_accounting',{stockVoucherId});}
+export async function getInventoryAccountingStatus(stockVoucherId:string):Promise<InventoryAccountingIntegration|null>{if(!isTauriEnv())return null;return invoke<InventoryAccountingIntegration|null>('get_inventory_accounting_status',{stockVoucherId});}
+export async function listInventoryAccountingHistory():Promise<InventoryAccountingIntegration[]>{if(!isTauriEnv())return [];return invoke<InventoryAccountingIntegration[]>('list_inventory_accounting_history');}
+export async function getInventoryValuationAttribution(stockVoucherId:string):Promise<InventoryValuationAttribution[]>{if(!isTauriEnv())return [];return invoke<InventoryValuationAttribution[]>('get_inventory_valuation_attribution',{stockVoucherId});}
+export async function getInventoryValuationAttributionDetails(stockVoucherId:string):Promise<InventoryValuationAttributionDetails[]>{if(!isTauriEnv())return [];return invoke<InventoryValuationAttributionDetails[]>('get_inventory_valuation_attribution_details',{stockVoucherId});}
 
 
 

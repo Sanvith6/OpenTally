@@ -455,6 +455,269 @@ pub async fn get_ledger(
     exec_get_ledger(&state, id).await
 }
 
+pub async fn exec_list_parties(
+    state: &AppState,
+    search: Option<String>,
+) -> Result<Vec<crate::party::PartyProfile>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::party::PartyService::list(state.db.pool(), &company_id, search.as_deref()).await
+}
+
+#[tauri::command]
+pub async fn list_parties(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::party::PartyProfile>, OpenTallyError> {
+    exec_list_parties(&state, search).await
+}
+
+pub async fn exec_get_party(
+    state: &AppState,
+    id: String,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::party::PartyService::get(state.db.pool(), &company_id, &id).await
+}
+
+#[tauri::command]
+pub async fn get_party(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    exec_get_party(&state, id).await
+}
+
+pub async fn exec_create_party(
+    state: &AppState,
+    request: crate::party::PartyRequest,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::party::PartyService::create(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn create_party(
+    state: tauri::State<'_, AppState>,
+    request: crate::party::PartyRequest,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    exec_create_party(&state, request).await
+}
+
+pub async fn exec_update_party(
+    state: &AppState,
+    id: String,
+    request: crate::party::PartyRequest,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::party::PartyService::update(state.db.pool(), &company_id, &id, request).await
+}
+
+#[tauri::command]
+pub async fn update_party(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    request: crate::party::PartyRequest,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    exec_update_party(&state, id, request).await
+}
+
+pub async fn exec_set_party_active(
+    state: &AppState,
+    id: String,
+    active: bool,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::party::PartyService::set_active(state.db.pool(), &company_id, &id, active).await
+}
+
+#[tauri::command]
+pub async fn set_party_active(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    active: bool,
+) -> Result<crate::party::PartyProfile, OpenTallyError> {
+    exec_set_party_active(&state, id, active).await
+}
+
+pub async fn exec_list_sales_drafts(
+    state: &AppState,
+    search: Option<String>,
+) -> Result<Vec<crate::sales::SalesDocument>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::sales::SalesDocumentService::list_drafts(state.db.pool(), &company_id, search.as_deref())
+        .await
+}
+
+#[tauri::command]
+pub async fn list_sales_drafts(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::sales::SalesDocument>, OpenTallyError> {
+    exec_list_sales_drafts(&state, search).await
+}
+
+#[tauri::command]
+pub async fn get_sales_draft(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::sales::SalesDocumentWithLines, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::sales::SalesDocumentService::get_draft(state.db.pool(), &company_id, &id).await
+}
+
+#[tauri::command]
+pub async fn create_sales_draft(
+    state: tauri::State<'_, AppState>,
+    request: crate::sales::SalesDocumentRequest,
+) -> Result<crate::sales::SalesDocumentWithLines, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::sales::SalesDocumentService::create_draft(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn update_sales_draft(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    request: crate::sales::SalesDocumentRequest,
+) -> Result<crate::sales::SalesDocumentWithLines, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::sales::SalesDocumentService::update_draft(state.db.pool(), &company_id, &id, request)
+        .await
+}
+
+#[tauri::command]
+pub async fn delete_sales_draft(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::sales::SalesDocumentService::delete_draft(state.db.pool(), &company_id, &id).await
+}
+
+#[tauri::command]
+pub async fn reorder_sales_lines(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    line_ids: Vec<String>,
+) -> Result<crate::sales::SalesDocumentWithLines, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::sales::SalesDocumentService::reorder_lines(state.db.pool(), &company_id, &id, line_ids)
+        .await
+}
+
+pub async fn exec_day_book(
+    state: &AppState,
+    request: crate::reports::DayBookRequest,
+) -> Result<crate::reports::ReportPage<crate::reports::DayBookEntry>, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::reports::DayBookService::generate(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn day_book(
+    state: tauri::State<'_, AppState>,
+    request: crate::reports::DayBookRequest,
+) -> Result<crate::reports::ReportPage<crate::reports::DayBookEntry>, OpenTallyError> {
+    exec_day_book(&state, request).await
+}
+
+pub async fn exec_ledger_report(
+    state: &AppState,
+    request: crate::reports::LedgerReportRequest,
+) -> Result<crate::reports::LedgerReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::reports::LedgerReportService::generate(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn ledger_report(
+    state: tauri::State<'_, AppState>,
+    request: crate::reports::LedgerReportRequest,
+) -> Result<crate::reports::LedgerReport, OpenTallyError> {
+    exec_ledger_report(&state, request).await
+}
+
+pub async fn exec_trial_balance(
+    state: &AppState,
+    request: crate::reports::TrialBalanceRequest,
+) -> Result<crate::reports::TrialBalanceReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::reports::TrialBalanceService::generate(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn trial_balance(
+    state: tauri::State<'_, AppState>,
+    request: crate::reports::TrialBalanceRequest,
+) -> Result<crate::reports::TrialBalanceReport, OpenTallyError> {
+    exec_trial_balance(&state, request).await
+}
+
+pub async fn exec_profit_and_loss(
+    state: &AppState,
+    request: crate::reports::ProfitAndLossRequest,
+) -> Result<crate::reports::ProfitAndLossReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::reports::ProfitAndLossService::generate(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn profit_and_loss(
+    state: tauri::State<'_, AppState>,
+    request: crate::reports::ProfitAndLossRequest,
+) -> Result<crate::reports::ProfitAndLossReport, OpenTallyError> {
+    exec_profit_and_loss(&state, request).await
+}
+
+pub async fn exec_balance_sheet(
+    state: &AppState,
+    request: crate::reports::BalanceSheetRequest,
+) -> Result<crate::reports::BalanceSheetReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::reports::BalanceSheetService::generate(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn balance_sheet(
+    state: tauri::State<'_, AppState>,
+    request: crate::reports::BalanceSheetRequest,
+) -> Result<crate::reports::BalanceSheetReport, OpenTallyError> {
+    exec_balance_sheet(&state, request).await
+}
+
+pub async fn exec_cash_flow(
+    state: &AppState,
+    request: crate::reports::CashFlowRequest,
+) -> Result<crate::reports::CashFlowReport, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::reports::CashFlowService::generate(state.db.pool(), &company_id, request).await
+}
+
+#[tauri::command]
+pub async fn cash_flow(
+    state: tauri::State<'_, AppState>,
+    request: crate::reports::CashFlowRequest,
+) -> Result<crate::reports::CashFlowReport, OpenTallyError> {
+    exec_cash_flow(&state, request).await
+}
+
+pub async fn exec_export_report_preview(
+    state: &AppState,
+    request: crate::vouchers::VoucherExportPreviewRequest,
+) -> Result<crate::vouchers::VoucherExportPreviewResult, OpenTallyError> {
+    let company_id = require_active_company(state).await?;
+    crate::vouchers::VoucherExportService::export_preview(state.db.pool(), &company_id, request)
+        .await
+}
+
+#[tauri::command]
+pub async fn export_report_preview(
+    state: tauri::State<'_, AppState>,
+    request: crate::vouchers::VoucherExportPreviewRequest,
+) -> Result<crate::vouchers::VoucherExportPreviewResult, OpenTallyError> {
+    exec_export_report_preview(&state, request).await
+}
+
 pub async fn exec_create_ledger(
     state: &AppState,
     req: crate::accounting::CreateLedgerRequest,
@@ -1096,6 +1359,469 @@ pub async fn create_correction_draft(
     req: crate::vouchers::CreateCorrectionDraftRequest,
 ) -> Result<crate::vouchers::CorrectionResult, OpenTallyError> {
     exec_create_correction_draft(&state, req).await
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 4 Inventory master-data IPC commands
+// ---------------------------------------------------------------------------
+pub async fn exec_list_stock_groups(
+    state: &AppState,
+    search: Option<String>,
+) -> Result<Vec<crate::inventory::StockGroup>, OpenTallyError> {
+    let c = require_active_company(state).await?;
+    crate::inventory::InventoryService::list_stock_groups(state.db.pool(), &c, search.as_deref())
+        .await
+}
+#[tauri::command]
+pub async fn list_stock_groups(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::inventory::StockGroup>, OpenTallyError> {
+    exec_list_stock_groups(&state, search).await
+}
+#[tauri::command]
+pub async fn create_stock_group(
+    state: tauri::State<'_, AppState>,
+    req: crate::inventory::StockGroupRequest,
+) -> Result<crate::inventory::StockGroup, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::create_stock_group(state.db.pool(), &c, req).await
+}
+#[tauri::command]
+pub async fn update_stock_group(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    req: crate::inventory::StockGroupRequest,
+) -> Result<crate::inventory::StockGroup, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::update_stock_group(state.db.pool(), &c, &id, req).await
+}
+#[tauri::command]
+pub async fn set_stock_group_active(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    active: bool,
+) -> Result<crate::inventory::StockGroup, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::set_stock_group_active(state.db.pool(), &c, &id, active)
+        .await
+}
+#[tauri::command]
+pub async fn delete_stock_group(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::delete_stock_group(state.db.pool(), &c, &id).await
+}
+#[tauri::command]
+pub async fn list_stock_categories(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::inventory::StockCategory>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::list_stock_categories(
+        state.db.pool(),
+        &c,
+        search.as_deref(),
+    )
+    .await
+}
+#[tauri::command]
+pub async fn create_stock_category(
+    state: tauri::State<'_, AppState>,
+    req: crate::inventory::StockCategoryRequest,
+) -> Result<crate::inventory::StockCategory, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::create_stock_category(state.db.pool(), &c, req).await
+}
+#[tauri::command]
+pub async fn update_stock_category(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    req: crate::inventory::StockCategoryRequest,
+) -> Result<crate::inventory::StockCategory, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::update_stock_category(state.db.pool(), &c, &id, req).await
+}
+#[tauri::command]
+pub async fn set_stock_category_active(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    active: bool,
+) -> Result<crate::inventory::StockCategory, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::set_stock_category_active(state.db.pool(), &c, &id, active)
+        .await
+}
+#[tauri::command]
+pub async fn delete_stock_category(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::delete_stock_category(state.db.pool(), &c, &id).await
+}
+#[tauri::command]
+pub async fn list_units(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::inventory::Unit>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::list_units(state.db.pool(), &c, search.as_deref()).await
+}
+#[tauri::command]
+pub async fn create_unit(
+    state: tauri::State<'_, AppState>,
+    req: crate::inventory::UnitRequest,
+) -> Result<crate::inventory::Unit, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::create_unit(state.db.pool(), &c, req).await
+}
+#[tauri::command]
+pub async fn update_unit(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    req: crate::inventory::UnitRequest,
+) -> Result<crate::inventory::Unit, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::update_unit(state.db.pool(), &c, &id, req).await
+}
+#[tauri::command]
+pub async fn set_unit_active(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    active: bool,
+) -> Result<crate::inventory::Unit, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::set_unit_active(state.db.pool(), &c, &id, active).await
+}
+#[tauri::command]
+pub async fn delete_unit(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::delete_unit(state.db.pool(), &c, &id).await
+}
+#[tauri::command]
+pub async fn list_stock_items(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::inventory::StockItem>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::list_stock_items(state.db.pool(), &c, search.as_deref())
+        .await
+}
+#[tauri::command]
+pub async fn create_stock_item(
+    state: tauri::State<'_, AppState>,
+    req: crate::inventory::StockItemRequest,
+) -> Result<crate::inventory::StockItem, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::create_stock_item(state.db.pool(), &c, req).await
+}
+#[tauri::command]
+pub async fn update_stock_item(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    req: crate::inventory::StockItemRequest,
+) -> Result<crate::inventory::StockItem, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::update_stock_item(state.db.pool(), &c, &id, req).await
+}
+#[tauri::command]
+pub async fn set_stock_item_active(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    active: bool,
+) -> Result<crate::inventory::StockItem, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::set_stock_item_active(state.db.pool(), &c, &id, active)
+        .await
+}
+#[tauri::command]
+pub async fn delete_stock_item(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::delete_stock_item(state.db.pool(), &c, &id).await
+}
+#[tauri::command]
+pub async fn list_godowns(
+    state: tauri::State<'_, AppState>,
+    search: Option<String>,
+) -> Result<Vec<crate::inventory::Godown>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::list_godowns(state.db.pool(), &c, search.as_deref()).await
+}
+#[tauri::command]
+pub async fn create_godown(
+    state: tauri::State<'_, AppState>,
+    req: crate::inventory::GodownRequest,
+) -> Result<crate::inventory::Godown, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::create_godown(state.db.pool(), &c, req).await
+}
+#[tauri::command]
+pub async fn update_godown(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    req: crate::inventory::GodownRequest,
+) -> Result<crate::inventory::Godown, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::update_godown(state.db.pool(), &c, &id, req).await
+}
+#[tauri::command]
+pub async fn set_godown_active(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    active: bool,
+) -> Result<crate::inventory::Godown, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::set_godown_active(state.db.pool(), &c, &id, active).await
+}
+#[tauri::command]
+pub async fn delete_godown(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<(), OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryService::delete_godown(state.db.pool(), &c, &id).await
+}
+
+#[tauri::command]
+pub async fn create_stock_voucher(
+    state: tauri::State<'_, AppState>,
+    request: crate::inventory::StockVoucherRequest,
+) -> Result<crate::inventory::StockVoucher, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::create_draft(state.db.pool(), &c, request).await
+}
+#[tauri::command]
+pub async fn get_stock_voucher(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<
+    (
+        crate::inventory::StockVoucher,
+        Vec<crate::inventory::StockVoucherLine>,
+    ),
+    OpenTallyError,
+> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::get(state.db.pool(), &c, &id).await
+}
+#[tauri::command]
+pub async fn update_stock_voucher(
+    state: tauri::State<'_, AppState>,
+    id: String,
+    request: crate::inventory::StockVoucherRequest,
+) -> Result<crate::inventory::StockVoucher, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::update_draft(state.db.pool(), &c, &id, request).await
+}
+#[tauri::command]
+pub async fn list_stock_vouchers(
+    state: tauri::State<'_, AppState>,
+    filter: crate::inventory::StockVoucherListFilter,
+) -> Result<Vec<crate::inventory::StockVoucher>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::list(state.db.pool(), &c, filter).await
+}
+#[tauri::command]
+pub async fn post_stock_voucher(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::inventory::StockVoucher, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::post(state.db.pool(), &c, &id).await
+}
+#[tauri::command]
+pub async fn cancel_stock_voucher(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::inventory::StockVoucher, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::cancel_or_reverse(state.db.pool(), &c, &id, false).await
+}
+#[tauri::command]
+pub async fn reverse_stock_voucher(
+    state: tauri::State<'_, AppState>,
+    id: String,
+) -> Result<crate::inventory::StockVoucher, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockVoucherService::cancel_or_reverse(state.db.pool(), &c, &id, true).await
+}
+#[tauri::command]
+pub async fn get_stock_balance(
+    state: tauri::State<'_, AppState>,
+    request: crate::inventory::StockBalanceRequest,
+    overall: bool,
+) -> Result<Vec<crate::inventory::StockBalanceRow>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockBalanceService::query(state.db.pool(), &c, request, overall).await
+}
+#[tauri::command]
+pub async fn get_stock_movement_history(
+    state: tauri::State<'_, AppState>,
+    stock_item_id: Option<String>,
+    godown_id: Option<String>,
+) -> Result<Vec<crate::inventory::StockMovementHistory>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::StockBalanceService::history(state.db.pool(), &c, stock_item_id, godown_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn get_inventory_valuation_config(
+    state: tauri::State<'_, AppState>,
+) -> Result<crate::inventory::ValuationConfig, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::ValuationService::get_config(state.db.pool(), &c).await
+}
+#[tauri::command]
+pub async fn set_inventory_valuation_method(
+    state: tauri::State<'_, AppState>,
+    method: String,
+) -> Result<crate::inventory::ValuationConfig, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::ValuationService::set_config(state.db.pool(), &c, &method).await
+}
+#[tauri::command]
+pub async fn get_stock_valuation(
+    state: tauri::State<'_, AppState>,
+    request: crate::inventory::ValuationRequest,
+) -> Result<Vec<crate::inventory::ValuationRow>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::ValuationService::summary(state.db.pool(), &c, request).await
+}
+#[tauri::command]
+pub async fn get_fifo_layers(
+    state: tauri::State<'_, AppState>,
+    request: crate::inventory::ValuationRequest,
+) -> Result<Vec<crate::inventory::FifoLayer>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::ValuationService::fifo_layers(state.db.pool(), &c, request).await
+}
+#[tauri::command]
+pub async fn get_valuation_history(
+    state: tauri::State<'_, AppState>,
+    request: crate::inventory::ValuationRequest,
+) -> Result<Vec<crate::inventory::ValuationHistoryRow>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::ValuationService::history(state.db.pool(), &c, request).await
+}
+
+#[tauri::command]
+pub async fn get_stock_summary_report(
+    state: tauri::State<'_, AppState>,
+    filter: crate::inventory::InventoryReportFilter,
+) -> Result<crate::inventory::StockSummaryReport, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryReportsService::stock_summary(state.db.pool(), &c, filter).await
+}
+#[tauri::command]
+pub async fn get_stock_movement_register(
+    state: tauri::State<'_, AppState>,
+    filter: crate::inventory::InventoryReportFilter,
+) -> Result<crate::inventory::StockRegisterReport, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryReportsService::stock_register(state.db.pool(), &c, filter).await
+}
+#[tauri::command]
+pub async fn get_stock_ledger_report(
+    state: tauri::State<'_, AppState>,
+    filter: crate::inventory::InventoryReportFilter,
+) -> Result<crate::inventory::StockLedgerReport, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryReportsService::stock_ledger(state.db.pool(), &c, filter).await
+}
+#[tauri::command]
+pub async fn get_inventory_reconciliation(
+    state: tauri::State<'_, AppState>,
+    filter: crate::inventory::InventoryReportFilter,
+) -> Result<Vec<crate::inventory::ReconciliationFinding>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryReportsService::reconciliation(state.db.pool(), &c, filter).await
+}
+
+#[tauri::command]
+pub async fn get_inventory_account_mapping(
+    state: tauri::State<'_, AppState>,
+) -> Result<Option<crate::inventory::InventoryAccountMapping>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryAccountingService::get_mapping(state.db.pool(), &c).await
+}
+#[tauri::command]
+pub async fn configure_inventory_account_mapping(
+    state: tauri::State<'_, AppState>,
+    request: crate::inventory::InventoryAccountMappingRequest,
+) -> Result<crate::inventory::InventoryAccountMapping, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryAccountingService::configure_mapping(state.db.pool(), &c, request)
+        .await
+}
+#[tauri::command]
+pub async fn preview_inventory_accounting(
+    state: tauri::State<'_, AppState>,
+    stock_voucher_id: String,
+) -> Result<crate::inventory::InventoryAccountingPreview, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryAccountingService::preview(state.db.pool(), &c, &stock_voucher_id)
+        .await
+}
+#[tauri::command]
+pub async fn integrate_inventory_accounting(
+    state: tauri::State<'_, AppState>,
+    stock_voucher_id: String,
+) -> Result<crate::inventory::InventoryAccountingIntegration, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryAccountingService::integrate(state.db.pool(), &c, &stock_voucher_id)
+        .await
+}
+#[tauri::command]
+pub async fn get_inventory_accounting_status(
+    state: tauri::State<'_, AppState>,
+    stock_voucher_id: String,
+) -> Result<Option<crate::inventory::InventoryAccountingIntegration>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryAccountingService::status(state.db.pool(), &c, &stock_voucher_id)
+        .await
+}
+#[tauri::command]
+pub async fn list_inventory_accounting_history(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<crate::inventory::InventoryAccountingIntegration>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryAccountingService::history(state.db.pool(), &c).await
+}
+#[tauri::command]
+pub async fn get_inventory_valuation_attribution(
+    state: tauri::State<'_, AppState>,
+    stock_voucher_id: String,
+) -> Result<Vec<crate::inventory::InventoryValuationAttribution>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryValuationAttributionService::for_voucher(
+        state.db.pool(),
+        &c,
+        &stock_voucher_id,
+    )
+    .await
+}
+#[tauri::command]
+pub async fn get_inventory_valuation_attribution_details(
+    state: tauri::State<'_, AppState>,
+    stock_voucher_id: String,
+) -> Result<Vec<crate::inventory::InventoryValuationAttributionDetails>, OpenTallyError> {
+    let c = require_active_company(&state).await?;
+    crate::inventory::InventoryValuationAttributionService::details_for_voucher(
+        state.db.pool(),
+        &c,
+        &stock_voucher_id,
+    )
+    .await
 }
 
 #[cfg(test)]

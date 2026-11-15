@@ -7,7 +7,7 @@ mod stage4_hardening_migration_tests;
 use serde::{Deserialize, Serialize};
 use sqlx::{
     sqlite::{SqliteConnectOptions, SqlitePoolOptions},
-    Pool, Row, Sqlite,
+    Pool, Row, Sqlite, TransactionManager,
 };
 use std::path::Path;
 use std::str::FromStr;
@@ -74,6 +74,38 @@ impl DatabaseManager {
             .max_connections(max_connections)
             .min_connections(1)
             .acquire_timeout(std::time::Duration::from_secs(5))
+            .after_release(|conn, _meta| {
+                Box::pin(async move {
+                    // Execute PRAGMA query_only first so the FIFO SQLite worker drains any
+                    // pending async rollback queued by a dropped Transaction before checking depth.
+                    let query_only = match sqlx::query_scalar::<_, i64>("PRAGMA query_only;")
+                        .fetch_one(&mut *conn)
+                        .await
+                    {
+                        Ok(flag) => flag,
+                        Err(e) => {
+                            warn!(
+                                "Discarding pooled SQLite connection: PRAGMA query_only check failed: {}",
+                                e
+                            );
+                            return Ok(false);
+                        }
+                    };
+
+                    let tx_depth =
+                        <Sqlite as sqlx::Database>::TransactionManager::get_transaction_depth(conn);
+
+                    if query_only != 0 || tx_depth != 0 {
+                        warn!(
+                            "Discarding contaminated SQLite connection on pool release (query_only={}, tx_depth={})",
+                            query_only, tx_depth
+                        );
+                        return Ok(false);
+                    }
+
+                    Ok(true)
+                })
+            })
             .connect_with(options)
             .await?;
 

@@ -12,7 +12,13 @@ interface MenuItem {
 const MENU_ITEMS: MenuItem[] = [
   // Masters
   { id: 'acc_masters', label: 'Accounts Info', hotkey: 'A', category: 'MASTERS', sprint: 'Sprint 1', description: 'Chart of Accounts, Groups & Ledgers' },
-  { id: 'inv_masters', label: 'Inventory Info', hotkey: 'I', category: 'MASTERS', sprint: 'Sprint 3', description: 'Stock Items, Units of Measure & Godowns' },
+  { id: 'inv_masters', label: 'Inventory Info', hotkey: 'I', category: 'MASTERS', sprint: 'Sprint 4', description: 'Stock Groups, Categories, Items, Units & Godowns' },
+  { id: 'party_masters', label: 'Party Masters', hotkey: 'P', category: 'MASTERS', sprint: 'Sprint 6', description: 'Customer and supplier master records linked to ledgers' },
+  { id: 'sales_vouchers', label: 'Sales Vouchers', hotkey: 'S', category: 'TRANSACTIONS', sprint: 'Sprint 6', description: 'Sales document drafts and invoice line management' },
+  { id: 'inv_transactions', label: 'Inventory Vouchers', hotkey: 'N', category: 'TRANSACTIONS', sprint: 'Sprint 4', description: 'Receipts, deliveries, transfers, adjustments & stock register' },
+  { id: 'inv_valuation', label: 'Inventory Valuation', hotkey: 'V', category: 'REPORTS', sprint: 'Sprint 4', description: 'FIFO and weighted average stock valuation' },
+  { id: 'inv_reports', label: 'Inventory Reports', hotkey: 'R', category: 'REPORTS', sprint: 'Sprint 4', description: 'Stock summary, register, ledger and reconciliation' },
+  { id: 'inv_accounting', label: 'Inventory Accounting', hotkey: 'A', category: 'REPORTS', sprint: 'Sprint 5', description: 'Configure and integrate inventory accounting effects' },
 
   // Transactions
   { id: 'vouchers', label: 'Accounting Vouchers', hotkey: 'V', category: 'TRANSACTIONS', sprint: 'Sprint 2', description: 'Sales, Purchase, Payment, Receipt, Journal, Contra' },
@@ -25,7 +31,11 @@ const MENU_ITEMS: MenuItem[] = [
   // Reports
   { id: 'balance_sheet', label: 'Balance Sheet', hotkey: 'B', category: 'REPORTS', sprint: 'Sprint 4', description: 'Assets, Liabilities & Capital Position' },
   { id: 'pnl', label: 'Profit & Loss A/c', hotkey: 'P', category: 'REPORTS', sprint: 'Sprint 4', description: 'Operating Income & Expense Statements' },
-  { id: 'trial_balance', label: 'Trial Balance', hotkey: 'T', category: 'REPORTS', sprint: 'Sprint 4', description: 'Real-time Debit/Credit Ledger Equilibrium' },
+  { id: 'trial_balance', label: 'Trial Balance', hotkey: 'T', category: 'REPORTS', sprint: 'Sprint 3', description: 'Real-time Debit/Credit Ledger Equilibrium' },
+  { id: 'profit_and_loss', label: 'Profit & Loss', hotkey: 'P', category: 'REPORTS', sprint: 'Sprint 3', description: 'Income, expenses, gross and net result' },
+  { id: 'balance_sheet', label: 'Balance Sheet', hotkey: 'B', category: 'REPORTS', sprint: 'Sprint 3', description: 'Assets, liabilities, equity and position' },
+  { id: 'cash_flow', label: 'Cash Flow', hotkey: 'C', category: 'REPORTS', sprint: 'Sprint 3', description: 'Operating, investing and financing cash movement' },
+  { id: 'ledger_report', label: 'Ledger Report', hotkey: 'L', category: 'REPORTS', sprint: 'Sprint 3', description: 'Account-wise transaction and running balance' },
 ];
 
 interface GatewayProps {
