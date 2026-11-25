@@ -100,6 +100,13 @@ impl VoucherCancellationService {
             ))
         })?;
 
+        crate::company::FinancialYearClosingService::validate_period_not_locked(
+            &mut *conn,
+            company_id,
+            &voucher.date,
+        )
+        .await?;
+
         // Step 4: Strict status eligibility validation
         if voucher.status == "draft" {
             return Err(OpenTallyError::Validation(
@@ -146,6 +153,75 @@ impl VoucherCancellationService {
                 "Cannot cancel a voucher that has already been reversed".to_string(),
             ));
         }
+
+        // Step 5b: FIFO guardrails for commercial vouchers (Purchase & Sales)
+        if voucher.voucher_type_id == "vt_pur" {
+            crate::commercial::CommercialPostingService::verify_and_cancel_purchase_fifo(
+                conn,
+                company_id,
+                voucher_id,
+                &voucher.voucher_number,
+            )
+            .await?;
+        } else if voucher.voucher_type_id == "vt_sales" {
+            crate::commercial::CommercialPostingService::restore_sales_fifo_on_cancel(
+                conn,
+                company_id,
+                voucher_id,
+                &voucher.voucher_number,
+            )
+            .await?;
+        }
+
+        // Step 5c: Bill-wise settlement guardrails and allocation cancellation (Milestone 2)
+        crate::billwise::BillWiseService::verify_and_cancel_billwise(
+            conn,
+            company_id,
+            voucher_id,
+            &voucher.voucher_number,
+        )
+        .await?;
+
+        // Step 5d: Mark GST voucher details as cancelled (Milestone 3)
+        crate::gst::GstService::cancel_voucher_gst_details(conn, company_id, voucher_id).await?;
+
+        // Step 5e: Mark bank allocations as cancelled (Milestone 8)
+        crate::banking::BankingService::cancel_voucher_bank_allocations(
+            conn,
+            company_id,
+            voucher_id,
+            &voucher.voucher_number,
+            Some(actor_id),
+        )
+        .await?;
+
+        // Step 5f: TDS guardrail and cancellation (Milestone 9)
+        crate::tds::TdsService::verify_and_cancel_voucher_tds(
+            conn,
+            company_id,
+            voucher_id,
+            &voucher.voucher_number,
+            Some(actor_id),
+        )
+        .await?;
+
+        // Step 5g: Order fulfillment restoration on invoice cancellation (Milestone 13)
+        crate::orders::OrdersService::restore_order_fulfillments_on_cancel(
+            conn,
+            company_id,
+            voucher_id,
+            Some(actor_id),
+        )
+        .await?;
+
+        // Step 5h: Payroll run cancellation on payroll voucher cancel (Milestone 15)
+        crate::payroll::PayrollService::cancel_payroll_run_on_voucher_cancel(
+            conn,
+            company_id,
+            voucher_id,
+            Some(actor_id),
+        )
+        .await?;
 
         // Step 6: Execute cancellation update
         let rows_affected = sqlx::query(

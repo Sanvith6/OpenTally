@@ -203,8 +203,8 @@ impl SalesDocumentService {
         id: &str,
         request: SalesDocumentRequest,
     ) -> Result<SalesDocumentWithLines, OpenTallyError> {
-        let prepared = prepare(pool, company_id, request).await?;
         let current = select_document(pool, company_id, id).await?;
+        let prepared = prepare(pool, company_id, request).await?;
         VoucherDraftService::update_draft_header(
             pool,
             company_id,
@@ -308,6 +308,120 @@ impl SalesDocumentService {
         audit(&mut tx, company_id, id, "DELETE", Some(&document), None).await?;
         tx.commit().await?;
         VoucherDraftService::delete_draft(pool, company_id, &document.voucher_id).await
+    }
+
+    pub async fn post_sales_document(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        id: &str,
+        sales_ledger_id: Option<String>,
+    ) -> Result<crate::commercial::CommercialPostingResult, OpenTallyError> {
+        let doc_with_lines = Self::get_draft(pool, company_id, id).await?;
+        let doc = doc_with_lines.document;
+
+        if doc.status == "posted" {
+            return Err(OpenTallyError::Validation(
+                "Sales document is already posted".to_string(),
+            ));
+        }
+        if doc.status != "draft" {
+            return Err(OpenTallyError::Validation(format!(
+                "Cannot post sales document in status '{}'",
+                doc.status
+            )));
+        }
+
+        // Resolve customer party ledger ID
+        let party_ledger_id: String = sqlx::query_scalar(
+            "SELECT ledger_id FROM party_profiles WHERE company_id = ? AND id = ?",
+        )
+        .bind(company_id)
+        .bind(&doc.party_id)
+        .fetch_one(pool)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        let series_id: String =
+            sqlx::query_scalar("SELECT series_id FROM vouchers WHERE company_id = ? AND id = ?")
+                .bind(company_id)
+                .bind(&doc.voucher_id)
+                .fetch_one(pool)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+        let posting_lines: Vec<crate::commercial::CommercialLinePosting> = doc_with_lines
+            .lines
+            .into_iter()
+            .map(|l| {
+                let qty = Decimal::from_str_exact(&l.quantity).map_err(|_| {
+                    OpenTallyError::IntegrityViolation(format!("Invalid quantity: {}", l.quantity))
+                })?;
+                let rate = Decimal::from_str_exact(&l.rate).map_err(|_| {
+                    OpenTallyError::IntegrityViolation(format!("Invalid rate: {}", l.rate))
+                })?;
+                let discount_amount =
+                    Decimal::from_str_exact(&l.discount_amount).map_err(|_| {
+                        OpenTallyError::IntegrityViolation(format!(
+                            "Invalid discount: {}",
+                            l.discount_amount
+                        ))
+                    })?;
+                let line_amount = Decimal::from_str_exact(&l.line_amount).map_err(|_| {
+                    OpenTallyError::IntegrityViolation(format!(
+                        "Invalid line amount: {}",
+                        l.line_amount
+                    ))
+                })?;
+                Ok(crate::commercial::CommercialLinePosting {
+                    line_number: l.line_number,
+                    description: l.description,
+                    stock_item_id: l.stock_item_id,
+                    unit_id: l.unit_id,
+                    godown_id: l.godown_id,
+                    quantity: qty,
+                    rate,
+                    discount_amount,
+                    line_amount,
+                    batch_number: None,
+                    mfg_date: None,
+                    expiry_date: None,
+                })
+            })
+            .collect::<Result<Vec<_>, OpenTallyError>>()?;
+
+        let net_total = Decimal::from_str_exact(&doc.net_total).map_err(|_| {
+            OpenTallyError::IntegrityViolation(format!("Invalid net_total: {}", doc.net_total))
+        })?;
+
+        let input = crate::commercial::CommercialPostingInput {
+            company_id: company_id.to_string(),
+            document_type: crate::commercial::CommercialDocumentType::Sales,
+            source_document_id: doc.id.clone(),
+            source_voucher_id: Some(doc.voucher_id.clone()),
+            series_id,
+            date: doc.invoice_date.clone(),
+            due_date: Some(doc.due_date.clone()),
+            party_id: doc.party_id.clone(),
+            party_ledger_id,
+            commercial_account_ledger_id: sales_ledger_id,
+            total_amount: net_total,
+            document_reference: doc.document_reference.clone(),
+            narration: doc.narration.clone(),
+            lines: posting_lines,
+            tax_lines: Vec::new(),
+            bill_allocations: Vec::new(),
+            place_of_supply_state_code: None,
+            is_reverse_charge: None,
+            allow_tax_override: None,
+            original_voucher_id: None,
+            return_reason: None,
+            tds_section_code: None,
+        };
+
+        crate::commercial::CommercialPostingService::post_commercial_voucher(
+            pool, company_id, input,
+        )
+        .await
     }
 }
 

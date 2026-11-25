@@ -1,0 +1,101 @@
+name: OpenTally CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Rust Backend (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+          sudo apt-get install -y libappindicator3-dev || sudo apt-get install -y libayatana-appindicator3-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 02-open-tally/src-tauri
+
+      - name: Check formatting (cargo fmt)
+        run: cargo fmt --manifest-path 02-open-tally/src-tauri/Cargo.toml --check
+
+      - name: Run Clippy lints
+        run: cargo clippy --manifest-path 02-open-tally/src-tauri/Cargo.toml -- -D warnings
+
+      - name: Run Rust test suite
+        run: cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
+
+  frontend:
+    name: React Frontend (ubuntu-latest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: 02-open-tally/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix 02-open-tally/frontend ci
+
+      - name: Run frontend test suite
+        run: npm --prefix 02-open-tally/frontend test -- --run
+
+      - name: Build production frontend bundle
+        run: npm --prefix 02-open-tally/frontend run build
+
+  clean-room-guard:
+    name: Clean-Room Isolation Guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify clean-room boundary inside 02-open-tally source trees
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -rnE "01-clean-room-specs" 02-open-tally/src-tauri/src 02-open-tally/frontend/src 02-open-tally/src-tauri/tauri.conf.json 02-open-tally/src-tauri/Cargo.toml 02-open-tally/frontend/package.json | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::Dirty-room path reference '01-clean-room-specs' detected inside 02-open-tally runtime/build files:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          BAD_FILES=$(find 02-open-tally/src-tauri/src 02-open-tally/frontend/src -type f \( -name "*.tsf" -o -name "*.tdl" -o -name "*.exe" -o -name "*.dll" -o -name "*.so" -o -name "*.dylib" \))
+          if [ -n "$BAD_FILES" ]; then
+            echo "::error::Prohibited binary or proprietary artifact found in clean-room source:"
+            echo "$BAD_FILES"
+            exit 1
+          fi
+          echo "Clean-room isolation check passed: zero dirty-room references or prohibited artifacts in 02-open-tally source trees."

@@ -1,17 +1,25 @@
-//! Interoperability & XML Server Module (Sprint 0 Foundation)
+//! Clean-Room Tally XML Interoperability Subsystem
 //!
-//! Scope Notice:
-//! The local HTTP XML daemon listening on TCP Port 9000 will be implemented
-//! following formal review and acceptance of ADR-002 (HTTP framework selection:
-//! Axum vs Actix vs tiny_http vs Hyper).
-//!
-//! Behavioral contract reference: `01-clean-room-specs/tallyprime/interoperability/`.
+//! Provides safe file-based XML interchange (Import with Dry-Run Preview & Export)
+//! compliant with ADR-002 (file-based XML interchange only; does not bind TCP port 9000).
 
-/// Placeholder descriptor for the interoperability subsystem.
+pub mod export;
+pub mod import;
+pub mod models;
+pub mod parser;
+pub mod security;
+
+pub use export::export_company_tally_xml;
+pub use import::{execute_tally_xml_import, preview_tally_xml_import};
+pub use models::*;
+pub use parser::parse_tally_xml;
+pub use security::sanitize_and_decode_xml;
+
+/// Historical descriptor preserved for system status reporting.
 pub struct InteroperabilitySubsystem;
 
 impl InteroperabilitySubsystem {
     pub const MODULE_NAME: &'static str = "interoperability";
     pub const DEFAULT_PORT: u16 = 9000;
-    pub const STATUS: &'static str = "pending_adr_002";
+    pub const STATUS: &'static str = "file_based_interchange_active";
 }

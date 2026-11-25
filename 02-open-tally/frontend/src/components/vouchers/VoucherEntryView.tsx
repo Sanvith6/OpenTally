@@ -18,18 +18,21 @@ import { VoucherHeaderForm } from './VoucherHeaderForm';
 import { VoucherLineGrid } from './VoucherLineGrid';
 import { VoucherTotalBar } from './VoucherTotalBar';
 import { DraftsModal } from './DraftsModal';
+import { BillWiseAllocationModal } from './BillWiseAllocationModal';
 import './VoucherEntryView.css';
 
 interface VoucherEntryViewProps {
   activeCompany: Company | null;
   onBackToGateway: () => void;
   onSwitchToMasters?: () => void;
+  initialTypeId?: string;
 }
 
 export function VoucherEntryView({
   activeCompany,
   onBackToGateway,
   onSwitchToMasters,
+  initialTypeId,
 }: VoucherEntryViewProps) {
   const [voucherTypes, setVoucherTypes] = useState<VoucherType[]>([]);
   const [selectedTypeId, setSelectedTypeId] = useState<string>('');
@@ -55,6 +58,7 @@ export function VoucherEntryView({
 
   // Modals & Async state
   const [isDraftsModalOpen, setIsDraftsModalOpen] = useState(false);
+  const [billAllocLineIndex, setBillAllocLineIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -83,8 +87,15 @@ export function VoucherEntryView({
         setVoucherTypes(types);
         setLedgers(ledgersList);
 
-        // Default to Sales or first available
-        const defaultType = types.find((t) => t.id === 'vt_sales') || types[0];
+        // Default to initialTypeId or vt_sales or first available
+        const targetType = initialTypeId
+          ? types.find(
+              (t) =>
+                t.id === initialTypeId ||
+                t.name.toLowerCase().includes(initialTypeId.toLowerCase())
+            )
+          : null;
+        const defaultType = targetType || types.find((t) => t.id === 'vt_sales') || types[0];
         if (defaultType) {
           setSelectedTypeId(defaultType.id);
         }
@@ -95,7 +106,20 @@ export function VoucherEntryView({
       }
     }
     initWorkspace();
-  }, [activeCompany]);
+  }, [activeCompany, initialTypeId]);
+
+  useEffect(() => {
+    if (initialTypeId && voucherTypes.length > 0) {
+      const target = voucherTypes.find(
+        (t) =>
+          t.id === initialTypeId ||
+          t.name.toLowerCase().includes(initialTypeId.toLowerCase())
+      );
+      if (target) {
+        setSelectedTypeId(target.id);
+      }
+    }
+  }, [initialTypeId, voucherTypes]);
 
   // 2. Load Series when selectedTypeId changes
   useEffect(() => {
@@ -220,6 +244,7 @@ export function VoucherEntryView({
       const result = await saveVoucherDraft(payload);
       setActiveDraftId(result.voucher.id);
       setProvisionalNumber(result.voucher.voucher_number);
+
       showNotification(`Draft voucher saved successfully (${result.voucher.voucher_number}).`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -297,6 +322,7 @@ export function VoucherEntryView({
         handleSaveDraft();
       } else if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         onBackToGateway();
       }
     },
@@ -404,6 +430,7 @@ export function VoucherEntryView({
             onDeleteLine={handleDeleteLine}
             onMoveLineUp={handleMoveLineUp}
             onMoveLineDown={handleMoveLineDown}
+            onOpenBillAllocations={(idx) => setBillAllocLineIndex(idx)}
           />
 
           {/* Sticky Running Totals and Balance Bar */}
@@ -418,6 +445,26 @@ export function VoucherEntryView({
             saving={saving}
           />
         </div>
+      )}
+
+      {/* Bill-Wise Allocation Modal */}
+      {billAllocLineIndex !== null && lines[billAllocLineIndex] && (
+        <BillWiseAllocationModal
+          isOpen={true}
+          partyLedgerId={lines[billAllocLineIndex].ledger_id}
+          partyLedgerName={
+            ledgers.find((l) => l.id === lines[billAllocLineIndex].ledger_id)?.name || 'Party Ledger'
+          }
+          lineAmount={lines[billAllocLineIndex].amount}
+          lineEntryType={lines[billAllocLineIndex].entry_type}
+          initialAllocations={lines[billAllocLineIndex].bill_allocations || []}
+          onSaveAllocations={(allocs) => {
+            handleUpdateLine(billAllocLineIndex, { bill_allocations: allocs });
+            setBillAllocLineIndex(null);
+            showNotification(`Bill-wise allocations recorded for line ${billAllocLineIndex + 1}.`);
+          }}
+          onClose={() => setBillAllocLineIndex(null)}
+        />
       )}
 
       {/* Drafts List Modal */}

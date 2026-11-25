@@ -17,6 +17,17 @@ impl VoucherPostingService {
         voucher_id: &str,
         actor_id: Option<&str>,
     ) -> Result<VoucherWithLines, OpenTallyError> {
+        Self::post_voucher_with_allocations(pool, company_id, voucher_id, actor_id, None).await
+    }
+
+    /// Atomically promotes a voucher draft to POSTED status with optional bank allocations.
+    pub async fn post_voucher_with_allocations(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        voucher_id: &str,
+        actor_id: Option<&str>,
+        custom_bank_allocations: Option<&[crate::banking::BankAllocationInput]>,
+    ) -> Result<VoucherWithLines, OpenTallyError> {
         // Step 1: Dedicated connection acquisition & immediate write lock
         let mut conn = pool.acquire().await.map_err(OpenTallyError::Database)?;
         sqlx::query("BEGIN IMMEDIATE")
@@ -29,6 +40,7 @@ impl VoucherPostingService {
             company_id,
             voucher_id,
             actor_id.unwrap_or("system"),
+            custom_bank_allocations,
         )
         .await;
 
@@ -54,6 +66,7 @@ impl VoucherPostingService {
         company_id: &str,
         voucher_id: &str,
         actor_id: &str,
+        custom_bank_allocations: Option<&[crate::banking::BankAllocationInput]>,
     ) -> Result<VoucherWithLines, OpenTallyError> {
         // Step 2: Load and verify draft header
         let draft = sqlx::query_as::<_, Voucher>(
@@ -101,6 +114,18 @@ impl VoucherPostingService {
         let (fy_begins, books_beginning, precision) = row_company;
         validate_voucher_date(&draft.date, &books_beginning)?;
         validate_voucher_date(&draft.effective_date, &books_beginning)?;
+        crate::company::FinancialYearClosingService::validate_period_not_locked(
+            &mut *conn,
+            company_id,
+            &draft.date,
+        )
+        .await?;
+        crate::company::FinancialYearClosingService::validate_period_not_locked(
+            &mut *conn,
+            company_id,
+            &draft.effective_date,
+        )
+        .await?;
 
         // Step 5: Validate voucher type and series
         let vt_active: Option<i64> = sqlx::query_scalar(
@@ -292,6 +317,17 @@ impl VoucherPostingService {
                 "Voucher is no longer in draft state or was concurrently modified".into(),
             ));
         }
+
+        // Step 10b: Auto-create or attach bank allocations for any bank ledger line (Milestone 8)
+        crate::banking::BankingService::auto_create_or_attach_bank_allocations(
+            conn,
+            company_id,
+            voucher_id,
+            &draft.date,
+            &lines,
+            custom_bank_allocations,
+        )
+        .await?;
 
         // Step 11: Write immutable audit log record
         let audit_id = Uuid::new_v4().to_string();

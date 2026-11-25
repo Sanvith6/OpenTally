@@ -31,6 +31,15 @@ pub enum OpenTallyError {
     #[error("Voucher number collision: {0}")]
     VoucherNumberCollision(String),
 
+    #[error("Period locked: {0}")]
+    PeriodLocked(String),
+
+    #[error("Unauthorized: {0}")]
+    Unauthorized(String),
+
+    #[error("Forbidden: {0}")]
+    Forbidden(String),
+
     #[error("Internal system error: {0}")]
     Internal(String),
 }

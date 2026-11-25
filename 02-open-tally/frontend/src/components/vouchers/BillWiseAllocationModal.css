@@ -1,0 +1,173 @@
+.ot-bill-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.ot-bill-modal-container {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  width: 740px;
+  max-width: 95vw;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.ot-bill-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background-color: #0f172a;
+  border-bottom: 1px solid #334155;
+}
+
+.ot-bill-modal-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  color: #ffffff;
+}
+
+.ot-bill-modal-sub {
+  font-size: 0.8rem;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.ot-bill-modal-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.35rem;
+  cursor: pointer;
+}
+
+.ot-bill-modal-body {
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ot-pending-bills-box {
+  background-color: #0f172a;
+  border: 1px solid #283548;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.ot-pending-bills-header {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.ot-pending-bills-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.ot-bill-chip {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  font-size: 0.76rem;
+  padding: 3px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.ot-bill-chip:hover {
+  background-color: #334155;
+  border-color: #f1c40f;
+  color: #f1c40f;
+}
+
+.ot-bill-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.ot-bill-grid th {
+  background-color: #162032;
+  color: #94a3b8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  border-bottom: 1px solid #334155;
+  text-align: left;
+}
+
+.ot-bill-grid td {
+  padding: 6px 10px;
+  border-bottom: 1px solid #283548;
+}
+
+.ot-bill-grid select,
+.ot-bill-grid input {
+  width: 100%;
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 0.88rem;
+}
+
+.ot-bill-grid select:focus,
+.ot-bill-grid input:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.ot-amount-input {
+  text-align: right;
+  font-family: monospace;
+  font-weight: 600;
+}
+
+.ot-del-btn {
+  background: none;
+  border: none;
+  color: #ef4444;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.ot-del-btn:hover {
+  color: #f87171;
+}
+
+.ot-balance-bar {
+  padding: 10px 14px;
+  border-radius: 4px;
+  background-color: #0f172a;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.ot-bal-success {
+  color: #10b981;
+}
+
+.ot-bal-error {
+  color: #ef4444;
+}
+
+.ot-bill-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 6px;
+}

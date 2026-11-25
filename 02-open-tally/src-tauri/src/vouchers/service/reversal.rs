@@ -102,6 +102,19 @@ impl VoucherReversalService {
         })?;
 
         // Step 4: Status validation
+        crate::company::FinancialYearClosingService::validate_period_not_locked(
+            &mut *conn,
+            company_id,
+            &orig_voucher.date,
+        )
+        .await?;
+        crate::company::FinancialYearClosingService::validate_period_not_locked(
+            &mut *conn,
+            company_id,
+            &req.reversal_date,
+        )
+        .await?;
+
         if orig_voucher.status == "draft" {
             return Err(OpenTallyError::Validation(
                 "Draft vouchers cannot be reversed; use delete or edit".to_string(),
@@ -140,6 +153,67 @@ impl VoucherReversalService {
                 rev_num, rev_id
             )));
         }
+
+        // Step 5b: FIFO guardrail for reversing commercial vouchers
+        if orig_voucher.voucher_type_id == "vt_pur" {
+            crate::commercial::CommercialPostingService::verify_and_cancel_purchase_fifo(
+                conn,
+                company_id,
+                &orig_voucher.id,
+                &orig_voucher.voucher_number,
+            )
+            .await?;
+        } else if orig_voucher.voucher_type_id == "vt_sales" {
+            crate::commercial::CommercialPostingService::restore_sales_fifo_on_cancel(
+                conn,
+                company_id,
+                &orig_voucher.id,
+                &orig_voucher.voucher_number,
+            )
+            .await?;
+        }
+
+        // Step 5c: Bill-wise settlement guardrail and allocation cancellation (Milestone 2)
+        crate::billwise::BillWiseService::verify_and_cancel_billwise(
+            conn,
+            company_id,
+            &orig_voucher.id,
+            &orig_voucher.voucher_number,
+        )
+        .await?;
+
+        // Step 5d: Mark GST voucher details as cancelled (Milestone 3)
+        crate::gst::GstService::cancel_voucher_gst_details(conn, company_id, &orig_voucher.id)
+            .await?;
+
+        // Step 5e: Mark bank allocations as cancelled (Milestone 8)
+        crate::banking::BankingService::cancel_voucher_bank_allocations(
+            conn,
+            company_id,
+            &orig_voucher.id,
+            &orig_voucher.voucher_number,
+            req.actor_id.as_deref(),
+        )
+        .await?;
+
+        // Step 5f: TDS guardrail and cancellation (Milestone 9)
+        crate::tds::TdsService::verify_and_cancel_voucher_tds(
+            conn,
+            company_id,
+            &orig_voucher.id,
+            &orig_voucher.voucher_number,
+            req.actor_id.as_deref(),
+        )
+        .await?;
+
+        // Step 5g: Order fulfillment restoration on invoice reversal (Milestone 13)
+        crate::orders::OrdersService::restore_order_fulfillments_on_cancel(
+            conn,
+            company_id,
+            &orig_voucher.id,
+            req.actor_id.as_deref(),
+        )
+        .await?;
 
         // Step 6: Validate fiscal boundaries and reversal date
         let (_fy_begins, books_beginning, precision): (String, String, i64) = sqlx::query_as(
@@ -350,6 +424,15 @@ impl VoucherReversalService {
         if rows_orig != 1 {
             return Err(OpenTallyError::Database(sqlx::Error::RowNotFound));
         }
+
+        // Step 14b: Cancel associated payroll run if reversing a payroll voucher (Milestone 15)
+        crate::payroll::PayrollService::cancel_payroll_run_on_voucher_cancel(
+            conn,
+            company_id,
+            &orig_voucher.id,
+            Some(actor_id),
+        )
+        .await?;
 
         // Step 15: Dual audit logging
         // A. POST action for reversing voucher

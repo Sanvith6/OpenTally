@@ -1,0 +1,97 @@
+/* Classic high-contrast TallyPrime vertical function key bar */
+.ot-function-bar {
+  width: 96px;
+  background-color: #1e2638;
+  border-left: 2px solid #2f3b52;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  flex-shrink: 0;
+  box-shadow: -2px 0 6px rgba(0, 0, 0, 0.2);
+  z-index: 50;
+}
+
+.ot-function-bar-header {
+  padding: 6px 4px;
+  background-color: #161c2a;
+  border-bottom: 1px solid #2f3b52;
+  text-align: center;
+}
+
+.ot-function-bar-title {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #8da2c0;
+}
+
+.ot-function-bar-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 4px 2px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ot-function-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background-color: #26324a;
+  border: 1px solid #3d4f70;
+  color: #e2e8f0;
+  border-radius: 3px;
+  padding: 6px 2px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  min-height: 44px;
+  text-align: center;
+}
+
+.ot-function-btn:hover:not(:disabled) {
+  background-color: #3b4e73;
+  border-color: #f1c40f;
+  transform: translateY(-1px);
+}
+
+.ot-function-btn:active:not(:disabled) {
+  background-color: #1a2336;
+  transform: translateY(1px);
+}
+
+.ot-function-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background-color: #1a2233;
+}
+
+.ot-function-btn .ot-fn-key {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #f1c40f; /* Signature Tally gold/yellow */
+  letter-spacing: 0.04em;
+  font-family: monospace;
+}
+
+.ot-function-btn .ot-fn-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 1px;
+}
+
+.ot-function-btn-highlight {
+  background-color: #1e3a5f;
+  border-color: #38bdf8;
+}
+
+.ot-function-btn-highlight .ot-fn-key {
+  color: #38bdf8;
+}
+
+.ot-function-btn-highlight:hover:not(:disabled) {
+  background-color: #2563eb;
+  border-color: #60a5fa;
+}

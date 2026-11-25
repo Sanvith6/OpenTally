@@ -8,6 +8,7 @@ interface VoucherLineGridProps {
   onDeleteLine: (index: number) => void;
   onMoveLineUp: (index: number) => void;
   onMoveLineDown: (index: number) => void;
+  onOpenBillAllocations?: (index: number) => void;
 }
 
 export function VoucherLineGrid({
@@ -18,6 +19,7 @@ export function VoucherLineGrid({
   onDeleteLine,
   onMoveLineUp,
   onMoveLineDown,
+  onOpenBillAllocations,
 }: VoucherLineGridProps) {
   const handleKeyDown = (
     e: React.KeyboardEvent,
@@ -118,6 +120,107 @@ export function VoucherLineGrid({
                         </option>
                       ))}
                     </select>
+                    {onOpenBillAllocations && line.ledger_id && parseFloat(line.amount) > 0 && (
+                      <div style={{ marginTop: '4px' }}>
+                        <button
+                          type="button"
+                          className="ot-badge-btn"
+                          onClick={() => onOpenBillAllocations(idx)}
+                          title="Configure Bill-wise details (Agst Ref, New Ref)"
+                          style={{
+                            fontSize: '0.72rem',
+                            padding: '1px 6px',
+                            background: line.bill_allocations && line.bill_allocations.length > 0 ? '#065f46' : '#1e293b',
+                            color: line.bill_allocations && line.bill_allocations.length > 0 ? '#a7f3d0' : '#38bdf8',
+                            border: '1px solid #334155',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Bill-wise {line.bill_allocations && line.bill_allocations.length > 0 ? `(${line.bill_allocations.length} allocated)` : '+'}
+                        </button>
+                      </div>
+                    )}
+                    {line.ledger_id && ledgers.find((l) => l.id === line.ledger_id)?.name.toLowerCase().includes('bank') && (
+                      <div style={{ marginTop: '4px' }}>
+                        <button
+                          type="button"
+                          className="ot-badge-btn"
+                          onClick={() => {
+                            const cur = line.bank_allocation || { transaction_type: 'Cheque', instrument_number: '', instrument_date: '' };
+                            onUpdateLine(idx, { bank_allocation: line.bank_allocation ? undefined : cur });
+                          }}
+                          title="Configure Bank instrument details (Cheque, NEFT, RTGS, etc.)"
+                          style={{
+                            fontSize: '0.72rem',
+                            padding: '1px 6px',
+                            background: line.bank_allocation ? '#075985' : '#1e293b',
+                            color: line.bank_allocation ? '#bae6fd' : '#38bdf8',
+                            border: '1px solid #334155',
+                            borderRadius: '3px',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          Bank Details {line.bank_allocation ? '✓' : '+'}
+                        </button>
+                      </div>
+                    )}
+                    {line.bank_allocation && (
+                      <div
+                        style={{
+                          marginTop: '6px',
+                          padding: '6px',
+                          background: '#0f172a',
+                          border: '1px solid #334155',
+                          borderRadius: '4px',
+                          display: 'flex',
+                          gap: '6px',
+                          flexWrap: 'wrap',
+                          fontSize: '0.75rem',
+                        }}
+                      >
+                        <select
+                          className="ot-input"
+                          style={{ fontSize: '0.75rem', padding: '2px 4px' }}
+                          value={line.bank_allocation.transaction_type || 'Cheque'}
+                          onChange={(e) =>
+                            onUpdateLine(idx, {
+                              bank_allocation: { ...line.bank_allocation, transaction_type: e.target.value },
+                            })
+                          }
+                        >
+                          {['Cheque', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'DD', 'Card', 'ECS', 'Other'].map((t) => (
+                            <option key={t} value={t}>
+                              {t}
+                            </option>
+                          ))}
+                        </select>
+                        <input
+                          type="text"
+                          placeholder="Inst. No."
+                          className="ot-input"
+                          style={{ fontSize: '0.75rem', padding: '2px 4px', width: '90px' }}
+                          value={line.bank_allocation.instrument_number || ''}
+                          onChange={(e) =>
+                            onUpdateLine(idx, {
+                              bank_allocation: { ...line.bank_allocation, instrument_number: e.target.value },
+                            })
+                          }
+                        />
+                        <input
+                          type="date"
+                          placeholder="Inst. Date"
+                          className="ot-input"
+                          style={{ fontSize: '0.75rem', padding: '2px 4px' }}
+                          value={line.bank_allocation.instrument_date || ''}
+                          onChange={(e) =>
+                            onUpdateLine(idx, {
+                              bank_allocation: { ...line.bank_allocation, instrument_date: e.target.value },
+                            })
+                          }
+                        />
+                      </div>
+                    )}
                   </td>
 
                   {/* Debit Amount */}

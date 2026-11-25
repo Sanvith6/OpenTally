@@ -1,7 +1,6 @@
 use crate::errors::OpenTallyError;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
-use sqlx::{Sqlite, Transaction};
 use std::collections::VecDeque;
 use uuid::Uuid;
 
@@ -63,31 +62,31 @@ fn fmt(value: Decimal) -> String {
 pub struct InventoryValuationAttributionService;
 impl InventoryValuationAttributionService {
     pub async fn attribute_movement(
-        tx: &mut Transaction<'_, Sqlite>,
+        conn: &mut sqlx::SqliteConnection,
         company: &str,
         movement_id: &str,
         valuation_method: &str,
     ) -> Result<(), OpenTallyError> {
         let target: Movement = sqlx::query_as("SELECT m.id,m.voucher_id,v.voucher_type,m.voucher_line_id,m.movement_date,m.signed_quantity,l.unit_cost,v.reversal_of_voucher_id FROM stock_movements m JOIN stock_vouchers v ON v.company_id=m.company_id AND v.id=m.voucher_id JOIN stock_voucher_lines l ON l.company_id=m.company_id AND l.id=m.voucher_line_id WHERE m.company_id=? AND m.id=?")
-            .bind(company).bind(movement_id).fetch_one(&mut **tx).await?;
+            .bind(company).bind(movement_id).fetch_one(&mut *conn).await?;
         let exists: Option<String> = sqlx::query_scalar("SELECT id FROM inventory_valuation_attributions WHERE company_id=? AND stock_movement_id=?")
-            .bind(company).bind(movement_id).fetch_optional(&mut **tx).await?;
+            .bind(company).bind(movement_id).fetch_optional(&mut *conn).await?;
         if exists.is_some() {
             return Ok(());
         }
 
         if let Some(original_voucher) = &target.reversal_of_voucher_id {
             let original: Option<InventoryValuationAttribution> = sqlx::query_as("SELECT id,company_id,stock_voucher_id,voucher_type,voucher_line_id,stock_item_id,stock_movement_id,valuation_method,quantity,unit_cost,total_value,context,posting_timestamp,reversal_of_attribution_id FROM inventory_valuation_attributions WHERE company_id=? AND stock_voucher_id=? AND stock_item_id=(SELECT stock_item_id FROM stock_movements WHERE company_id=? AND id=?) ORDER BY id LIMIT 1")
-                .bind(company).bind(original_voucher).bind(company).bind(movement_id).fetch_optional(&mut **tx).await?;
+                .bind(company).bind(original_voucher).bind(company).bind(movement_id).fetch_optional(&mut *conn).await?;
             if let Some(original) = original {
                 let id = Uuid::new_v4().to_string();
                 sqlx::query("INSERT INTO inventory_valuation_attributions(id,company_id,stock_voucher_id,voucher_type,voucher_line_id,stock_item_id,stock_movement_id,valuation_method,quantity,unit_cost,total_value,context,reversal_of_attribution_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)")
-                    .bind(&id).bind(company).bind(&target.voucher_id).bind(&target.voucher_type).bind(&target.voucher_line_id).bind(&original.stock_item_id).bind(movement_id).bind(&original.valuation_method).bind(&original.quantity).bind(&original.unit_cost).bind(&original.total_value).bind(&original.context).bind(&original.id).execute(&mut **tx).await?;
+                    .bind(&id).bind(company).bind(&target.voucher_id).bind(&target.voucher_type).bind(&target.voucher_line_id).bind(&original.stock_item_id).bind(movement_id).bind(&original.valuation_method).bind(&original.quantity).bind(&original.unit_cost).bind(&original.total_value).bind(&original.context).bind(&original.id).execute(&mut *conn).await?;
                 let uses: Vec<InventoryValuationLayerUse> = sqlx::query_as("SELECT id,attribution_id,source_movement_id,source_voucher_id,quantity,unit_cost,total_value FROM inventory_valuation_layer_uses WHERE company_id=? AND attribution_id=?")
-                    .bind(company).bind(original.id).fetch_all(&mut **tx).await?;
+                    .bind(company).bind(original.id).fetch_all(&mut *conn).await?;
                 for use_row in uses {
                     sqlx::query("INSERT INTO inventory_valuation_layer_uses(id,company_id,attribution_id,source_movement_id,source_voucher_id,quantity,unit_cost,total_value) VALUES(?,?,?,?,?,?,?,?)")
-                        .bind(Uuid::new_v4().to_string()).bind(company).bind(&id).bind(use_row.source_movement_id).bind(use_row.source_voucher_id).bind(use_row.quantity).bind(use_row.unit_cost).bind(use_row.total_value).execute(&mut **tx).await?;
+                        .bind(Uuid::new_v4().to_string()).bind(company).bind(&id).bind(use_row.source_movement_id).bind(use_row.source_voucher_id).bind(use_row.quantity).bind(use_row.unit_cost).bind(use_row.total_value).execute(&mut *conn).await?;
                 }
                 return Ok(());
             }
@@ -98,14 +97,14 @@ impl InventoryValuationAttributionService {
         )
         .bind(company)
         .bind(movement_id)
-        .fetch_one(&mut **tx)
+        .fetch_one(&mut *conn)
         .await?;
         let opening: (String, String) = sqlx::query_as(
             "SELECT opening_quantity,opening_value FROM stock_items WHERE company_id=? AND id=?",
         )
         .bind(company)
         .bind(&item)
-        .fetch_one(&mut **tx)
+        .fetch_one(&mut *conn)
         .await?;
         let mut fifo: VecDeque<(Option<String>, Option<String>, Decimal, Decimal)> =
             VecDeque::new();
@@ -116,7 +115,7 @@ impl InventoryValuationAttributionService {
         let mut weighted_qty = oq;
         let mut weighted_value = decimal(&opening.1)?;
         let movements: Vec<Movement> = sqlx::query_as("SELECT m.id,m.voucher_id,v.voucher_type,m.voucher_line_id,m.movement_date,m.signed_quantity,l.unit_cost,v.reversal_of_voucher_id FROM stock_movements m JOIN stock_vouchers v ON v.company_id=m.company_id AND v.id=m.voucher_id JOIN stock_voucher_lines l ON l.company_id=m.company_id AND l.id=m.voucher_line_id WHERE m.company_id=? AND m.stock_item_id=? AND v.status='posted' ORDER BY m.movement_date,m.rowid")
-            .bind(company).bind(&item).fetch_all(&mut **tx).await?;
+            .bind(company).bind(&item).fetch_all(&mut *conn).await?;
         let mut target_cost = Decimal::ZERO;
         let target_qty = decimal(&target.signed_quantity)?.abs();
         let mut layer_uses = Vec::new();
@@ -193,10 +192,10 @@ impl InventoryValuationAttributionService {
         let attribution_id = Uuid::new_v4().to_string();
         let context = serde_json::json!({"method": valuation_method, "source": "posting-replay", "quantity_context": fmt(target_qty), "layer_count": layer_uses.len()}).to_string();
         sqlx::query("INSERT INTO inventory_valuation_attributions(id,company_id,stock_voucher_id,voucher_type,voucher_line_id,stock_item_id,stock_movement_id,valuation_method,quantity,unit_cost,total_value,context) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)")
-            .bind(&attribution_id).bind(company).bind(&target.voucher_id).bind(&target.voucher_type).bind(&target.voucher_line_id).bind(&item).bind(&target.id).bind(valuation_method).bind(fmt(target_qty)).bind(fmt(unit_cost)).bind(fmt(target_cost)).bind(context).execute(&mut **tx).await?;
+            .bind(&attribution_id).bind(company).bind(&target.voucher_id).bind(&target.voucher_type).bind(&target.voucher_line_id).bind(&item).bind(&target.id).bind(valuation_method).bind(fmt(target_qty)).bind(fmt(unit_cost)).bind(fmt(target_cost)).bind(context).execute(&mut *conn).await?;
         for (source_movement_id, source_voucher_id, quantity, cost) in layer_uses {
             sqlx::query("INSERT INTO inventory_valuation_layer_uses(id,company_id,attribution_id,source_movement_id,source_voucher_id,quantity,unit_cost,total_value) VALUES(?,?,?,?,?,?,?,?)")
-                .bind(Uuid::new_v4().to_string()).bind(company).bind(&attribution_id).bind(source_movement_id).bind(source_voucher_id).bind(fmt(quantity)).bind(fmt(cost)).bind(fmt(quantity * cost)).execute(&mut **tx).await?;
+                .bind(Uuid::new_v4().to_string()).bind(company).bind(&attribution_id).bind(source_movement_id).bind(source_voucher_id).bind(fmt(quantity)).bind(fmt(cost)).bind(fmt(quantity * cost)).execute(&mut *conn).await?;
         }
         Ok(())
     }

@@ -1,22 +1,28 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "OpenTally",
-  "version": "0.1.0",
+  "version": "2.0.0",
   "identifier": "org.opentally.desktop",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": {
+      "script": "npm run dev",
+      "cwd": "../frontend"
+    },
+    "beforeBuildCommand": {
+      "script": "npm run build",
+      "cwd": "../frontend"
+    },
     "devUrl": null,
     "frontendDist": "../frontend/dist"
   },
   "app": {
     "windows": [
       {
-        "title": "OpenTally — Modern Accounting Foundation",
+        "title": "OpenTally",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,
-        "minHeight": 640,
+        "minHeight": 700,
         "resizable": true,
         "fullscreen": false
       }
@@ -26,7 +32,17 @@
     }
   },
   "bundle": {
-    "active": false
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/64x64.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ]
   }
 }
 

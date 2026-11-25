@@ -111,6 +111,12 @@ impl InventoryAccountingService {
     ) -> Result<Option<InventoryAccountMapping>, OpenTallyError> {
         Ok(sqlx::query_as("SELECT company_id,inventory_asset_ledger_id,adjustment_expense_ledger_id,adjustment_gain_ledger_id,cogs_ledger_id,receipt_offset_ledger_id,journal_series_id,enabled FROM inventory_account_mappings WHERE company_id=?").bind(company).fetch_optional(pool).await?)
     }
+    pub async fn get_mapping_tx(
+        conn: &mut sqlx::SqliteConnection,
+        company: &str,
+    ) -> Result<Option<InventoryAccountMapping>, OpenTallyError> {
+        Ok(sqlx::query_as("SELECT company_id,inventory_asset_ledger_id,adjustment_expense_ledger_id,adjustment_gain_ledger_id,cogs_ledger_id,receipt_offset_ledger_id,journal_series_id,enabled FROM inventory_account_mappings WHERE company_id=?").bind(company).fetch_optional(conn).await?)
+    }
     async fn validate_ledger(
         pool: &SqlitePool,
         company: &str,

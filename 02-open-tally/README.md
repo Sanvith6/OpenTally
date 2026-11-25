@@ -1,99 +1,125 @@
-# OpenTally — Clean-Room Desktop Application (`02-open-tally`)
+# OpenTally — Clean-Room Indian Accounting & ERP Engine (v2.0.0)
 
-This directory contains the independent clean-room implementation of the **OpenTally** accounting engine and desktop application.
+OpenTally is a high-performance, open-source desktop accounting, inventory, taxation, manufacturing, and payroll application interoperable with standard TallyPrime observable workflows and data formats, engineered from first principles under strict clean-room governance.
 
----
-
-## Directory Structure
-
-```text
-02-open-tally/
-├── docs/                                  # Architectural Decision Records (ADRs) & technical designs
-│   ├── README.md                          # ADR index
-│   ├── ADR-001-embedded-database-selection.md  # SQLite + WAL + SQLCipher architecture
-│   ├── OPENTALLY_SPRINT1_FINAL_COMPLETION_REPORT.md # Sprint 1 completion documentation
-│   ├── OPENTALLY_SPRINT2_VOUCHER_ENGINE_TECHNICAL_DESIGN.md # Voucher engine specification (v2.9.4)
-│   └── PHASE-1-DISCREPANCY-CORRECTION-LOG.md   # Reconciled Phase 1 research discrepancies
-├── frontend/                              # Desktop GUI (TypeScript + React 18 + Vite + Tauri API)
-│   ├── src/
-│   │   ├── components/                    # Chart of Accounts, Company creation modal, Gateway, Status bars
-│   │   ├── hooks/                         # Keyboard navigation & hotkeys handler
-│   │   ├── services/                      # Tauri IPC invocation wrappers
-│   │   ├── types/                         # IPC request/response data contracts
-│   │   ├── App.tsx                        # Main application view & status orchestrator
-│   │   └── main.tsx                       # Entry point
-│   ├── package.json
-│   └── vite.config.ts
-└── src-tauri/                             # Core Desktop Accounting Engine (Rust + Tauri 2 + SQLite)
-    ├── src/
-    │   ├── accounting/                    # 29 account groups, 2 reserved ledgers, CoA tree, validation
-    │   ├── app/                           # AppState container
-    │   ├── commands/                      # 11 registered Tauri IPC command handlers
-    │   ├── company/                       # Company lifecycle, FY dates, validation, leap-year calculations
-    │   ├── config/                        # Application configuration
-    │   ├── database/                      # SQLite pool, WAL mode, programmatic migrations
-    │   ├── errors/                        # Typed error definitions (OpenTallyError)
-    │   ├── logging/                       # Tracing and diagnostic logging
-    │   ├── lib.rs                         # Tauri builder & lifecycle management
-    │   └── main.rs                        # Executable entry point
-    ├── Cargo.toml
-    └── tauri.conf.json
-```
+Built with **Tauri v2**, **Rust** (core double-entry engine, SQLite + WAL + SQLCipher, `rust_decimal`), and **TypeScript / React 18** (keyboard-first desktop UI).
 
 ---
 
-## Current Status & Implemented Features
+## Key Capabilities (`v2.0.0` Release — Milestones 1–15)
 
-### Sprint 1: Company Management & Chart of Accounts (COMPLETED & VERIFIED)
-- **Embedded Database**: SQLite engine with Write-Ahead Logging (`PRAGMA journal_mode = WAL`) and strict foreign keys (`PRAGMA foreign_keys = ON`). Programmatic migration runner (`run_sprint1_migration`, `run_stage3_migration`).
-- **Multi-Company Management**: Full CRUD lifecycle, active company persistence across app restarts, statutory Indian FY date validation (`04-01`), leap-year handling (Feb 29), and soft-archival (`is_archived = 1`).
-- **Standard Chart of Accounts**:
-  - 29 standard predefined account groups seeded automatically on company creation.
-  - 2 reserved system ledgers (`Cash` under `Cash-in-Hand`, `Profit & Loss A/c` under system group) protected by database triggers.
-  - Multi-level recursive tree rollup for parent-child groups.
-  - Circular hierarchy prevention and multi-company boundary protection via composite foreign keys.
-- **Opening Balances**: Exact decimal normalization with `rust_decimal`, scale checking against `currency_decimal_places`, and double-entry equilibrium validation rollup.
-- **Tauri IPC Commands**: 11 commands registered and tested.
+### 1. Pure Double-Entry Accounting Core & MCA Audit Certification
+- **Standard Chart of Accounts**: 29 Indian standard account groups, recursive multi-level rollup, and database trigger-protected reserved ledgers (`Cash`, `Profit & Loss A/c`).
+- **Exact Decimal Arithmetic**: Zero IEEE-754 floating-point math (`rust_decimal` in Rust, integer minor units / decimal strings in TypeScript) with canonical string storage in SQLite.
+- **MCA 2023 Forensic Audit Trail**: Immutable `audit_log` with SHA-256 cryptographic hash chaining, live `AuditCertificationService` chain verification, and authenticated user attribution via `AppState::resolve_actor`.
+- **Automated FY Year-End Closing & Period Lock**: Rolls nominal P&L accounts into Retained Earnings / Profit & Loss, carries forward Balance Sheet & FIFO stock opening layers, and enforces `PeriodLocked` freeze against backdated writes.
+- **Multi-Company Isolation**: Strict tenant partitioning across all tables (`WHERE company_id = ?`).
 
-### Sprint 2: Voucher Management & Posting Engine (DESIGNED — v2.9.4)
-- Technical design approved in `docs/OPENTALLY_SPRINT2_VOUCHER_ENGINE_TECHNICAL_DESIGN.md`.
-- 18-column voucher header schema with immutability triggers.
-- Normalized numbering series master (`voucher_number_series`) and effective-dated configuration versioning.
-- Atomic 13-step reversal workflow under predefined `Reversing Journal` (`vt_reversing_journal`) with dedicated `REV` series.
+### 2. Commercial Invoicing, Orders & Multi-Location Inventory
+- **Atomic Sales (`F8`) & Purchase (`F9`)**: Atomically commits double-entry GL vouchers, GST splits, Bill-Wise allocations, and FIFO inventory cost layers in a single `BEGIN IMMEDIATE` transaction.
+- **Order Processing (`Ctrl+F8` / `Ctrl+F9`)**: Sales Orders and Purchase Orders isolated from GL/stock until converted, with partial fulfillment tracking and Pending Orders outstanding reports.
+- **Credit Notes (`Alt+F6`) & Debit Notes (`Alt+F5`)**: Sales and purchase return notes with GST reversal, stock adjustments, and original invoice linkage.
+- **Multi-Location Godowns & Stock Journals (`Alt+F7`)**: Inter-godown transfers, godown summaries, batch/expiry aging tracking, and dual-column Stock Journals.
+- **Manufacturing Bill of Materials (BOM)**: Multi-component recipes with cycle protection, proportional scaling, raw-material FIFO consumption, overhead capitalization, batch linking, and exact finished-goods landed unit costing.
+
+### 3. Indian Statutory Compliance (GST, GSTR-2B, e-Invoice, TDS/TCS, Payroll)
+- **GST Returns & GSTR-2B Reconciliation**: GSTR-1, GSTR-3B, portal GSTR-2B JSON import with 4-way ITC reconciliation (`Matched`, `Mismatch`, `Missing in Books`, `Missing in 2B`), NIC e-Invoice (`v1.1`), and e-Way Bill JSON exports.
+- **TDS & TCS Engine**: TAN/PAN validation, Nature of Payment sections (`194C`, `194J`, `194I`, `194H`, `194A`, `194Q`, `206C(1H)`), FY thresholds, Section 206AA 20% missing-PAN enforcement, Challan tagging, and Form 26Q Q1–Q4 exports.
+- **Indian Payroll (`Ctrl+F4`) & A4 Payslip PDFs**: `F11` auto-seeding of 7 Payroll ledgers, Employee masters (PAN/UAN), LOP proration, EPF/EPS (`₹15,000` ceiling), ESI (`₹21,000` ceiling), PT slab (`₹25,000`), atomic `vt_payroll` GL posting, voucher cancellation hooks, CWE-1236-safe CSV export, and pure-Rust A4 `%PDF-1.4` Payslip PDFs.
+
+### 4. Banking (BRS), Management Accounting & Security Control
+- **Banking & BRS**: Instrument allocations (`Cheque`, `NEFT`, `RTGS`, `IMPS`, `UPI`, etc.) and CSV bank statement deterministic auto-matching.
+- **Management Accounting**: Two-pane Ratio Analysis, Cost Categories & Centres with breakup reports, and Group/Ledger/Cost Centre Budgets & Variance tracking.
+- **Security Control (Argon2id RBAC)**: Optional per-company login (`Admin`, `Accountant`, `DataEntry`, `Auditor`), sole active Admin guardrails, and database-backed session validation.
+- **Bill-Wise AR/AP & Aging**: `New Ref`, `Agst Ref`, `Advance`, `On Account` tracking and overdue aging intervals backed by `ReadOnlyConnectionGuard`.
+
+### 5. Tally XML Interchange, Tax Invoice PDF & WAL Backup/Restore
+- **Streaming Tally XML (`Alt+I`)**: Pure-Rust `quick-xml` parser/exporter with 50MB guard, XXE protection, dry-run preview, and `<ENVELOPE>` export (ADR-002 compliant).
+- **WAL-Safe Backup & Restore (`Alt+B`)**: SQLite online backup API (`sqlite3_backup`) + SHA-256 verified restore.
+- **1-Click Sample Company (`F3` → `S`)**: Realistic Indian SME dataset (`Bharath Precision Components Pvt Ltd`).
 
 ---
 
-## Running & Testing
+## Keyboard Shortcuts Quick Reference
 
-### Prerequisites
-- Rust 1.80+ or 1.99+ (`cargo`, `rustc`, `clippy`, `rustfmt`)
-- Node.js 20+ & npm
+| Shortcut | Context | Action |
+|:---|:---|:---|
+| `F2` | Global | Change Period / Date |
+| `F3` | Global | Select Company (`Alt+F3` / `C` to Create Company) |
+| `F4` | Global | Contra Voucher Entry |
+| `Ctrl+F4` | Global | Indian Payroll & Statutory Compliance |
+| `F5` / `Alt+F5` | Global | Payment Voucher / Debit Note (Purchase Return) |
+| `F6` / `Alt+F6` | Global | Receipt Voucher / Credit Note (Sales Return) |
+| `F7` / `Alt+F7` | Global | Journal Voucher / Stock Journal (Inter-Godown) |
+| `F8` / `Ctrl+F8` | Global | Sales Invoicing (Commercial) / Sales Order |
+| `F9` / `Ctrl+F9` | Global | Purchase Invoicing (Commercial) / Purchase Order |
+| `F11` | Global | Company Features (Accounting, Inventory, GST, TDS, Payroll) |
+| `Alt+G` / `Ctrl+G` | Global | Omnipresent "Go To" Command Palette & Global Search |
+| `Alt+I` | Global | Tally XML Import / Export Modal |
+| `Alt+B` | Global | Database Backup & Restore Modal |
+| `Ctrl+A` | Voucher / Form | Accept & Save Form |
+| `Ctrl+P` | Invoice / Report | Print / Export PDF |
+| `Esc` | Global | Close Active Modal / Step Back in Navigation Stack |
+| `A` / `M` / `P` | Gateway | Chart of Accounts / Inventory Masters / Profit & Loss |
+| `T` / `B` / `C` / `D` / `L` | Gateway | Trial Balance / Balance Sheet / Cash Flow / Day Book / Ledger |
+| `G` / `K` / `O` / `Q` / `Z` | Gateway | GST Reports / Banking (BRS) / Outstanding / Ratios / Year Closing & Audit |
+| `2` / `Y` | Gateway | Budgets & Scenarios / Payroll (`Ctrl+F4`) |
 
-### Running Automated Tests
+---
+
+## Configuration & Environment Variables
+
+- **`OPENTALLY_DATA_DIR`**: Optional directory path overriding the OS default application data directory (`%APPDATA%\org.opentally.desktop`). When set, OpenTally stores and reads `opentally.db` inside `$OPENTALLY_DATA_DIR/opentally.db` — useful for portable deployments, multi-environment isolation, and live Playwright CDP E2E audits without touching production data.
+- **`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS`**: Set to `--remote-debugging-port=9222` on Windows before launching `opentally.exe` to attach Playwright directly via CDP (`http://127.0.0.1:9222`).
+
+---
+
+## Verification, E2E & Build Commands
+
+### 1. Prerequisites
+- **Rust**: 1.80+ (`cargo`, `rustc`, `clippy`, `rustfmt`)
+- **Node.js**: 20+ & `npm`
+
+### 2. Automated Backend & Frontend Test Suites
 ```powershell
-# Run backend tests (52 tests)
-cargo test --manifest-path src-tauri/Cargo.toml
+# Run all 492 Rust unit, integration, and security tests
+cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
 
-# Run frontend tests (12 tests)
-cd frontend
-npm test
-cd ..
+# Run all 128 Vitest React component and integration tests
+npm --prefix 02-open-tally/frontend test -- --run
 ```
 
-### Running the Desktop Application
+### 3. Linting, Formatting & Type Checks
 ```powershell
-cd src-tauri
-cargo run
+cargo clippy --manifest-path 02-open-tally/src-tauri/Cargo.toml -- -D warnings
+cargo fmt --manifest-path 02-open-tally/src-tauri/Cargo.toml --check
+npm --prefix 02-open-tally/frontend run build
 ```
-Or launch with hot module reload:
+
+### 4. Live Desktop Playwright E2E Audit (WebView2 CDP)
 ```powershell
-cd frontend
-npm run tauri dev
+# Launch debug binary with isolated DB and WebView2 CDP enabled
+$env:OPENTALLY_DATA_DIR = "$env:TEMP\opentally_e2e_db"
+$env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
+.\02-open-tally\src-tauri\target\debug\opentally.exe
+
+# Run 15-step real-app Playwright E2E verification
+node 02-open-tally/frontend/e2e/playwright_tally_audit.mjs
+```
+
+### 5. Production Installer Packaging (`.exe` & `.msi`)
+```powershell
+npm --prefix 02-open-tally/frontend run tauri build
+# Outputs:
+#   02-open-tally/src-tauri/target/release/opentally.exe
+#   02-open-tally/src-tauri/target/release/bundle/nsis/OpenTally_2.0.0_x64-setup.exe
+#   02-open-tally/src-tauri/target/release/bundle/msi/OpenTally_2.0.0_x64_en-US.msi
 ```
 
 ---
 
-## Clean-Room Governance
-- Net-new, independent implementation authored from scratch based exclusively on `01-clean-room-specs/`.
-- Strict prohibition of proprietary executable binaries, `.tsf` files, raw TDL source, or decompiled code.
-- 100% test passing baseline: 52 Rust backend tests + 12 frontend tests = 64 tests passing.
+## Clean-Room Governance & Legal Hygiene
+
+- **Independent Authorship**: OpenTally is a net-new, clean-room software implementation authored solely from written behavioral specifications in `01-clean-room-specs/`.
+- **Zero Proprietary Artifacts**: No proprietary executables, `.tsf` data files, proprietary TDL source, or decompiled code exist in `02-open-tally/`.
+- **Safe Interoperability**: XML and statutory JSON routines operate strictly on open, observable schemas without reverse-engineering proprietary encryption or closed binary protocols.

@@ -1,17 +1,67 @@
 pub mod accounting;
 pub mod app;
+pub mod audit;
+pub mod backup;
+pub mod banking;
+pub mod billwise;
 pub mod commands;
+pub mod commercial;
 pub mod company;
 pub mod config;
 pub mod database;
 pub mod errors;
+pub mod gst;
 pub mod interoperability;
 pub mod inventory;
 pub mod logging;
+pub mod navigation;
+pub mod orders;
 pub mod party;
+pub mod payroll;
+pub mod pdf;
+pub mod purchase;
 pub mod reports;
 pub mod sales;
+pub mod security;
+pub mod tds;
 pub mod vouchers;
+
+#[cfg(test)]
+mod backup_tests;
+#[cfg(test)]
+mod banking_tests;
+#[cfg(test)]
+mod billwise_tests;
+#[cfg(test)]
+mod closing_budgets_audit_tests;
+#[cfg(test)]
+mod commercial_tests;
+#[cfg(test)]
+mod godown_batch_costing_tests;
+#[cfg(test)]
+mod gst_compliance_tests;
+#[cfg(test)]
+mod gst_tests;
+#[cfg(test)]
+mod interoperability_tests;
+#[cfg(test)]
+mod navigation_tests;
+#[cfg(test)]
+mod notes_tests;
+#[cfg(test)]
+mod onboarding_tests;
+#[cfg(test)]
+mod orders_tests;
+#[cfg(test)]
+mod payroll_tests;
+#[cfg(test)]
+mod pdf_tests;
+#[cfg(test)]
+mod security_bom_tests;
+#[cfg(test)]
+mod tds_tests;
+#[cfg(test)]
+mod v1_release_e2e_tests;
 
 use crate::app::AppState;
 use crate::config::AppConfig;
@@ -25,16 +75,17 @@ pub fn run() {
     logging::init_logging();
     info!("Starting OpenTally desktop application runtime...");
 
-    let config = AppConfig::new();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let app_handle = app.handle();
-            let app_dir = app_handle
-                .path()
-                .app_data_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from("."));
+            let app_dir = match std::env::var("OPENTALLY_DATA_DIR") {
+                Ok(dir) if !dir.trim().is_empty() => std::path::PathBuf::from(dir),
+                _ => app_handle
+                    .path()
+                    .app_data_dir()
+                    .unwrap_or_else(|_| std::path::PathBuf::from(".")),
+            };
 
             std::fs::create_dir_all(&app_dir)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
@@ -44,27 +95,12 @@ pub fn run() {
 
             let db = tauri::async_runtime::block_on(async {
                 let m = DatabaseManager::init(&db_path).await?;
-                crate::database::migrations::run_sprint1_migration(m.pool()).await?;
-                crate::database::migrations::run_stage3_migration(m.pool()).await?;
-                crate::database::migrations::run_sprint2_migration(m.pool()).await?;
-                crate::database::migrations::run_sprint2_stage4_hardening_migration(m.pool())
-                    .await?;
-                crate::database::migrations::run_sprint4_inventory_migration(m.pool()).await?;
-                crate::database::migrations::run_sprint4_stage11_stock_migration(m.pool()).await?;
-                crate::database::migrations::run_sprint4_stage12_valuation_migration(m.pool())
-                    .await?;
-                crate::database::migrations::run_sprint5_stage14_integration_migration(m.pool())
-                    .await?;
-                crate::database::migrations::run_sprint5_stage15_valuation_attribution_migration(
-                    m.pool(),
-                )
-                .await?;
-                crate::database::migrations::run_sprint6_stage17_party_migration(m.pool()).await?;
-                crate::database::migrations::run_sprint6_stage18_sales_migration(m.pool()).await?;
+                crate::database::migrations::run_all_migrations(m.pool()).await?;
                 Ok::<_, crate::errors::OpenTallyError>(m)
             })
             .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
 
+            let config = AppConfig::new().with_db_path(db_path.clone());
             let state = AppState::new(config, Arc::new(db));
             app.manage(state);
 
@@ -98,6 +134,13 @@ pub fn run() {
             commands::update_sales_draft,
             commands::delete_sales_draft,
             commands::reorder_sales_lines,
+            commands::post_sales_document,
+            commands::list_purchase_drafts,
+            commands::get_purchase_draft,
+            commands::create_purchase_draft,
+            commands::update_purchase_draft,
+            commands::delete_purchase_draft,
+            commands::post_purchase_document,
             commands::day_book,
             commands::ledger_report,
             commands::trial_balance,
@@ -105,6 +148,26 @@ pub fn run() {
             commands::balance_sheet,
             commands::cash_flow,
             commands::export_report_preview,
+            commands::get_bills_receivable,
+            commands::get_bills_payable,
+            commands::get_party_pending_bills,
+            commands::get_aging_analysis,
+            commands::record_bill_allocations,
+            commands::get_company_gst_profile,
+            commands::save_company_gst_profile,
+            commands::get_ledger_gst_profile,
+            commands::save_ledger_gst_profile,
+            commands::list_hsn_sac_codes,
+            commands::create_hsn_sac_code,
+            commands::get_item_gst_mapping,
+            commands::save_item_gst_mapping,
+            commands::get_gst_ledger_mapping,
+            commands::save_gst_ledger_mapping,
+            commands::preview_gst_calculation,
+            commands::get_gstr1_summary,
+            commands::get_gstr3b_summary,
+            commands::global_goto_search,
+            commands::get_voucher_full_detail,
             commands::create_ledger,
             commands::update_ledger,
             commands::delete_ledger,
@@ -186,7 +249,100 @@ pub fn run() {
             commands::get_inventory_accounting_status,
             commands::list_inventory_accounting_history,
             commands::get_inventory_valuation_attribution,
-            commands::get_inventory_valuation_attribution_details
+            commands::get_inventory_valuation_attribution_details,
+            commands::export_invoice_pdf,
+            commands::create_database_backup,
+            commands::restore_database_backup,
+            commands::get_backup_status,
+            commands::post_commercial_voucher,
+            commands::export_company_tally_xml,
+            commands::preview_tally_xml_import,
+            commands::execute_tally_xml_import,
+            commands::export_gstr1_json,
+            commands::export_gstr3b_json,
+            commands::get_company_features,
+            commands::save_company_features,
+            commands::create_sample_company,
+            commands::list_bank_ledgers,
+            commands::get_bank_reconciliation,
+            commands::reconcile_bank_entries,
+            commands::preview_bank_statement_auto_match,
+            commands::list_tds_sections,
+            commands::create_tds_section,
+            commands::get_company_tds_profile,
+            commands::save_company_tds_profile,
+            commands::get_ledger_tds_profile,
+            commands::save_ledger_tds_profile,
+            commands::preview_tds_calculation,
+            commands::record_tds_challan_payment,
+            commands::get_tds_outstanding,
+            commands::get_form_26q_summary,
+            commands::export_form_26q_json,
+            commands::export_form_26q_csv,
+            commands::import_and_reconcile_gstr2b,
+            commands::get_gstr2b_reconciliation_report,
+            commands::export_gstr2b_reconciliation_csv,
+            commands::export_einvoice_json,
+            commands::export_eway_bill_json,
+            commands::save_voucher_einvoice_metadata,
+            commands::get_voucher_einvoice_metadata,
+            commands::get_godown_summary_report,
+            commands::list_stock_item_batches,
+            commands::create_stock_item_batch,
+            commands::get_batch_expiry_report,
+            commands::post_stock_journal_voucher,
+            commands::list_stock_journal_vouchers,
+            commands::list_cost_categories,
+            commands::create_cost_category,
+            commands::list_cost_centres,
+            commands::create_cost_centre,
+            commands::get_voucher_cost_allocations,
+            commands::get_cost_centre_breakup_report,
+            commands::get_ratio_analysis,
+            commands::list_budgets,
+            commands::create_budget,
+            commands::get_budget,
+            commands::delete_budget,
+            commands::get_budget_variance_report,
+            commands::preview_year_end_closing,
+            commands::execute_year_end_closing,
+            commands::list_closed_years,
+            commands::verify_audit_trail_integrity,
+            commands::export_audit_certification_csv,
+            commands::list_purchase_orders,
+            commands::create_purchase_order,
+            commands::get_purchase_order,
+            commands::cancel_purchase_order,
+            commands::convert_purchase_order_to_invoice,
+            commands::list_sales_orders,
+            commands::create_sales_order,
+            commands::get_sales_order,
+            commands::cancel_sales_order,
+            commands::convert_sales_order_to_invoice,
+            commands::get_pending_purchase_orders,
+            commands::get_pending_sales_orders,
+            commands::get_company_security_status,
+            commands::enable_company_security,
+            commands::authenticate_company_user,
+            commands::logout_company_session,
+            commands::list_company_users,
+            commands::create_company_user,
+            commands::update_company_user_role,
+            commands::update_company_user_password,
+            commands::deactivate_company_user,
+            commands::list_boms,
+            commands::get_bom_detail,
+            commands::create_bom,
+            commands::execute_manufacturing_journal,
+            commands::list_employees,
+            commands::create_employee,
+            commands::deactivate_employee,
+            commands::preview_payroll_run,
+            commands::execute_payroll_run,
+            commands::list_payroll_runs,
+            commands::get_payroll_statutory_summary,
+            commands::export_payslip_pdf,
+            commands::export_payroll_csv
         ])
         .run(tauri::generate_context!())
         .expect("Error while running OpenTally desktop application");

@@ -5,10 +5,10 @@ import { SalesVoucherView } from '../SalesVoucherView';
 const company = { id: 'c1', name: 'Sales Co', mailing_name: 'Sales Co', country: 'India', state: 'Delhi', financial_year_begins: '2026-04-01', books_beginning_from: '2026-04-01', currency_symbol: '₹', currency_formal_name: 'INR', currency_decimal_places: 2, status: 'active' as const, created_at: '', updated_at: '' };
 
 describe('SalesVoucherView', () => {
-  it('renders the draft workflow and deferred-policy notice', async () => {
+  it('renders the draft workflow and posting notice', async () => {
     render(<SalesVoucherView activeCompany={company} onBack={() => undefined} />);
     expect(await screen.findByText('No sales drafts found.')).toBeTruthy();
-    expect(screen.getByText(/Final accounting, inventory journals, GST/)).toBeTruthy();
+    expect(screen.getByText(/Atomic GL \+ FIFO Inventory posting is active/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Save draft' })).toBeTruthy();
   });
 

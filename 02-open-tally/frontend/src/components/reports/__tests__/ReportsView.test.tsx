@@ -6,6 +6,7 @@ import { TrialBalanceView } from '../TrialBalanceView';
 import { ProfitAndLossView } from '../ProfitAndLossView';
 import { BalanceSheetView } from '../BalanceSheetView';
 import { CashFlowView } from '../CashFlowView';
+import { OutstandingAgingView } from '../OutstandingAgingView';
 import * as api from '../../../services/api';
 import { Company } from '../../../types';
 
@@ -78,5 +79,80 @@ describe('Stage 9 report screens', () => {
     expect(await screen.findByText('Receipt')).toBeTruthy();
     expect(screen.getByText('Reconciled')).toBeTruthy();
     expect(api.getCashFlow).toHaveBeenCalledWith(expect.objectContaining({ activity_filter: null }));
+  });
+});
+
+describe('Milestone 2 Outstanding & Aging View', () => {
+  it('renders receivables bills and switches tabs to aging analysis', async () => {
+    vi.spyOn(api, 'getBillsReceivable').mockResolvedValue([
+      {
+        party_ledger_id: 'ledger-debtor-1',
+        party_name: 'Acme Corp',
+        bill_name: 'INV-001',
+        bill_date: '2026-04-01',
+        due_date: '2026-04-15',
+        dr_cr: 'Dr',
+        original_amount: '5000.00',
+        settled_amount: '2000.00',
+        pending_amount: '3000.00',
+        overdue_days: 16,
+      },
+    ]);
+
+    vi.spyOn(api, 'getAgingAnalysis').mockResolvedValue({
+      as_of_date: '2026-05-01',
+      report_type: 'receivable',
+      parties: [
+        {
+          party_ledger_id: 'ledger-debtor-1',
+          party_name: 'Acme Corp',
+          buckets: {
+            not_due: '0.00',
+            days_0_30: '3000.00',
+            days_31_60: '0.00',
+            days_61_90: '0.00',
+            days_90_plus: '0.00',
+            total: '3000.00',
+          },
+          bills: [
+            {
+              party_ledger_id: 'ledger-debtor-1',
+              party_name: 'Acme Corp',
+              bill_name: 'INV-001',
+              bill_date: '2026-04-01',
+              due_date: '2026-04-15',
+              dr_cr: 'Dr',
+              original_amount: '5000.00',
+              settled_amount: '2000.00',
+              pending_amount: '3000.00',
+              overdue_days: 16,
+            },
+          ],
+        },
+      ],
+      grand_total: {
+        not_due: '0.00',
+        days_0_30: '3000.00',
+        days_31_60: '0.00',
+        days_61_90: '0.00',
+        days_90_plus: '0.00',
+        total: '3000.00',
+      },
+    });
+
+    render(<OutstandingAgingView activeCompany={company} onBack={vi.fn()} />);
+
+    expect(await screen.findByText('Acme Corp')).toBeTruthy();
+    expect(screen.getByText('INV-001')).toBeTruthy();
+    expect(screen.getAllByText('3000.00 Dr').length).toBeGreaterThan(0);
+    expect(screen.getByText('16 days')).toBeTruthy();
+
+    // Switch tab to Aging Analysis
+    fireEvent.click(screen.getByText('Aging Analysis'));
+    await waitFor(() => {
+      expect(api.getAgingAnalysis).toHaveBeenCalled();
+    });
+    expect(screen.getAllByText('Not Due').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('90+ Days').length).toBeGreaterThan(0);
   });
 });

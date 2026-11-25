@@ -1,0 +1,326 @@
+.ot-brs-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: #0f172a;
+  color: #f8fafc;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  overflow: hidden;
+}
+
+.ot-brs-header {
+  padding: 1rem 1.5rem;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ot-brs-title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ot-brs-title-bar h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ot-brs-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.ot-brs-btn {
+  background: #334155;
+  color: #f8fafc;
+  border: 1px solid #475569;
+  padding: 0.4rem 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+
+.ot-brs-btn:hover:not(:disabled) {
+  background: #475569;
+}
+
+.ot-brs-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ot-brs-btn-primary {
+  background: #0284c7;
+  border-color: #0369a1;
+  color: #ffffff;
+}
+
+.ot-brs-btn-primary:hover:not(:disabled) {
+  background: #0369a1;
+}
+
+.ot-brs-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: center;
+  font-size: 0.875rem;
+}
+
+.ot-brs-control-group {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ot-brs-control-group label {
+  color: #94a3b8;
+  font-weight: 500;
+}
+
+.ot-brs-select,
+.ot-brs-input {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+.ot-brs-select:focus,
+.ot-brs-input:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.ot-brs-checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  color: #cbd5e1;
+}
+
+.ot-brs-table-container {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+  position: relative;
+}
+
+.ot-brs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.ot-brs-table th {
+  background: #1e293b;
+  color: #94a3b8;
+  padding: 0.6rem 0.75rem;
+  font-weight: 600;
+  border-bottom: 2px solid #334155;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.ot-brs-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #1e293b;
+  color: #e2e8f0;
+}
+
+.ot-brs-table tr:hover {
+  background: #1e293b88;
+}
+
+.ot-brs-date-input {
+  background: #1e293b;
+  border: 1px solid #475569;
+  color: #f8fafc;
+  padding: 0.25rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.8rem;
+  width: 130px;
+}
+
+.ot-brs-date-input.modified {
+  border-color: #38bdf8;
+  background: #0369a122;
+}
+
+.ot-brs-text-right {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.ot-brs-link {
+  color: #38bdf8;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ot-brs-summary-box {
+  background: #1e293b;
+  border-top: 2px solid #334155;
+  padding: 1rem 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ot-brs-summary-card {
+  width: 480px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+}
+
+.ot-brs-summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.35rem 0;
+  font-size: 0.85rem;
+  color: #cbd5e1;
+}
+
+.ot-brs-summary-row.bold {
+  font-weight: 600;
+  border-top: 1px dashed #334155;
+  margin-top: 0.25rem;
+  padding-top: 0.5rem;
+}
+
+.ot-brs-summary-row.final {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #38bdf8;
+  border-top: 2px solid #475569;
+  margin-top: 0.35rem;
+  padding-top: 0.5rem;
+}
+
+/* Modal Styling */
+.ot-brs-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.ot-brs-modal {
+  background: #1e293b;
+  border: 1px solid #475569;
+  border-radius: 8px;
+  width: 900px;
+  max-width: 95vw;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+}
+
+.ot-brs-modal-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ot-brs-modal-header h3 {
+  margin: 0;
+  color: #38bdf8;
+  font-size: 1.1rem;
+}
+
+.ot-brs-modal-body {
+  padding: 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ot-brs-csv-textarea {
+  width: 100%;
+  height: 120px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #f8fafc;
+  padding: 0.6rem;
+  font-family: monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.ot-brs-modal-footer {
+  padding: 0.75rem 1.25rem;
+  border-top: 1px solid #334155;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  background: #0f172a;
+}
+
+.ot-badge-exact {
+  background: #065f46;
+  color: #34d399;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ot-badge-suggested {
+  background: #854d0e;
+  color: #fde047;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.ot-badge-unmatched {
+  background: #334155;
+  color: #94a3b8;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+}
+
+.ot-brs-status-bar {
+  padding: 0.4rem 1rem;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  display: flex;
+  justify-content: space-between;
+}

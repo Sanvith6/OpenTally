@@ -91,21 +91,13 @@ impl TrialBalanceService {
                     }
                 };
             }
-            let debit_normal =
-                matches!(ledger.account_group_nature.as_str(), "Assets" | "Expenses");
             let net = accumulator.opening_debit + accumulator.period_debit
                 - accumulator.opening_credit
                 - accumulator.period_credit;
-            let (closing_debit, closing_credit) = if debit_normal {
-                if net >= Decimal::ZERO {
-                    (net, Decimal::ZERO)
-                } else {
-                    (Decimal::ZERO, -net)
-                }
-            } else if net >= Decimal::ZERO {
-                (Decimal::ZERO, net)
+            let (closing_debit, closing_credit) = if net >= Decimal::ZERO {
+                (net, Decimal::ZERO)
             } else {
-                (-net, Decimal::ZERO)
+                (Decimal::ZERO, -net)
             };
             if !request.include_zero_balances && closing_debit.is_zero() && closing_credit.is_zero()
             {

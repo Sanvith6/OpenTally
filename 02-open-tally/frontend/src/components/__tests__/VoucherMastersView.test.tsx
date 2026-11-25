@@ -139,8 +139,10 @@ describe('VoucherMastersView Component', () => {
     const searchInput = screen.getByPlaceholderText(/Search 24 Voucher Types/i);
     fireEvent.change(searchInput, { target: { value: 'Delivery' } });
 
-    expect(screen.getByText('Delivery Note')).toBeDefined();
-    expect(screen.queryByText('Payment')).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByText('Delivery Note')).toBeDefined();
+      expect(screen.queryByText('Payment')).toBeNull();
+    });
   });
 
   it('opens Create Series modal and validates mandatory restart_period', async () => {

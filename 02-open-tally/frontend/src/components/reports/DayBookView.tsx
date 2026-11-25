@@ -3,11 +3,15 @@ import { Company, DayBookEntry, ReportPage, VoucherType } from '../../types';
 import { exportReportPreview, getDayBook, listVoucherTypes } from '../../services/api';
 import './Reports.css';
 
-interface Props { activeCompany: Company | null; onBack: () => void; }
+interface Props {
+  activeCompany: Company | null;
+  onBack: () => void;
+  onViewVoucher?: (voucherId: string) => void;
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export function DayBookView({ activeCompany, onBack }: Props) {
+export function DayBookView({ activeCompany, onBack, onViewVoucher }: Props) {
   const initialDate = activeCompany?.financial_year_begins || today();
   const [from, setFrom] = useState(initialDate);
   const [to, setTo] = useState(today());
@@ -64,7 +68,7 @@ export function DayBookView({ activeCompany, onBack }: Props) {
     {!loading && !error && result && result.items.length === 0 && <div className="ot-report-empty">No posted transactions in this period.</div>}
     {!loading && !error && result && result.items.length > 0 && <>
       <div className="ot-report-card"><table className="ot-report-table"><thead><tr><th></th><th>Date</th><th>Voucher</th><th>Type</th><th>Narration</th><th className="money">Debit</th><th className="money">Credit</th><th className="money">Total</th></tr></thead><tbody>{result.items.map((entry) => <Fragment key={entry.voucher_id}>
-        <tr key={entry.voucher_id}><td className="expand" onClick={() => setExpanded((old) => { const next = new Set(old); next.has(entry.voucher_id) ? next.delete(entry.voucher_id) : next.add(entry.voucher_id); return next; })}>{expanded.has(entry.voucher_id) ? '▾' : '▸'}</td><td>{entry.date}</td><td>{entry.voucher_number}</td><td>{entry.voucher_type}</td><td>{entry.narration || '—'}</td><td className="money">{entry.debit_total}</td><td className="money">{entry.credit_total}</td><td className="money">{entry.voucher_total}</td></tr>
+        <tr key={entry.voucher_id}><td className="expand" onClick={() => setExpanded((old) => { const next = new Set(old); next.has(entry.voucher_id) ? next.delete(entry.voucher_id) : next.add(entry.voucher_id); return next; })}>{expanded.has(entry.voucher_id) ? '▾' : '▸'}</td><td>{entry.date}</td><td>{onViewVoucher ? <button type="button" className="ot-drilldown-btn" style={{ background: 'none', border: 'none', color: '#38bdf8', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit', fontWeight: 'bold' }} onClick={() => onViewVoucher(entry.voucher_id)} title="View Voucher Details">{entry.voucher_number}</button> : entry.voucher_number}</td><td>{entry.voucher_type}</td><td>{entry.narration || '—'}</td><td className="money">{entry.debit_total}</td><td className="money">{entry.credit_total}</td><td className="money">{entry.voucher_total}</td></tr>
         {expanded.has(entry.voucher_id) && <tr className="ot-report-detail" key={`${entry.voucher_id}-detail`}><td colSpan={8}><table><tbody>{entry.lines.map((line) => <tr key={`${entry.voucher_id}-${line.ledger_id}`}><td>{line.ledger_name}</td><td>{line.narration || ''}</td><td className="money">{line.debit}</td><td className="money">{line.credit}</td></tr>)}</tbody></table></td></tr>}
       </Fragment>)}</tbody></table></div>
       <div className="ot-report-pagination"><span>{result.total} voucher(s)</span><span><button disabled={page <= 1} onClick={() => setPage((value) => value - 1)}>Previous</button> <button disabled={page >= result.total_pages} onClick={() => setPage((value) => value + 1)}>Next</button></span></div>

@@ -6,6 +6,7 @@ import '../reports/Reports.css';
 interface Props {
   activeCompany: Company | null;
   onBack: () => void;
+  onViewLedger?: (ledgerId: string, ledgerName?: string) => void;
 }
 
 function downloadCsv(report: TrialBalanceReport): void {
@@ -28,7 +29,7 @@ function downloadCsv(report: TrialBalanceReport): void {
   URL.revokeObjectURL(url);
 }
 
-export function TrialBalanceView({ activeCompany, onBack }: Props) {
+export function TrialBalanceView({ activeCompany, onBack, onViewLedger }: Props) {
   const [asOfDate, setAsOfDate] = useState(activeCompany?.financial_year_begins || '');
   const [groupId, setGroupId] = useState('');
   const [search, setSearch] = useState('');
@@ -72,7 +73,7 @@ export function TrialBalanceView({ activeCompany, onBack }: Props) {
       </div>
       {report && <div className="ot-report-summary"><div className="ot-report-summary-card"><span>Closing debit</span><strong>{report.total_debit}</strong></div><div className="ot-report-summary-card"><span>Closing credit</span><strong>{report.total_credit}</strong></div><div className="ot-report-summary-card"><span>Difference</span><strong>{report.difference}</strong></div><div className="ot-report-summary-card"><span>Ledgers</span><strong>{report.ledger_count}</strong></div></div>}
       <div className="ot-report-card">
-        {loading ? <div className="ot-report-loading">Loading trial balance…</div> : error ? <div className="ot-report-error">{error}</div> : !report || report.rows.length === 0 ? <div className="ot-report-empty">No ledger balances for this selection.</div> : <table className="ot-report-table"><thead><tr><th>Account group</th><th>Ledger</th><th>Nature</th><th className="money">Opening Dr</th><th className="money">Opening Cr</th><th className="money">Period Dr</th><th className="money">Period Cr</th><th className="money">Closing Dr</th><th className="money">Closing Cr</th></tr></thead><tbody>{report.rows.map((row) => <tr key={row.ledger_id}><td>{row.account_group_name}</td><td>{row.ledger_name}</td><td>{row.account_group_nature}</td><td className="money">{row.opening_debit}</td><td className="money">{row.opening_credit}</td><td className="money">{row.period_debit}</td><td className="money">{row.period_credit}</td><td className="money">{row.closing_debit}</td><td className="money">{row.closing_credit}</td></tr>)}</tbody></table>}
+        {loading ? <div className="ot-report-loading">Loading trial balance…</div> : error ? <div className="ot-report-error">{error}</div> : !report || report.rows.length === 0 ? <div className="ot-report-empty">No ledger balances for this selection.</div> : <table className="ot-report-table"><thead><tr><th>Account group</th><th>Ledger</th><th>Nature</th><th className="money">Opening Dr</th><th className="money">Opening Cr</th><th className="money">Period Dr</th><th className="money">Period Cr</th><th className="money">Closing Dr</th><th className="money">Closing Cr</th></tr></thead><tbody>{report.rows.map((row) => <tr key={row.ledger_id}><td>{row.account_group_name}</td><td>{onViewLedger ? <button type="button" className="ot-drilldown-btn" style={{ background: 'none', border: 'none', color: '#38bdf8', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit', fontWeight: 'bold', textAlign: 'left' }} onClick={() => onViewLedger(row.ledger_id, row.ledger_name)} title="View Ledger Report">{row.ledger_name}</button> : row.ledger_name}</td><td>{row.account_group_nature}</td><td className="money">{row.opening_debit}</td><td className="money">{row.opening_credit}</td><td className="money">{row.period_debit}</td><td className="money">{row.period_credit}</td><td className="money">{row.closing_debit}</td><td className="money">{row.closing_credit}</td></tr>)}</tbody></table>}
       </div>
     </section>
   );

@@ -402,6 +402,8 @@ pub struct SaveVoucherDraftRequest {
 pub struct PostVoucherRequest {
     pub voucher_id: String,
     pub actor_id: Option<String>,
+    #[serde(default)]
+    pub bank_allocations: Option<Vec<crate::banking::BankAllocationInput>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

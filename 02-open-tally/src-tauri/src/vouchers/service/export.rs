@@ -243,10 +243,39 @@ async fn finalize_export_file(
 
     #[cfg(not(windows))]
     {
-        let _ = (tmp, target);
-        Err(OpenTallyError::Io(std::io::Error::other(
-            "Atomic export finalization is supported only on Windows",
-        )))
+        if overwrite {
+            tokio::fs::rename(tmp, target).await.map_err(|error| {
+                OpenTallyError::Io(std::io::Error::other(format!(
+                    "Atomic export finalization failed for '{}': {error}",
+                    target.display()
+                )))
+            })
+        } else {
+            match tokio::fs::hard_link(tmp, target).await {
+                Ok(()) => {
+                    let _ = tokio::fs::remove_file(tmp).await;
+                    Ok(())
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    Err(OpenTallyError::Io(std::io::Error::other(format!(
+                        "Destination file '{}' was created concurrently by another process",
+                        target.display()
+                    ))))
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::Unsupported => {
+                    tokio::fs::rename(tmp, target).await.map_err(|rename_err| {
+                        OpenTallyError::Io(std::io::Error::other(format!(
+                            "Atomic export finalization failed for '{}': {rename_err}",
+                            target.display()
+                        )))
+                    })
+                }
+                Err(error) => Err(OpenTallyError::Io(std::io::Error::other(format!(
+                    "Atomic export finalization failed for '{}': {error}",
+                    target.display()
+                )))),
+            }
+        }
     }
 }
 

@@ -1,0 +1,234 @@
+name: OpenTally Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag name (e.g. v2.0.0). Defaults to branch/ref name if omitted."
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Pre-Release Verification Gates
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Verify clean-room isolation
+        run: |
+          set -euo pipefail
+          MATCHES=$(grep -rnE "01-clean-room-specs" 02-open-tally/src-tauri/src 02-open-tally/frontend/src 02-open-tally/src-tauri/tauri.conf.json 02-open-tally/src-tauri/Cargo.toml 02-open-tally/frontend/package.json | grep -vE '^[^:]+:[0-9]+:[[:space:]]*//' || true)
+          if [ -n "$MATCHES" ]; then
+            echo "::error::Dirty-room path reference detected inside 02-open-tally runtime/build files:"
+            echo "$MATCHES"
+            exit 1
+          fi
+          BAD_FILES=$(find 02-open-tally/src-tauri/src 02-open-tally/frontend/src -type f \( -name "*.tsf" -o -name "*.tdl" -o -name "*.exe" -o -name "*.dll" -o -name "*.so" -o -name "*.dylib" \))
+          if [ -n "$BAD_FILES" ]; then
+            echo "::error::Prohibited binary or proprietary artifact found in clean-room source:"
+            echo "$BAD_FILES"
+            exit 1
+          fi
+
+      - name: Install Linux Tauri system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev librsvg2-dev patchelf
+          sudo apt-get install -y libappindicator3-dev || sudo apt-get install -y libayatana-appindicator3-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 02-open-tally/src-tauri
+
+      - name: Run Rust fmt, clippy, and tests
+        run: |
+          cargo fmt --manifest-path 02-open-tally/src-tauri/Cargo.toml --check
+          cargo clippy --manifest-path 02-open-tally/src-tauri/Cargo.toml -- -D warnings
+          cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: 02-open-tally/frontend/package-lock.json
+
+      - name: Run frontend tests and production build
+        run: |
+          npm --prefix 02-open-tally/frontend ci
+          npm --prefix 02-open-tally/frontend test -- --run
+          npm --prefix 02-open-tally/frontend run build
+
+  build:
+    name: Build Tauri Bundles (${{ matrix.label }})
+    needs: verify
+    runs-on: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: windows-x64
+            platform: windows-latest
+            rust_target: ""
+            args: ""
+          - label: macos-aarch64
+            platform: macos-latest
+            rust_target: aarch64-apple-darwin
+            args: "--target aarch64-apple-darwin"
+          - label: macos-x64
+            platform: macos-latest
+            rust_target: x86_64-apple-darwin
+            args: "--target x86_64-apple-darwin"
+          - label: linux-x64
+            platform: ubuntu-22.04
+            rust_target: ""
+            args: ""
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux Tauri system libraries
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            xdg-utils
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: 02-open-tally/frontend/package-lock.json
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Cache Cargo registry and target
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 02-open-tally/src-tauri
+
+      - name: Install frontend dependencies
+        run: npm --prefix 02-open-tally/frontend ci
+
+      - name: Build Tauri application bundles
+        id: tauri-build
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: 02-open-tally/src-tauri
+          args: ${{ matrix.args }}
+
+      - name: Stage platform installers
+        shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri-build.outputs.artifactPaths }}
+        run: |
+          mkdir -p staged-installers
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            const paths = JSON.parse(process.env.ARTIFACT_PATHS || "[]");
+            for (const p of paths) {
+              if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+                const dest = path.join("staged-installers", path.basename(p));
+                fs.copyFileSync(p, dest);
+                console.log("Staged:", dest);
+              }
+            }
+          '
+          ls -lh staged-installers
+
+      - name: Upload staged installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: installers-${{ matrix.label }}
+          path: staged-installers/*
+          if-no-files-found: error
+
+  release:
+    name: Create Draft Release & SHA256SUMS
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all platform installers
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          pattern: installers-*
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS.txt
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Resolve release tag and changelog notes
+        id: meta
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          TAG="${INPUT_TAG:-$REF_NAME}"
+          if [[ "$TAG" != v* ]]; then
+            VERSION=$(node -p "require('./02-open-tally/frontend/package.json').version")
+            TAG="v${VERSION}"
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+          node -e '
+            const fs = require("fs");
+            const version = process.argv[1];
+            const changelog = fs.readFileSync("02-open-tally/CHANGELOG.md", "utf8");
+            const sections = changelog.split(/^## \[/m);
+            let match = sections.find(s => s.startsWith(version + "]"));
+            if (!match && sections.length > 1) {
+              match = sections[1];
+            }
+            const body = match ? "## [" + match.trim() : "Release " + version;
+            fs.writeFileSync("RELEASE_NOTES.md", body + "\n\n---\n\nVerify installer integrity with `SHA256SUMS.txt` (`sha256sum -c SHA256SUMS.txt`).\n");
+          ' "$VERSION"
+          cat RELEASE_NOTES.md
+
+      - name: Publish draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          name: OpenTally ${{ steps.meta.outputs.tag }}
+          body_path: RELEASE_NOTES.md
+          draft: true
+          prerelease: false
+          files: release-assets/*

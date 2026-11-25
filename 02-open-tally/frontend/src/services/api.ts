@@ -60,6 +60,38 @@ import {
   InventoryAccountMapping, InventoryAccountMappingRequest, InventoryAccountingPreview, InventoryAccountingIntegration,
   PartyProfile, PartyRequest,
   SalesDocument, SalesDocumentRequest, SalesDocumentWithLines,
+  PurchaseDocument, PurchaseDocumentRequest, PurchaseDocumentWithLines, CommercialPostingResult,
+  BillAllocation, BillAllocationInput, PendingBill, AgingReport,
+  CompanyGstProfile, LedgerGstProfile, HsnSacCode, ItemGstMapping, GstLedgerMapping, GstCalculationResult, Gstr1SummaryReport, Gstr3bSummaryReport,
+  GotoSearchResult, VoucherFullDetail,
+  BackupManifest, RestoreResult, BackupStatus, CommercialPostingInput,
+  TallyXmlImportPreview, TallyXmlImportResult,
+  CompanyFeaturesDto, SaveCompanyFeaturesInput,
+  BankLedgerItem, BankReconciliationStatement, ReconcileEntryInput, ReconcileResult, BankStatementMatchPreview,
+  CompanyTdsProfile, SaveCompanyTdsProfileInput, LedgerTdsProfile, SaveLedgerTdsProfileInput,
+  TdsNatureOfPayment, CreateTdsNatureOfPaymentInput, TdsCalculationPreviewInput, TdsCalculationPreviewResult,
+  RecordTdsChallanPaymentInput, TdsOutstandingReport, Form26qSummary,
+  Gstr2bReconciliationReport, TransportDetailsInput, VoucherEinvoiceMetadataInput, VoucherEinvoiceMetadataDto,
+  GodownSummaryReport,
+  StockItemBatch,
+  StockItemBatchRequest,
+  BatchExpiryReportRow,
+  StockJournalRequest,
+  StockJournalResponse,
+  CostCategory,
+  CostCategoryRequest,
+  CostCentre,
+  CostCentreRequest,
+  VoucherCostAllocationItem,
+  CostCentreBreakupReport,
+  RatioAnalysisReport,
+  Budget,
+  BudgetRequest,
+  BudgetDetails,
+  BudgetVarianceReport,
+  FinancialYearClosingRecord,
+  YearEndClosingPreview,
+  AuditCertificationReport,
 } from '../types';
 
 function getWebPreviewMock(): HealthResponse {
@@ -435,6 +467,43 @@ export async function reorderSalesLines(id: string, lineIds: string[]): Promise<
   if (!isTauriEnv()) throw new Error('Sales drafts require the native OpenTally application');
   return invoke<SalesDocumentWithLines>('reorder_sales_lines', { id, lineIds });
 }
+export async function postSalesDocument(id: string, salesLedgerId?: string): Promise<CommercialPostingResult> {
+  if (!isTauriEnv()) throw new Error('Posting sales documents requires the native OpenTally application');
+  return invoke<CommercialPostingResult>('post_sales_document', { id, salesLedgerId: salesLedgerId || null });
+}
+
+export async function listPurchaseDrafts(search?: string): Promise<PurchaseDocument[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<PurchaseDocument[]>('list_purchase_drafts', { search: search || null });
+}
+export async function getPurchaseDraft(id: string): Promise<PurchaseDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Purchase drafts require the native OpenTally application');
+  return invoke<PurchaseDocumentWithLines>('get_purchase_draft', { id });
+}
+export async function createPurchaseDraft(request: PurchaseDocumentRequest): Promise<PurchaseDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Purchase drafts require the native OpenTally application');
+  return invoke<PurchaseDocumentWithLines>('create_purchase_draft', { request });
+}
+export async function updatePurchaseDraft(id: string, request: PurchaseDocumentRequest): Promise<PurchaseDocumentWithLines> {
+  if (!isTauriEnv()) throw new Error('Purchase drafts require the native OpenTally application');
+  return invoke<PurchaseDocumentWithLines>('update_purchase_draft', { id, request });
+}
+export async function deletePurchaseDraft(id: string): Promise<void> {
+  if (!isTauriEnv()) throw new Error('Purchase drafts require the native OpenTally application');
+  return invoke<void>('delete_purchase_draft', { id });
+}
+export async function postPurchaseDocument(
+  id: string,
+  purchaseLedgerId?: string,
+  tdsSectionCode?: string
+): Promise<CommercialPostingResult> {
+  if (!isTauriEnv()) throw new Error('Posting purchase documents requires the native OpenTally application');
+  return invoke<CommercialPostingResult>('post_purchase_document', {
+    id,
+    purchaseLedgerId: purchaseLedgerId || null,
+    tdsSectionCode: tdsSectionCode || null,
+  });
+}
 
 export async function getDayBook(request: DayBookRequest): Promise<ReportPage<DayBookEntry>> {
   if (!isTauriEnv()) {
@@ -501,6 +570,56 @@ export async function exportReportPreview(
   if (!isTauriEnv()) throw new Error('Report export requires the native OpenTally application');
   return invoke<VoucherExportPreviewResult>('export_report_preview', {
     request: { filter, format, include_bom: false },
+  });
+}
+
+export async function getBillsReceivable(asOfDate: string): Promise<PendingBill[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<PendingBill[]>('get_bills_receivable', { asOfDate });
+}
+
+export async function getBillsPayable(asOfDate: string): Promise<PendingBill[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<PendingBill[]>('get_bills_payable', { asOfDate });
+}
+
+export async function getPartyPendingBills(partyLedgerId: string, asOfDate: string): Promise<PendingBill[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<PendingBill[]>('get_party_pending_bills', { partyLedgerId, asOfDate });
+}
+
+export async function getAgingAnalysis(reportType: 'receivable' | 'payable', asOfDate: string): Promise<AgingReport> {
+  if (!isTauriEnv()) {
+    return {
+      as_of_date: asOfDate,
+      report_type: reportType,
+      parties: [],
+      grand_total: { not_due: '0.00', days_0_30: '0.00', days_31_60: '0.00', days_61_90: '0.00', days_90_plus: '0.00', total: '0.00' },
+    };
+  }
+  return invoke<AgingReport>('get_aging_analysis', { reportType, asOfDate });
+}
+
+export async function recordBillAllocations(
+  voucherId: string,
+  voucherLineId: string,
+  partyLedgerId: string,
+  lineEntryType: string,
+  lineAmount: string,
+  billDate: string,
+  dueDate: string | null,
+  allocations: BillAllocationInput[],
+): Promise<BillAllocation[]> {
+  if (!isTauriEnv()) throw new Error('Bill allocations require the native OpenTally application');
+  return invoke<BillAllocation[]>('record_bill_allocations', {
+    voucherId,
+    voucherLineId,
+    partyLedgerId,
+    lineEntryType,
+    lineAmount,
+    billDate,
+    dueDate,
+    allocations,
   });
 }
 
@@ -1224,58 +1343,2933 @@ export async function saveVoucherDraft(
 
 // Inventory master-data API. Browser preview intentionally returns empty collections because
 // inventory persistence belongs to the native SQLite/Tauri runtime.
-const inventoryList = async <T>(command:string, search?:string):Promise<T[]> => isTauriEnv() ? invoke<T[]>(command, { search: search || null }) : [];
-const inventoryMutate = async <T>(command:string, args:Record<string, unknown>):Promise<T> => { if (!isTauriEnv()) throw new Error('Inventory editing requires the native OpenTally application'); return invoke<T>(command,args); };
-export const listStockGroups = (search?:string) => inventoryList<StockGroup>('list_stock_groups',search);
-export const createStockGroup = (req:StockGroupRequest) => inventoryMutate<StockGroup>('create_stock_group',{req});
-export const updateStockGroup = (id:string,req:StockGroupRequest) => inventoryMutate<StockGroup>('update_stock_group',{id,req});
-export const setStockGroupActive = (id:string,active:boolean) => inventoryMutate<StockGroup>('set_stock_group_active',{id,active});
-export const deleteStockGroup = (id:string) => inventoryMutate<void>('delete_stock_group',{id});
-export const listStockCategories = (search?:string) => inventoryList<StockCategory>('list_stock_categories',search);
-export const createStockCategory = (req:StockCategoryRequest) => inventoryMutate<StockCategory>('create_stock_category',{req});
-export const updateStockCategory = (id:string,req:StockCategoryRequest) => inventoryMutate<StockCategory>('update_stock_category',{id,req});
-export const setStockCategoryActive = (id:string,active:boolean) => inventoryMutate<StockCategory>('set_stock_category_active',{id,active});
-export const deleteStockCategory = (id:string) => inventoryMutate<void>('delete_stock_category',{id});
-export const listUnits = (search?:string) => inventoryList<Unit>('list_units',search);
-export const createUnit = (req:UnitRequest) => inventoryMutate<Unit>('create_unit',{req});
-export const updateUnit = (id:string,req:UnitRequest) => inventoryMutate<Unit>('update_unit',{id,req});
-export const setUnitActive = (id:string,active:boolean) => inventoryMutate<Unit>('set_unit_active',{id,active});
-export const deleteUnit = (id:string) => inventoryMutate<void>('delete_unit',{id});
-export const listStockItems = (search?:string) => inventoryList<StockItem>('list_stock_items',search);
-export const createStockItem = (req:StockItemRequest) => inventoryMutate<StockItem>('create_stock_item',{req});
-export const updateStockItem = (id:string,req:StockItemRequest) => inventoryMutate<StockItem>('update_stock_item',{id,req});
-export const setStockItemActive = (id:string,active:boolean) => inventoryMutate<StockItem>('set_stock_item_active',{id,active});
-export const deleteStockItem = (id:string) => inventoryMutate<void>('delete_stock_item',{id});
-export const listGodowns = (search?:string) => inventoryList<Godown>('list_godowns',search);
-export const createGodown = (req:GodownRequest) => inventoryMutate<Godown>('create_godown',{req});
-export const updateGodown = (id:string,req:GodownRequest) => inventoryMutate<Godown>('update_godown',{id,req});
-export const setGodownActive = (id:string,active:boolean) => inventoryMutate<Godown>('set_godown_active',{id,active});
-export const deleteGodown = (id:string) => inventoryMutate<void>('delete_godown',{id});
-export async function createStockVoucher(request:StockVoucherRequest):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('create_stock_voucher',{request});}
-export async function updateStockVoucher(id:string,request:StockVoucherRequest):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('update_stock_voucher',{id,request});}
-export async function getStockVoucher(id:string):Promise<{0:StockVoucher;1:StockVoucherLine[]}>{if(!isTauriEnv())throw new Error('Stock vouchers require the native application');return invoke<{0:StockVoucher;1:StockVoucherLine[]}>('get_stock_voucher',{id});}
-export async function listStockVouchers(filter:StockVoucherListFilter):Promise<StockVoucher[]>{if(!isTauriEnv())return [];return invoke<StockVoucher[]>('list_stock_vouchers',{filter});}
-export async function postStockVoucher(id:string):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('post_stock_voucher',{id});}
-export async function cancelStockVoucher(id:string):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('cancel_stock_voucher',{id});}
-export async function reverseStockVoucher(id:string):Promise<StockVoucher>{return inventoryMutate<StockVoucher>('reverse_stock_voucher',{id});}
-export async function getStockBalance(request:StockBalanceRequest,overall:boolean):Promise<StockBalanceRow[]>{if(!isTauriEnv())return [];return invoke<StockBalanceRow[]>('get_stock_balance',{request,overall});}
-export async function getValuationConfig():Promise<ValuationConfig>{if(!isTauriEnv())return {company_id:'',valuation_method:'fifo'};return invoke<ValuationConfig>('get_inventory_valuation_config');}
-export async function setValuationMethod(method:'fifo'|'weighted_average'):Promise<ValuationConfig>{return inventoryMutate<ValuationConfig>('set_inventory_valuation_method',{method});}
-export async function getStockValuation(request:ValuationRequest):Promise<ValuationRow[]>{if(!isTauriEnv())return [];return invoke<ValuationRow[]>('get_stock_valuation',{request});}
-export async function getFifoLayers(request:ValuationRequest):Promise<FifoLayer[]>{if(!isTauriEnv())return [];return invoke<FifoLayer[]>('get_fifo_layers',{request});}
-export async function getValuationHistory(request:ValuationRequest):Promise<ValuationHistoryRow[]>{if(!isTauriEnv())return [];return invoke<ValuationHistoryRow[]>('get_valuation_history',{request});}
-export async function getStockSummaryReport(filter:InventoryReportFilter):Promise<StockSummaryReport>{if(!isTauriEnv())return {as_of_date:filter.as_of_date||filter.date_to||'',rows:[]};return invoke<StockSummaryReport>('get_stock_summary_report',{filter});}
-export async function getStockMovementRegister(filter:InventoryReportFilter):Promise<StockRegisterReport>{if(!isTauriEnv())return {total:0,page:1,page_size:filter.page_size||100,rows:[]};return invoke<StockRegisterReport>('get_stock_movement_register',{filter});}
-export async function getStockLedgerReport(filter:InventoryReportFilter):Promise<StockLedgerReport>{if(!isTauriEnv())return {stock_item_id:filter.stock_item_id||'',godown_id:filter.godown_id||null,opening_quantity:'0',closing_quantity:'0',rows:[]};return invoke<StockLedgerReport>('get_stock_ledger_report',{filter});}
-export async function getInventoryReconciliation(filter:InventoryReportFilter):Promise<ReconciliationFinding[]>{if(!isTauriEnv())return [];return invoke<ReconciliationFinding[]>('get_inventory_reconciliation',{filter});}
-export async function getInventoryAccountMapping():Promise<InventoryAccountMapping|null>{if(!isTauriEnv())return null;return invoke<InventoryAccountMapping|null>('get_inventory_account_mapping');}
-export async function configureInventoryAccountMapping(request:InventoryAccountMappingRequest):Promise<InventoryAccountMapping>{return inventoryMutate<InventoryAccountMapping>('configure_inventory_account_mapping',{request});}
-export async function previewInventoryAccounting(stockVoucherId:string):Promise<InventoryAccountingPreview>{if(!isTauriEnv())throw new Error('Inventory accounting requires the native application');return invoke<InventoryAccountingPreview>('preview_inventory_accounting',{stockVoucherId});}
-export async function integrateInventoryAccounting(stockVoucherId:string):Promise<InventoryAccountingIntegration>{return inventoryMutate<InventoryAccountingIntegration>('integrate_inventory_accounting',{stockVoucherId});}
-export async function getInventoryAccountingStatus(stockVoucherId:string):Promise<InventoryAccountingIntegration|null>{if(!isTauriEnv())return null;return invoke<InventoryAccountingIntegration|null>('get_inventory_accounting_status',{stockVoucherId});}
-export async function listInventoryAccountingHistory():Promise<InventoryAccountingIntegration[]>{if(!isTauriEnv())return [];return invoke<InventoryAccountingIntegration[]>('list_inventory_accounting_history');}
-export async function getInventoryValuationAttribution(stockVoucherId:string):Promise<InventoryValuationAttribution[]>{if(!isTauriEnv())return [];return invoke<InventoryValuationAttribution[]>('get_inventory_valuation_attribution',{stockVoucherId});}
-export async function getInventoryValuationAttributionDetails(stockVoucherId:string):Promise<InventoryValuationAttributionDetails[]>{if(!isTauriEnv())return [];return invoke<InventoryValuationAttributionDetails[]>('get_inventory_valuation_attribution_details',{stockVoucherId});}
+const inventoryList = async <T>(command: string, search?: string): Promise<T[]> => isTauriEnv() ? invoke<T[]>(command, { search: search || null }) : [];
+const inventoryMutate = async <T>(command: string, args: Record<string, unknown>): Promise<T> => { if (!isTauriEnv()) throw new Error('Inventory editing requires the native OpenTally application'); return invoke<T>(command, args); };
+export const listStockGroups = (search?: string) => inventoryList<StockGroup>('list_stock_groups', search);
+export const createStockGroup = (req: StockGroupRequest) => inventoryMutate<StockGroup>('create_stock_group', { req });
+export const updateStockGroup = (id: string, req: StockGroupRequest) => inventoryMutate<StockGroup>('update_stock_group', { id, req });
+export const setStockGroupActive = (id: string, active: boolean) => inventoryMutate<StockGroup>('set_stock_group_active', { id, active });
+export const deleteStockGroup = (id: string) => inventoryMutate<void>('delete_stock_group', { id });
+export const listStockCategories = (search?: string) => inventoryList<StockCategory>('list_stock_categories', search);
+export const createStockCategory = (req: StockCategoryRequest) => inventoryMutate<StockCategory>('create_stock_category', { req });
+export const updateStockCategory = (id: string, req: StockCategoryRequest) => inventoryMutate<StockCategory>('update_stock_category', { id, req });
+export const setStockCategoryActive = (id: string, active: boolean) => inventoryMutate<StockCategory>('set_stock_category_active', { id, active });
+export const deleteStockCategory = (id: string) => inventoryMutate<void>('delete_stock_category', { id });
+export const listUnits = (search?: string) => inventoryList<Unit>('list_units', search);
+export const createUnit = (req: UnitRequest) => inventoryMutate<Unit>('create_unit', { req });
+export const updateUnit = (id: string, req: UnitRequest) => inventoryMutate<Unit>('update_unit', { id, req });
+export const setUnitActive = (id: string, active: boolean) => inventoryMutate<Unit>('set_unit_active', { id, active });
+export const deleteUnit = (id: string) => inventoryMutate<void>('delete_unit', { id });
+export const listStockItems = (search?: string) => inventoryList<StockItem>('list_stock_items', search);
+export const createStockItem = (req: StockItemRequest) => inventoryMutate<StockItem>('create_stock_item', { req });
+export const updateStockItem = (id: string, req: StockItemRequest) => inventoryMutate<StockItem>('update_stock_item', { id, req });
+export const setStockItemActive = (id: string, active: boolean) => inventoryMutate<StockItem>('set_stock_item_active', { id, active });
+export const deleteStockItem = (id: string) => inventoryMutate<void>('delete_stock_item', { id });
+export const listGodowns = (search?: string) => inventoryList<Godown>('list_godowns', search);
+export const createGodown = (req: GodownRequest) => inventoryMutate<Godown>('create_godown', { req });
+export const updateGodown = (id: string, req: GodownRequest) => inventoryMutate<Godown>('update_godown', { id, req });
+export const setGodownActive = (id: string, active: boolean) => inventoryMutate<Godown>('set_godown_active', { id, active });
+export const deleteGodown = (id: string) => inventoryMutate<void>('delete_godown', { id });
+export async function createStockVoucher(request: StockVoucherRequest): Promise<StockVoucher> { return inventoryMutate<StockVoucher>('create_stock_voucher', { request }); }
+export async function updateStockVoucher(id: string, request: StockVoucherRequest): Promise<StockVoucher> { return inventoryMutate<StockVoucher>('update_stock_voucher', { id, request }); }
+export async function getStockVoucher(id: string): Promise<{ 0: StockVoucher; 1: StockVoucherLine[] }> { if (!isTauriEnv()) throw new Error('Stock vouchers require the native application'); return invoke<{ 0: StockVoucher; 1: StockVoucherLine[] }>('get_stock_voucher', { id }); }
+export async function listStockVouchers(filter: StockVoucherListFilter): Promise<StockVoucher[]> { if (!isTauriEnv()) return []; return invoke<StockVoucher[]>('list_stock_vouchers', { filter }); }
+export async function postStockVoucher(id: string): Promise<StockVoucher> { return inventoryMutate<StockVoucher>('post_stock_voucher', { id }); }
+export async function cancelStockVoucher(id: string): Promise<StockVoucher> { return inventoryMutate<StockVoucher>('cancel_stock_voucher', { id }); }
+export async function reverseStockVoucher(id: string): Promise<StockVoucher> { return inventoryMutate<StockVoucher>('reverse_stock_voucher', { id }); }
+export async function getStockBalance(request: StockBalanceRequest, overall: boolean): Promise<StockBalanceRow[]> { if (!isTauriEnv()) return []; return invoke<StockBalanceRow[]>('get_stock_balance', { request, overall }); }
+export async function getValuationConfig(): Promise<ValuationConfig> { if (!isTauriEnv()) return { company_id: '', valuation_method: 'fifo' }; return invoke<ValuationConfig>('get_inventory_valuation_config'); }
+export async function setValuationMethod(method: 'fifo' | 'weighted_average'): Promise<ValuationConfig> { return inventoryMutate<ValuationConfig>('set_inventory_valuation_method', { method }); }
+export async function getStockValuation(request: ValuationRequest): Promise<ValuationRow[]> { if (!isTauriEnv()) return []; return invoke<ValuationRow[]>('get_stock_valuation', { request }); }
+export async function getFifoLayers(request: ValuationRequest): Promise<FifoLayer[]> { if (!isTauriEnv()) return []; return invoke<FifoLayer[]>('get_fifo_layers', { request }); }
+export async function getValuationHistory(request: ValuationRequest): Promise<ValuationHistoryRow[]> { if (!isTauriEnv()) return []; return invoke<ValuationHistoryRow[]>('get_valuation_history', { request }); }
+export async function getStockSummaryReport(filter: InventoryReportFilter): Promise<StockSummaryReport> { if (!isTauriEnv()) return { as_of_date: filter.as_of_date || filter.date_to || '', rows: [] }; return invoke<StockSummaryReport>('get_stock_summary_report', { filter }); }
+export async function getStockMovementRegister(filter: InventoryReportFilter): Promise<StockRegisterReport> { if (!isTauriEnv()) return { total: 0, page: 1, page_size: filter.page_size || 100, rows: [] }; return invoke<StockRegisterReport>('get_stock_movement_register', { filter }); }
+export async function getStockLedgerReport(filter: InventoryReportFilter): Promise<StockLedgerReport> { if (!isTauriEnv()) return { stock_item_id: filter.stock_item_id || '', godown_id: filter.godown_id || null, opening_quantity: '0', closing_quantity: '0', rows: [] }; return invoke<StockLedgerReport>('get_stock_ledger_report', { filter }); }
+export async function getInventoryReconciliation(filter: InventoryReportFilter): Promise<ReconciliationFinding[]> { if (!isTauriEnv()) return []; return invoke<ReconciliationFinding[]>('get_inventory_reconciliation', { filter }); }
+export async function getInventoryAccountMapping(): Promise<InventoryAccountMapping | null> { if (!isTauriEnv()) return null; return invoke<InventoryAccountMapping | null>('get_inventory_account_mapping'); }
+export async function configureInventoryAccountMapping(request: InventoryAccountMappingRequest): Promise<InventoryAccountMapping> { return inventoryMutate<InventoryAccountMapping>('configure_inventory_account_mapping', { request }); }
+export async function previewInventoryAccounting(stockVoucherId: string): Promise<InventoryAccountingPreview> { if (!isTauriEnv()) throw new Error('Inventory accounting requires the native application'); return invoke<InventoryAccountingPreview>('preview_inventory_accounting', { stockVoucherId }); }
+export async function integrateInventoryAccounting(stockVoucherId: string): Promise<InventoryAccountingIntegration> { return inventoryMutate<InventoryAccountingIntegration>('integrate_inventory_accounting', { stockVoucherId }); }
+export async function getInventoryAccountingStatus(stockVoucherId: string): Promise<InventoryAccountingIntegration | null> { if (!isTauriEnv()) return null; return invoke<InventoryAccountingIntegration | null>('get_inventory_accounting_status', { stockVoucherId }); }
+export async function listInventoryAccountingHistory(): Promise<InventoryAccountingIntegration[]> { if (!isTauriEnv()) return []; return invoke<InventoryAccountingIntegration[]>('list_inventory_accounting_history'); }
+export async function getInventoryValuationAttribution(stockVoucherId: string): Promise<InventoryValuationAttribution[]> { if (!isTauriEnv()) return []; return invoke<InventoryValuationAttribution[]>('get_inventory_valuation_attribution', { stockVoucherId }); }
+export async function getInventoryValuationAttributionDetails(stockVoucherId: string): Promise<InventoryValuationAttributionDetails[]> { if (!isTauriEnv()) return []; return invoke<InventoryValuationAttributionDetails[]>('get_inventory_valuation_attribution_details', { stockVoucherId }); }
+
+// -----------------------------------------------------------------------------
+// Indian Statutory GST Services (Milestone 3)
+// -----------------------------------------------------------------------------
+
+export async function getCompanyGstProfile(): Promise<CompanyGstProfile | null> {
+  if (!isTauriEnv()) return null;
+  return invoke<CompanyGstProfile | null>('get_company_gst_profile');
+}
+
+export async function saveCompanyGstProfile(
+  gstin: string | null,
+  stateCode: string,
+  registrationType: string,
+  gstEnabled: boolean
+): Promise<CompanyGstProfile> {
+  if (!isTauriEnv()) throw new Error('Native app required');
+  return invoke<CompanyGstProfile>('save_company_gst_profile', {
+    gstin,
+    stateCode,
+    registrationType,
+    gstEnabled,
+  });
+}
+
+export async function getLedgerGstProfile(ledgerId: string): Promise<LedgerGstProfile | null> {
+  if (!isTauriEnv()) return null;
+  return invoke<LedgerGstProfile | null>('get_ledger_gst_profile', { ledgerId });
+}
+
+export async function saveLedgerGstProfile(
+  ledgerId: string,
+  gstin: string | null,
+  stateCode: string,
+  registrationType: string
+): Promise<LedgerGstProfile> {
+  if (!isTauriEnv()) throw new Error('Native app required');
+  return invoke<LedgerGstProfile>('save_ledger_gst_profile', {
+    ledgerId,
+    gstin,
+    stateCode,
+    registrationType,
+  });
+}
+
+export async function listHsnSacCodes(): Promise<HsnSacCode[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<HsnSacCode[]>('list_hsn_sac_codes');
+}
+
+export async function createHsnSacCode(
+  code: string,
+  description: string | null,
+  codeType: string,
+  defaultGstRate: string,
+  cessRate: string,
+  effectiveFrom: string
+): Promise<HsnSacCode> {
+  if (!isTauriEnv()) throw new Error('Native app required');
+  return invoke<HsnSacCode>('create_hsn_sac_code', {
+    code,
+    description,
+    codeType,
+    defaultGstRate,
+    cessRate,
+    effectiveFrom,
+  });
+}
+
+export async function getItemGstMapping(stockItemId: string): Promise<ItemGstMapping | null> {
+  if (!isTauriEnv()) return null;
+  return invoke<ItemGstMapping | null>('get_item_gst_mapping', { stockItemId });
+}
+
+export async function saveItemGstMapping(
+  stockItemId: string,
+  hsnSacCodeId: string,
+  gstRate: string,
+  cessRate: string,
+  taxability: string
+): Promise<ItemGstMapping> {
+  if (!isTauriEnv()) throw new Error('Native app required');
+  return invoke<ItemGstMapping>('save_item_gst_mapping', {
+    stockItemId,
+    hsnSacCodeId,
+    gstRate,
+    cessRate,
+    taxability,
+  });
+}
+
+export async function getGstLedgerMapping(): Promise<GstLedgerMapping | null> {
+  if (!isTauriEnv()) return null;
+  return invoke<GstLedgerMapping | null>('get_gst_ledger_mapping');
+}
+
+export async function saveGstLedgerMapping(
+  outputCgstLedgerId: string,
+  outputSgstLedgerId: string,
+  outputIgstLedgerId: string,
+  outputCessLedgerId: string | null,
+  inputCgstLedgerId: string,
+  inputSgstLedgerId: string,
+  inputIgstLedgerId: string,
+  inputCessLedgerId: string | null
+): Promise<GstLedgerMapping> {
+  if (!isTauriEnv()) throw new Error('Native app required');
+  return invoke<GstLedgerMapping>('save_gst_ledger_mapping', {
+    outputCgstLedgerId,
+    outputSgstLedgerId,
+    outputIgstLedgerId,
+    outputCessLedgerId,
+    inputCgstLedgerId,
+    inputSgstLedgerId,
+    inputIgstLedgerId,
+    inputCessLedgerId,
+  });
+}
+
+export async function previewGstCalculation(
+  placeOfSupplyStateCode: string,
+  taxability: string,
+  taxableValue: string,
+  gstRate: string,
+  cessRate: string,
+  isReverseCharge: boolean
+): Promise<GstCalculationResult> {
+  if (!isTauriEnv()) {
+    const val = parseFloat(taxableValue) || 0;
+    const rate = parseFloat(gstRate) || 0;
+    const cessR = parseFloat(cessRate) || 0;
+    const tax = (val * rate) / 100;
+    const cess = (val * cessR) / 100;
+    return {
+      supply_type: 'IntraState',
+      taxable_value: val.toFixed(2),
+      cgst_rate: (rate / 2).toFixed(2),
+      cgst_amount: (tax / 2).toFixed(2),
+      sgst_rate: (rate / 2).toFixed(2),
+      sgst_amount: (tax / 2).toFixed(2),
+      igst_rate: '0.00',
+      igst_amount: '0.00',
+      cess_rate: cessR.toFixed(2),
+      cess_amount: cess.toFixed(2),
+      total_tax: (tax + cess).toFixed(2),
+      grand_total: (val + tax + cess).toFixed(2),
+    };
+  }
+  return invoke<GstCalculationResult>('preview_gst_calculation', {
+    placeOfSupplyStateCode,
+    taxability,
+    taxableValue,
+    gstRate,
+    cessRate,
+    isReverseCharge,
+  });
+}
+
+export async function getGstr1Summary(
+  fromDate: string,
+  toDate: string
+): Promise<Gstr1SummaryReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: '',
+      from_date: fromDate,
+      to_date: toDate,
+      total_taxable_value: '0.00',
+      total_cgst: '0.00',
+      total_sgst: '0.00',
+      total_igst: '0.00',
+      total_cess: '0.00',
+      total_tax: '0.00',
+      total_invoice_value: '0.00',
+      b2b_invoices: [],
+      b2c_large_invoices: [],
+      b2c_small_summary: [],
+      hsn_summary: [],
+    };
+  }
+  return invoke<Gstr1SummaryReport>('get_gstr1_summary', { fromDate, toDate });
+}
+
+export async function getGstr3bSummary(
+  fromDate: string,
+  toDate: string
+): Promise<Gstr3bSummaryReport> {
+  if (!isTauriEnv()) {
+    const zeroSummary = {
+      integrated_tax: '0.00',
+      central_tax: '0.00',
+      state_ut_tax: '0.00',
+      cess: '0.00',
+      total: '0.00',
+    };
+    return {
+      company_id: '',
+      from_date: fromDate,
+      to_date: toDate,
+      table_3_1: [],
+      table_4_itc: [],
+      total_output_tax: zeroSummary,
+      total_eligible_itc: zeroSummary,
+      net_tax_payable: zeroSummary,
+      closing_itc_balance: zeroSummary,
+    };
+  }
+  return invoke<Gstr3bSummaryReport>('get_gstr3b_summary', { fromDate, toDate });
+}
+
+export async function globalGotoSearch(
+  query: string,
+  limit?: number
+): Promise<GotoSearchResult[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return invoke<GotoSearchResult[]>('global_goto_search', { query, limit: limit || 20 });
+}
+
+export async function getVoucherFullDetail(
+  voucherId: string
+): Promise<VoucherFullDetail> {
+  if (!isTauriEnv()) {
+    throw new Error('Voucher full detail requires the native OpenTally application');
+  }
+  return invoke<VoucherFullDetail>('get_voucher_full_detail', { voucherId });
+}
+
+export async function cancelVoucher(
+  voucherId: string,
+  reason: string
+): Promise<VoucherWithLines> {
+  if (!isTauriEnv()) {
+    throw new Error('Voucher cancellation requires the native OpenTally application');
+  }
+  return invoke<VoucherWithLines>('cancel_voucher', {
+    req: {
+      voucher_id: voucherId,
+      reason,
+      actor_id: 'operator',
+    },
+  });
+}
+
+export async function reverseVoucher(
+  voucherId: string,
+  reversalDate: string,
+  reason: string
+): Promise<VoucherWithLines> {
+  if (!isTauriEnv()) {
+    throw new Error('Voucher reversal requires the native OpenTally application');
+  }
+  return invoke<VoucherWithLines>('reverse_voucher', {
+    req: {
+      voucher_id: voucherId,
+      reversal_date: reversalDate,
+      reason,
+      actor_id: 'operator',
+    },
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Milestone 5: Notes, Invoice PDF & WAL-Safe Backup/Restore
+// -----------------------------------------------------------------------------
+
+export async function exportInvoicePdf(
+  voucherId: string,
+  outputPath: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    throw new Error('Invoice PDF export requires the native OpenTally application');
+  }
+  return invoke<string>('export_invoice_pdf', { voucherId, outputPath });
+}
+
+export async function createDatabaseBackup(
+  destinationPath: string
+): Promise<BackupManifest> {
+  if (!isTauriEnv()) {
+    throw new Error('Database backup requires the native OpenTally application');
+  }
+  return invoke<BackupManifest>('create_database_backup', { destinationPath });
+}
+
+export async function restoreDatabaseBackup(
+  backupPath: string
+): Promise<RestoreResult> {
+  if (!isTauriEnv()) {
+    throw new Error('Database restore requires the native OpenTally application');
+  }
+  return invoke<RestoreResult>('restore_database_backup', { backupPath });
+}
+
+export async function getBackupStatus(): Promise<BackupStatus> {
+  if (!isTauriEnv()) {
+    return {
+      database_engine: 'Browser Virtual Storage',
+      is_wal_active: false,
+      current_schema_version: 'v0.7.0-notes (browser preview)',
+      last_backup_timestamp: null,
+      last_backup_file: null,
+      last_backup_sha256: null,
+    };
+  }
+  return invoke<BackupStatus>('get_backup_status');
+}
+
+export async function postCommercialVoucher(
+  input: CommercialPostingInput
+): Promise<CommercialPostingResult> {
+  if (!isTauriEnv()) {
+    throw new Error('Commercial voucher posting requires the native OpenTally application');
+  }
+  return invoke<CommercialPostingResult>('post_commercial_voucher', { input });
+}
+
+export async function exportCompanyTallyXml(
+  fromDate?: string,
+  toDate?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return `<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA><REQUESTDATA><TALLYMESSAGE><COMPANY>Demo Co</COMPANY></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>`;
+  }
+  return invoke<string>('export_company_tally_xml', {
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+  });
+}
+
+export async function previewTallyXmlImport(
+  xmlContent: string
+): Promise<TallyXmlImportPreview> {
+  if (!isTauriEnv()) {
+    return {
+      groups_to_create: 1,
+      groups_skipped: 0,
+      ledgers_to_create: 2,
+      ledgers_skipped: 0,
+      stock_items_to_create: 1,
+      stock_items_skipped: 0,
+      vouchers_to_create: 1,
+      vouchers_skipped: 0,
+      can_import: true,
+      errors: [],
+    };
+  }
+  return invoke<TallyXmlImportPreview>('preview_tally_xml_import', { xmlContent });
+}
+
+export async function executeTallyXmlImport(
+  xmlContent: string
+): Promise<TallyXmlImportResult> {
+  if (!isTauriEnv()) {
+    return {
+      success: true,
+      groups_created: 1,
+      ledgers_created: 2,
+      stock_items_created: 1,
+      vouchers_created: 1,
+      message: 'Demo import completed',
+    };
+  }
+  return invoke<TallyXmlImportResult>('execute_tally_xml_import', { xmlContent });
+}
+
+export async function exportGstr1Json(
+  fromDate: string,
+  toDate: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return JSON.stringify({ gstin: 'DEMO', fp: '052026', b2b: [] }, null, 2);
+  }
+  return invoke<string>('export_gstr1_json', { fromDate, toDate });
+}
+
+export async function exportGstr3bJson(
+  fromDate: string,
+  toDate: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return JSON.stringify({ gstin: 'DEMO', ret_period: '052026', sup_details: [] }, null, 2);
+  }
+  return invoke<string>('export_gstr3b_json', { fromDate, toDate });
+}
+
+export async function getCompanyFeatures(companyId?: string): Promise<CompanyFeaturesDto> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || mockActiveCompanyId || 'cmp_demo_01',
+      maintain_inventory: true,
+      billwise_tracking: true,
+      enable_perpetual_cogs: true,
+      gst_enabled: true,
+      gstin: '29ABCDE1234F1ZW',
+      state_code: '29',
+      registration_type: 'Regular',
+      has_gst_ledgers_mapped: true,
+      has_inventory_ledgers_mapped: true,
+      tds_enabled: false,
+      has_tds_sections_seeded: false,
+    };
+  }
+  return await invoke<CompanyFeaturesDto>('get_company_features', { companyId });
+}
+
+export async function saveCompanyFeatures(
+  input: SaveCompanyFeaturesInput,
+  companyId?: string
+): Promise<CompanyFeaturesDto> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || mockActiveCompanyId || 'cmp_demo_01',
+      maintain_inventory: input.maintain_inventory,
+      billwise_tracking: input.billwise_tracking,
+      enable_perpetual_cogs: input.enable_perpetual_cogs,
+      gst_enabled: input.gst_enabled,
+      gstin: input.gstin || null,
+      state_code: input.state_code || null,
+      registration_type: input.registration_type || 'Regular',
+      has_gst_ledgers_mapped: input.gst_enabled,
+      has_inventory_ledgers_mapped: input.maintain_inventory,
+      tds_enabled: input.tds_enabled ?? false,
+      has_tds_sections_seeded: input.auto_seed_tds_defaults ?? false,
+    };
+  }
+  return await invoke<CompanyFeaturesDto>('save_company_features', { companyId, input });
+}
+
+export async function createSampleCompany(): Promise<Company> {
+  if (!isTauriEnv()) {
+    const sampleCompany: Company = {
+      id: `cmp_sample_${Date.now()}`,
+      name: 'Bharath Precision Components Pvt Ltd',
+      mailing_name: 'Bharath Precision Components Pvt Ltd',
+      country: 'India',
+      state: 'Karnataka',
+      financial_year_begins: '2025-04-01',
+      books_beginning_from: '2025-04-01',
+      currency_symbol: '₹',
+      currency_formal_name: 'INR',
+      currency_decimal_places: 2,
+      status: 'active',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    mockCompanies.push(sampleCompany);
+    mockActiveCompanyId = sampleCompany.id;
+    return sampleCompany;
+  }
+  return await invoke<Company>('create_sample_company');
+}
 
 
 
+
+
+
+
+// Milestone 8 Banking & Bank Reconciliation Statement (BRS) APIs
+
+export async function listBankLedgers(companyId?: string): Promise<BankLedgerItem[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        id: 'led_bank_default',
+        name: 'HDFC Bank Regular A/c',
+        group_id: 'grp_bank',
+        group_name: 'Bank Accounts',
+        current_balance: '125000.00',
+        current_balance_dr_cr: 'Dr',
+      },
+      {
+        id: 'led_bank_od',
+        name: 'SBI Overdraft A/c',
+        group_id: 'grp_od',
+        group_name: 'Bank OD A/c',
+        current_balance: '45000.00',
+        current_balance_dr_cr: 'Cr',
+      },
+    ];
+  }
+  return await invoke<BankLedgerItem[]>('list_bank_ledgers', { companyId: companyId || null });
+}
+
+export async function getBankReconciliation(
+  bankLedgerId: string,
+  fromDate: string,
+  toDate: string,
+  includeReconciled: boolean = false,
+  companyId?: string
+): Promise<BankReconciliationStatement> {
+  if (!isTauriEnv()) {
+    return {
+      bank_ledger_id: bankLedgerId,
+      bank_ledger_name: 'HDFC Bank Regular A/c',
+      from_date: fromDate,
+      to_date: toDate,
+      summary: {
+        book_balance: '125000.00',
+        book_balance_dr_cr: 'Dr',
+        unreconciled_debit: '25000.00',
+        unreconciled_credit: '15000.00',
+        bank_balance: '115000.00',
+        bank_balance_dr_cr: 'Dr',
+      },
+      rows: [
+        {
+          bank_allocation_id: 'alloc_mock_1',
+          voucher_id: 'vch_mock_1',
+          voucher_line_id: 'line_mock_1',
+          voucher_date: '2026-04-10',
+          voucher_number: 'PMT-001',
+          voucher_type: 'Payment',
+          particulars: 'Precision Tools Ltd',
+          transaction_type: 'Cheque',
+          instrument_number: 'CHQ-100200',
+          instrument_date: '2026-04-09',
+          favouring_name: 'Precision Tools',
+          bank_date: null,
+          debit_amount: '0.00',
+          credit_amount: '15000.00',
+          is_reconciled: false,
+        },
+        {
+          bank_allocation_id: 'alloc_mock_2',
+          voucher_id: 'vch_mock_2',
+          voucher_line_id: 'line_mock_2',
+          voucher_date: '2026-04-12',
+          voucher_number: 'RCT-001',
+          voucher_type: 'Receipt',
+          particulars: 'Apex Retailers',
+          transaction_type: 'NEFT',
+          instrument_number: 'NEFT-554433',
+          instrument_date: '2026-04-12',
+          favouring_name: 'Apex Retailers',
+          bank_date: null,
+          debit_amount: '25000.00',
+          credit_amount: '0.00',
+          is_reconciled: false,
+        },
+      ],
+    };
+  }
+  return await invoke<BankReconciliationStatement>('get_bank_reconciliation', {
+    bankLedgerId,
+    fromDate,
+    toDate,
+    includeReconciled,
+    companyId: companyId || null,
+  });
+}
+
+export async function reconcileBankEntries(
+  entries: ReconcileEntryInput[],
+  companyId?: string
+): Promise<ReconcileResult> {
+  if (!isTauriEnv()) {
+    return {
+      success: true,
+      updated_count: entries.length,
+      updated_ids: entries.map(e => e.bank_allocation_id),
+    };
+  }
+  return await invoke<ReconcileResult>('reconcile_bank_entries', {
+    entries,
+    companyId: companyId || null,
+  });
+}
+
+export async function previewBankStatementAutoMatch(
+  bankLedgerId: string,
+  csvContent: string,
+  companyId?: string
+): Promise<BankStatementMatchPreview> {
+  if (!isTauriEnv()) {
+    return {
+      total_statement_rows: 2,
+      exact_matches: 1,
+      suggested_matches: 1,
+      unmatched: 0,
+      rows: [
+        {
+          csv_row_index: 0,
+          statement_date: '2026-04-11',
+          statement_ref: 'CHQ-100200',
+          statement_description: 'Cheque Clearing Precision Tools',
+          statement_amount: '15000.00',
+          statement_dr_cr: 'Dr',
+          matched_bank_allocation_id: 'alloc_mock_1',
+          matched_voucher_number: 'PMT-001',
+          matched_particulars: 'Precision Tools Ltd',
+          suggested_bank_date: '2026-04-11',
+          match_type: 'exact',
+          confidence: 'HIGH',
+        },
+        {
+          csv_row_index: 1,
+          statement_date: '2026-04-13',
+          statement_ref: 'NEFT-554433',
+          statement_description: 'NEFT INWARD APEX',
+          statement_amount: '25000.00',
+          statement_dr_cr: 'Cr',
+          matched_bank_allocation_id: 'alloc_mock_2',
+          matched_voucher_number: 'RCT-001',
+          matched_particulars: 'Apex Retailers',
+          suggested_bank_date: '2026-04-13',
+          match_type: 'suggested',
+          confidence: 'MEDIUM',
+        },
+      ],
+    };
+  }
+  return await invoke<BankStatementMatchPreview>('preview_bank_statement_auto_match', {
+    bankLedgerId,
+    csvContent,
+    companyId: companyId || null,
+  });
+}
+
+// Milestone 9: Indian TDS & TCS API Functions
+export async function listTdsSections(companyId?: string): Promise<TdsNatureOfPayment[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        id: 'tds_sec_194c',
+        company_id: companyId || 'mock_cmp',
+        section_code: '194C',
+        name: 'Payment to Contractors / Subcontractors',
+        rate_individual_huf: '1.00',
+        rate_others: '2.00',
+        rate_without_pan: '20.00',
+        single_threshold_limit: '30000.00',
+        aggregate_threshold_limit: '100000.00',
+        tds_payable_ledger_id: 'led_tds_payable',
+        is_tcs: 0,
+        created_at: '2026-04-01T00:00:00Z',
+        updated_at: '2026-04-01T00:00:00Z',
+      },
+      {
+        id: 'tds_sec_194j',
+        company_id: companyId || 'mock_cmp',
+        section_code: '194J',
+        name: 'Fees for Professional or Technical Services',
+        rate_individual_huf: '10.00',
+        rate_others: '10.00',
+        rate_without_pan: '20.00',
+        single_threshold_limit: '30000.00',
+        aggregate_threshold_limit: '30000.00',
+        tds_payable_ledger_id: 'led_tds_payable',
+        is_tcs: 0,
+        created_at: '2026-04-01T00:00:00Z',
+        updated_at: '2026-04-01T00:00:00Z',
+      },
+      {
+        id: 'tds_sec_194i',
+        company_id: companyId || 'mock_cmp',
+        section_code: '194I',
+        name: 'Rent on Land, Building or Furniture',
+        rate_individual_huf: '10.00',
+        rate_others: '10.00',
+        rate_without_pan: '20.00',
+        single_threshold_limit: '240000.00',
+        aggregate_threshold_limit: '240000.00',
+        tds_payable_ledger_id: 'led_tds_payable',
+        is_tcs: 0,
+        created_at: '2026-04-01T00:00:00Z',
+        updated_at: '2026-04-01T00:00:00Z',
+      },
+    ];
+  }
+  return await invoke<TdsNatureOfPayment[]>('list_tds_sections', {
+    companyId: companyId || null,
+  });
+}
+
+export async function createTdsSection(input: CreateTdsNatureOfPaymentInput): Promise<TdsNatureOfPayment> {
+  if (!isTauriEnv()) {
+    return {
+      id: `tds_${Date.now()}`,
+      company_id: input.company_id,
+      section_code: input.section_code,
+      name: input.name,
+      rate_individual_huf: input.rate_individual_huf,
+      rate_others: input.rate_others,
+      rate_without_pan: input.rate_without_pan || '20.00',
+      single_threshold_limit: input.single_threshold_limit || '0.00',
+      aggregate_threshold_limit: input.aggregate_threshold_limit || '0.00',
+      tds_payable_ledger_id: input.tds_payable_ledger_id || null,
+      is_tcs: input.is_tcs ? 1 : 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<TdsNatureOfPayment>('create_tds_section', { input });
+}
+
+export async function getCompanyTdsProfile(companyId?: string): Promise<CompanyTdsProfile | null> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'mock_cmp',
+      tan: 'BLRP12345A',
+      deductor_type: 'Company',
+      tds_enabled: 1,
+      created_at: '2026-04-01T00:00:00Z',
+      updated_at: '2026-04-01T00:00:00Z',
+    };
+  }
+  return await invoke<CompanyTdsProfile | null>('get_company_tds_profile', {
+    companyId: companyId || null,
+  });
+}
+
+export async function saveCompanyTdsProfile(input: SaveCompanyTdsProfileInput): Promise<CompanyTdsProfile> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: input.company_id,
+      tan: input.tan || null,
+      deductor_type: input.deductor_type,
+      tds_enabled: input.tds_enabled ? 1 : 0,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<CompanyTdsProfile>('save_company_tds_profile', { input });
+}
+
+export async function getLedgerTdsProfile(ledgerId: string, companyId?: string): Promise<LedgerTdsProfile | null> {
+  if (!isTauriEnv()) {
+    return {
+      id: `ltp_${ledgerId}`,
+      company_id: companyId || 'mock_cmp',
+      ledger_id: ledgerId,
+      pan: 'ABCCD1234F',
+      deductee_type: 'Company_Domestic',
+      lower_deduction_cert_no: null,
+      lower_deduction_rate: null,
+      created_at: '2026-04-01T00:00:00Z',
+      updated_at: '2026-04-01T00:00:00Z',
+    };
+  }
+  return await invoke<LedgerTdsProfile | null>('get_ledger_tds_profile', {
+    ledgerId,
+    companyId: companyId || null,
+  });
+}
+
+export async function saveLedgerTdsProfile(input: SaveLedgerTdsProfileInput): Promise<LedgerTdsProfile> {
+  if (!isTauriEnv()) {
+    return {
+      id: `ltp_${input.ledger_id}`,
+      company_id: input.company_id,
+      ledger_id: input.ledger_id,
+      pan: input.pan || null,
+      deductee_type: input.deductee_type,
+      lower_deduction_cert_no: input.lower_deduction_cert_no || null,
+      lower_deduction_rate: input.lower_deduction_rate || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<LedgerTdsProfile>('save_ledger_tds_profile', { input });
+}
+
+export async function previewTdsCalculation(input: TdsCalculationPreviewInput): Promise<TdsCalculationPreviewResult> {
+  if (!isTauriEnv()) {
+    const taxAmt = parseFloat(input.taxable_amount || '0');
+    const tdsAmt = taxAmt * 0.1;
+    return {
+      section_code: input.section_code,
+      section_name: 'Mock TDS Section',
+      deductee_type: 'Company_Domestic',
+      party_pan: 'ABCCD1234F',
+      is_pan_missing: false,
+      is_pan_missing_higher_rate: false,
+      taxable_base: input.taxable_amount,
+      applicable_rate: '10.00',
+      threshold_exceeded: true,
+      single_threshold: '30000.00',
+      aggregate_threshold: '30000.00',
+      prior_aggregate_amount: '0.00',
+      current_aggregate_amount: input.taxable_amount,
+      tds_amount: tdsAmt.toFixed(2),
+      net_payable_amount: (taxAmt - tdsAmt).toFixed(2),
+      tds_payable_ledger_id: 'led_tds_payable',
+    };
+  }
+  return await invoke<TdsCalculationPreviewResult>('preview_tds_calculation', { input });
+}
+
+export async function recordTdsChallanPayment(input: RecordTdsChallanPaymentInput): Promise<number> {
+  if (!isTauriEnv()) {
+    return input.voucher_tds_detail_ids.length;
+  }
+  return await invoke<number>('record_tds_challan_payment', { input });
+}
+
+export async function getTdsOutstanding(asOfDate: string, companyId?: string): Promise<TdsOutstandingReport> {
+  if (!isTauriEnv()) {
+    return {
+      as_of_date: asOfDate,
+      total_unpaid_tds: '10000.00',
+      sections: [
+        {
+          section_code: '194J',
+          section_name: 'Fees for Professional or Technical Services',
+          unpaid_tds_amount: '10000.00',
+          voucher_count: 1,
+          vouchers: [
+            {
+              voucher_tds_id: 'vtd_mock_1',
+              voucher_id: 'vch_mock_1',
+              voucher_number: 'PUR/2026/001',
+              voucher_date: '2026-05-15',
+              party_ledger_id: 'led_supp_consultant',
+              party_name: 'TechServe Solutions',
+              party_pan: 'ABCCD1234F',
+              section_code: '194J',
+              gross_amount: '100000.00',
+              tds_rate: '10.00',
+              tds_amount: '10000.00',
+              due_date: '2026-06-07',
+              status: 'Due',
+            },
+          ],
+        },
+      ],
+    };
+  }
+  return await invoke<TdsOutstandingReport>('get_tds_outstanding', {
+    asOfDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function getForm26qSummary(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<Form26qSummary> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'mock_cmp',
+      financial_year: financialYear,
+      quarter,
+      deductor_tan: 'BLRP12345A',
+      deductor_name: 'Apex Electronics Pvt Ltd',
+      total_amount_paid: '100000.00',
+      total_tds_deducted: '10000.00',
+      total_tds_deposited: '10000.00',
+      total_tds_unpaid: '0.00',
+      challans: [
+        {
+          challan_bsr_code: '0210012',
+          challan_date: '2026-06-05',
+          challan_serial_no: '00042',
+          payment_voucher_id: null,
+          total_tds_deposited: '10000.00',
+          voucher_count: 1,
+        },
+      ],
+      deductions: [
+        {
+          voucher_tds_id: 'vtd_mock_1',
+          voucher_number: 'PUR/2026/001',
+          deductee_pan: 'ABCCD1234F',
+          deductee_name: 'TechServe Solutions',
+          deductee_type: 'Company_Domestic',
+          section_code: '194J',
+          payment_date: '2026-05-15',
+          amount_paid: '100000.00',
+          tds_rate: '10.00',
+          tds_deducted: '10000.00',
+          is_pan_missing_higher_rate: false,
+          challan_serial_no: '00042',
+          challan_date: '2026-06-05',
+          challan_bsr_code: '0210012',
+          status: 'Deposited',
+        },
+      ],
+    };
+  }
+  return await invoke<Form26qSummary>('get_form_26q_summary', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportForm26qJson(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    const summary = await getForm26qSummary(financialYear, quarter, companyId);
+    return JSON.stringify(summary, null, 2);
+  }
+  return await invoke<string>('export_form_26q_json', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportForm26qCsv(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return [
+      `# Deductor TAN: BLRP12345A, FY: ${financialYear}, Quarter: ${quarter}`,
+      'Voucher No,Deductee PAN,Deductee Name,Deductee Type,Section,Payment Date,Gross Amount,TDS Rate,TDS Deducted,Challan BSR,Challan Date,Challan Serial,Status',
+      'PUR/2026/001,ABCCD1234F,TechServe Solutions,Company_Domestic,194J,2026-05-15,100000.00,10.00,10000.00,0210012,2026-06-05,00042,Deposited',
+    ].join('\n');
+  }
+  return await invoke<string>('export_form_26q_csv', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+// -----------------------------------------------------------------------------
+// Milestone 10: GST Compliance (GSTR-2B, e-Invoice, e-Way Bill)
+// -----------------------------------------------------------------------------
+
+export async function importAndReconcileGstr2b(
+  returnPeriod: string,
+  jsonPayload: string,
+  companyId?: string
+): Promise<Gstr2bReconciliationReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'cmp_demo_01',
+      return_period: returnPeriod,
+      batch_id: 'batch_mock_01',
+      imported_at: new Date().toISOString(),
+      summary: {
+        total_portal_invoices: 2,
+        matched_count: 1,
+        mismatch_count: 0,
+        missing_in_books_count: 1,
+        missing_in_2b_count: 1,
+        matched_itc: '18000.00',
+        mismatch_itc: '0.00',
+        missing_in_books_itc: '9000.00',
+        at_risk_itc: '5400.00',
+        total_eligible_itc: '18000.00',
+      },
+      invoices: [
+        {
+          id: 'row_1',
+          batch_id: 'batch_mock_01',
+          supplier_gstin: '29ABCDE1234F1Z5',
+          supplier_name: 'Apex Industrial Tools',
+          invoice_number: 'INV-2026-001',
+          invoice_date: '2026-04-15',
+          invoice_value: '118000.00',
+          taxable_value: '100000.00',
+          cgst_amount: '9000.00',
+          sgst_amount: '9000.00',
+          igst_amount: '0.00',
+          cess_amount: '0.00',
+          total_tax: '18000.00',
+          itc_availability: 'Y',
+          reconciliation_status: 'Matched',
+          matched_voucher_id: 'v_pur_01',
+          matched_voucher_number: 'PUR/001',
+          books_taxable_value: '100000.00',
+          books_total_tax: '18000.00',
+          tax_difference: '0.00',
+        },
+        {
+          id: 'row_2',
+          batch_id: 'batch_mock_01',
+          supplier_gstin: '27AABCT3456K1Z2',
+          supplier_name: 'Metro Fasteners',
+          invoice_number: 'INV-8899',
+          invoice_date: '2026-04-20',
+          invoice_value: '59000.00',
+          taxable_value: '50000.00',
+          cgst_amount: '0.00',
+          sgst_amount: '0.00',
+          igst_amount: '9000.00',
+          cess_amount: '0.00',
+          total_tax: '9000.00',
+          itc_availability: 'Y',
+          reconciliation_status: 'MissingInBooks',
+          matched_voucher_id: null,
+          matched_voucher_number: null,
+          books_taxable_value: null,
+          books_total_tax: null,
+          tax_difference: '9000.00',
+        },
+        {
+          id: 'row_3',
+          batch_id: 'batch_mock_01',
+          supplier_gstin: '29XYZDE9876P1Z1',
+          supplier_name: 'Delta Engineering',
+          invoice_number: 'PUR/002',
+          invoice_date: '2026-04-22',
+          invoice_value: '35400.00',
+          taxable_value: '30000.00',
+          cgst_amount: '2700.00',
+          sgst_amount: '2700.00',
+          igst_amount: '0.00',
+          cess_amount: '0.00',
+          total_tax: '5400.00',
+          itc_availability: 'Y',
+          reconciliation_status: 'MissingIn2B',
+          matched_voucher_id: 'v_pur_02',
+          matched_voucher_number: 'PUR/002',
+          books_taxable_value: '30000.00',
+          books_total_tax: '5400.00',
+          tax_difference: '-5400.00',
+        },
+      ],
+    };
+  }
+  return await invoke<Gstr2bReconciliationReport>('import_and_reconcile_gstr2b', {
+    companyId: companyId || null,
+    returnPeriod,
+    jsonPayload,
+  });
+}
+
+export async function getGstr2bReconciliationReport(
+  returnPeriod: string,
+  companyId?: string
+): Promise<Gstr2bReconciliationReport> {
+  if (!isTauriEnv()) {
+    return importAndReconcileGstr2b(returnPeriod, '{}', companyId);
+  }
+  return await invoke<Gstr2bReconciliationReport>('get_gstr2b_reconciliation_report', {
+    companyId: companyId || null,
+    returnPeriod,
+  });
+}
+
+export async function exportGstr2bReconciliationCsv(
+  returnPeriod: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return [
+      'Status,Supplier GSTIN,Supplier Name,Invoice No,Invoice Date,Portal Taxable,Portal Tax,Books Tax,Variance,ITC Available,Matched Voucher No',
+      'Matched,29ABCDE1234F1Z5,Apex Industrial Tools,INV-2026-001,2026-04-15,100000.00,18000.00,18000.00,0.00,Y,PUR/001',
+      'MissingInBooks,27AABCT3456K1Z2,Metro Fasteners,INV-8899,2026-04-20,50000.00,9000.00,0.00,9000.00,Y,',
+      'MissingIn2B,29XYZDE9876P1Z1,Delta Engineering,PUR/002,2026-04-22,30000.00,5400.00,5400.00,-5400.00,Y,PUR/002',
+    ].join('\r\n');
+  }
+  return await invoke<string>('export_gstr2b_reconciliation_csv', {
+    companyId: companyId || null,
+    returnPeriod,
+  });
+}
+
+export async function exportEinvoiceJson(
+  voucherId: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return JSON.stringify({
+      Version: '1.1',
+      TranDtls: { TaxSch: 'GST', SupTyp: 'B2B', RegRev: 'N', EcmGstin: null, IgstOnIntra: 'N' },
+      DocDtls: { Typ: 'INV', No: 'SALES-001', Dt: '15/04/2026' },
+      SellerDtls: { Gstin: '29ABCDE1234F1Z5', LglNm: 'OpenTally Demo', TrdNm: 'OpenTally', Addr1: 'Bangalore', Loc: 'Bangalore', Pin: 560001, Stcd: '29' },
+      BuyerDtls: { Gstin: '29XYZDE9876P1Z1', LglNm: 'Customer Corp', TrdNm: 'Customer Corp', Pos: '29', Addr1: 'N/A', Loc: 'City', Pin: 560001, Stcd: '29' },
+      ItemList: [],
+      ValDtls: { AssVal: 10000, CgstVal: 900, SgstVal: 900, IgstVal: 0, CesVal: 0, RndOffAmt: 0, TotInvVal: 11800 },
+    }, null, 2);
+  }
+  return await invoke<string>('export_einvoice_json', {
+    companyId: companyId || null,
+    voucherId,
+  });
+}
+
+export async function exportEwayBillJson(
+  voucherId: string,
+  transport: TransportDetailsInput,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return JSON.stringify({
+      version: '1.0.0621',
+      billLists: [{
+        userGstin: '29ABCDE1234F1Z5',
+        supplyType: 'O',
+        subSupplyType: '1',
+        docType: 'INV',
+        docNo: 'SALES-001',
+        transMode: transport.transport_mode,
+        transDistance: transport.distance_km.toString(),
+        vehicleNo: transport.vehicle_no || null,
+      }],
+    }, null, 2);
+  }
+  return await invoke<string>('export_eway_bill_json', {
+    companyId: companyId || null,
+    voucherId,
+    transport,
+  });
+}
+
+export async function saveVoucherEinvoiceMetadata(
+  voucherId: string,
+  input: VoucherEinvoiceMetadataInput,
+  companyId?: string
+): Promise<VoucherEinvoiceMetadataDto> {
+  if (!isTauriEnv()) {
+    return {
+      id: 'mock_meta_1',
+      company_id: companyId || 'cmp_demo_01',
+      voucher_id: voucherId,
+      irn: input.irn || null,
+      ack_no: input.ack_no || null,
+      ack_date: input.ack_date || null,
+      signed_qr_code: input.signed_qr_code || null,
+      einvoice_status: (input.einvoice_status as any) || 'Pending',
+      eway_bill_no: input.eway_bill_no || null,
+      eway_bill_date: input.eway_bill_date || null,
+      eway_valid_upto: input.eway_valid_upto || null,
+      transporter_id: input.transporter_id || null,
+      transporter_name: input.transporter_name || null,
+      transport_mode: input.transport_mode || null,
+      vehicle_no: input.vehicle_no || null,
+      distance_km: input.distance_km || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<VoucherEinvoiceMetadataDto>('save_voucher_einvoice_metadata', {
+    companyId: companyId || null,
+    voucherId,
+    input,
+  });
+}
+
+export async function getVoucherEinvoiceMetadata(
+  voucherId: string,
+  companyId?: string
+): Promise<VoucherEinvoiceMetadataDto | null> {
+  if (!isTauriEnv()) {
+    return null;
+  }
+  return await invoke<VoucherEinvoiceMetadataDto | null>('get_voucher_einvoice_metadata', {
+    companyId: companyId || null,
+    voucherId,
+  });
+}
+
+// ==========================================
+// Milestone 11: Multi-Location Godowns, Batches, Stock Journals & Cost Centres
+// ==========================================
+
+export async function getGodownSummaryReport(
+  godownId: string,
+  asOfDate?: string,
+  companyId?: string
+): Promise<GodownSummaryReport> {
+  if (!isTauriEnv()) {
+    return {
+      godown_id: godownId,
+      godown_name: 'Central Godown',
+      address: 'Industrial Area Phase 2, Peenya, Bangalore',
+      is_external: false,
+      items: [
+        {
+          stock_item_id: 'item_1',
+          stock_item_name: 'Copper Fitting 25mm',
+          base_unit: 'Nos',
+          inflow_quantity: '100',
+          outflow_quantity: '20',
+          closing_quantity: '80',
+          average_rate: '150.00',
+          closing_value: '12000.00',
+        },
+      ],
+      total_godown_value: '12000.00',
+    };
+  }
+  return await invoke<GodownSummaryReport>('get_godown_summary_report', {
+    godownId,
+    companyId: companyId || null,
+    asOfDate: asOfDate || null,
+  });
+}
+
+export async function listStockItemBatches(
+  stockItemId: string,
+  companyId?: string
+): Promise<StockItemBatch[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        id: 'batch_mock_1',
+        company_id: companyId || 'cmp_mock',
+        stock_item_id: stockItemId,
+        batch_number: 'BATCH-2025-A',
+        mfg_date: '2025-01-01',
+        expiry_date: '2026-06-30',
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+  }
+  return await invoke<StockItemBatch[]>('list_stock_item_batches', {
+    stockItemId,
+    companyId: companyId || null,
+  });
+}
+
+export async function createStockItemBatch(
+  stockItemId: string,
+  req: StockItemBatchRequest,
+  companyId?: string
+): Promise<StockItemBatch> {
+  if (!isTauriEnv()) {
+    return {
+      id: `batch_${Date.now()}`,
+      company_id: companyId || 'cmp_mock',
+      stock_item_id: stockItemId,
+      batch_number: req.batch_number,
+      mfg_date: req.mfg_date || null,
+      expiry_date: req.expiry_date || null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<StockItemBatch>('create_stock_item_batch', {
+    stockItemId,
+    req,
+    companyId: companyId || null,
+  });
+}
+
+export async function getBatchExpiryReport(
+  asOfDate?: string,
+  companyId?: string
+): Promise<BatchExpiryReportRow[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        stock_item_id: 'item_1',
+        stock_item_name: 'Amoxicillin 500mg',
+        batch_id: 'batch_mock_1',
+        batch_number: 'BATCH-2025-A',
+        mfg_date: '2025-01-01',
+        expiry_date: '2025-12-31',
+        closing_quantity: '500',
+        unit_cost: '12.50',
+        closing_value: '6250.00',
+        days_until_expiry: 35,
+        status: 'ExpiringIn60Days',
+      },
+    ];
+  }
+  return await invoke<BatchExpiryReportRow[]>('get_batch_expiry_report', {
+    companyId: companyId || null,
+    asOfDate: asOfDate || null,
+  });
+}
+
+export async function postStockJournalVoucher(
+  req: StockJournalRequest,
+  companyId?: string
+): Promise<StockJournalResponse> {
+  if (!isTauriEnv()) {
+    return {
+      voucher_id: `vch_sj_${Date.now()}`,
+      voucher_number: req.voucher_number || 'SJ-TEST-001',
+      voucher_date: req.voucher_date,
+      total_source_value: '15000.00',
+      total_destination_value: '15000.00',
+      lines_count: req.source_lines.length + req.destination_lines.length,
+    };
+  }
+  return await invoke<StockJournalResponse>('post_stock_journal_voucher', {
+    req,
+    companyId: companyId || null,
+  });
+}
+
+export async function listStockJournalVouchers(
+  companyId?: string,
+  limit?: number
+): Promise<StockJournalResponse[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<StockJournalResponse[]>('list_stock_journal_vouchers', {
+    companyId: companyId || null,
+    limit: limit || null,
+  });
+}
+
+export async function listCostCategories(
+  companyId?: string
+): Promise<CostCategory[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        id: 'cat_primary',
+        company_id: companyId || 'cmp_mock',
+        name: 'Primary Cost Category',
+        allocate_revenue: true,
+        allocate_non_revenue: false,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 'cat_projects',
+        company_id: companyId || 'cmp_mock',
+        name: 'Projects & Contracts',
+        allocate_revenue: true,
+        allocate_non_revenue: true,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+  }
+  return await invoke<CostCategory[]>('list_cost_categories', {
+    companyId: companyId || null,
+  });
+}
+
+export async function createCostCategory(
+  req: CostCategoryRequest,
+  companyId?: string
+): Promise<CostCategory> {
+  if (!isTauriEnv()) {
+    return {
+      id: `cat_${Date.now()}`,
+      company_id: companyId || 'cmp_mock',
+      name: req.name,
+      allocate_revenue: req.allocate_revenue,
+      allocate_non_revenue: req.allocate_non_revenue,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<CostCategory>('create_cost_category', {
+    req,
+    companyId: companyId || null,
+  });
+}
+
+export async function listCostCentres(
+  categoryId?: string,
+  companyId?: string
+): Promise<CostCentre[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        id: 'cc_north',
+        company_id: companyId || 'cmp_mock',
+        category_id: categoryId || 'cat_primary',
+        name: 'North Region Sales',
+        parent_id: null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      {
+        id: 'cc_south',
+        company_id: companyId || 'cmp_mock',
+        category_id: categoryId || 'cat_primary',
+        name: 'South Region Sales',
+        parent_id: null,
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    ];
+  }
+  return await invoke<CostCentre[]>('list_cost_centres', {
+    categoryId: categoryId || null,
+    companyId: companyId || null,
+  });
+}
+
+export async function createCostCentre(
+  req: CostCentreRequest,
+  companyId?: string
+): Promise<CostCentre> {
+  if (!isTauriEnv()) {
+    return {
+      id: `cc_${Date.now()}`,
+      company_id: companyId || 'cmp_mock',
+      category_id: req.category_id,
+      name: req.name,
+      parent_id: req.parent_id || null,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<CostCentre>('create_cost_centre', {
+    req,
+    companyId: companyId || null,
+  });
+}
+
+export async function getVoucherCostAllocations(
+  voucherId: string,
+  companyId?: string
+): Promise<VoucherCostAllocationItem[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<VoucherCostAllocationItem[]>('get_voucher_cost_allocations', {
+    voucherId,
+    companyId: companyId || null,
+  });
+}
+
+export async function getCostCentreBreakupReport(
+  companyId?: string,
+  fromDate?: string,
+  toDate?: string
+): Promise<CostCentreBreakupReport> {
+  if (!isTauriEnv()) {
+    return {
+      from_date: fromDate || null,
+      to_date: toDate || null,
+      centres: [
+        {
+          cost_centre_id: 'cc_north',
+          cost_centre_name: 'North Region Sales',
+          category_id: 'cat_primary',
+          category_name: 'Primary Cost Category',
+          debit_total: '25000.00',
+          credit_total: '0.00',
+          net_amount: '25000.00',
+          allocations_count: 2,
+        },
+        {
+          cost_centre_id: 'cc_south',
+          cost_centre_name: 'South Region Sales',
+          category_id: 'cat_primary',
+          category_name: 'Primary Cost Category',
+          debit_total: '35000.00',
+          credit_total: '0.00',
+          net_amount: '35000.00',
+          allocations_count: 3,
+        },
+      ],
+      total_debit: '60000.00',
+      total_credit: '0.00',
+      net_total: '60000.00',
+    };
+  }
+  return await invoke<CostCentreBreakupReport>('get_cost_centre_breakup_report', {
+    companyId: companyId || null,
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+  });
+}
+
+// =============================================================================
+// Milestone 12: Ratio Analysis, Budgets, Year Closing & MCA Audit Certification
+// =============================================================================
+
+export async function getRatioAnalysis(
+  companyId?: string,
+  fromDate?: string,
+  toDate?: string
+): Promise<RatioAnalysisReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'cmp_sample',
+      from_date: fromDate || '2024-04-01',
+      to_date: toDate || '2025-03-31',
+      working_capital: '450000.00',
+      cash_in_hand: '25000.00',
+      bank_accounts: '380000.00',
+      bank_od_ac: '0.00',
+      sundry_debtors: '185000.00',
+      sundry_creditors: '140000.00',
+      sales_accounts: '1250000.00',
+      purchase_accounts: '720000.00',
+      closing_stock: '150000.00',
+      net_profit: '235000.00',
+      current_ratio: '3.21',
+      quick_ratio: '2.14',
+      debt_equity_ratio: '0.28',
+      gross_profit_pct: '42.40%',
+      net_profit_pct: '18.80%',
+      operating_cost_pct: '38.80%',
+      receivables_turnover_days: '54 days',
+      inventory_turnover: '4.80',
+      return_on_working_capital_pct: '52.22%',
+    };
+  }
+  return await invoke<RatioAnalysisReport>('get_ratio_analysis', {
+    companyId: companyId || null,
+    fromDate: fromDate || null,
+    toDate: toDate || null,
+  });
+}
+
+export async function listBudgets(companyId?: string): Promise<Budget[]> {
+  if (!isTauriEnv()) {
+    return [
+      {
+        id: 'bdg_1',
+        company_id: companyId || 'cmp_sample',
+        name: 'Annual Operations Budget 2024-25',
+        from_date: '2024-04-01',
+        to_date: '2025-03-31',
+        created_at: '2024-04-01T00:00:00Z',
+        updated_at: '2024-04-01T00:00:00Z',
+      },
+    ];
+  }
+  return await invoke<Budget[]>('list_budgets', {
+    companyId: companyId || null,
+  });
+}
+
+export async function createBudget(
+  req: BudgetRequest,
+  companyId?: string
+): Promise<BudgetDetails> {
+  if (!isTauriEnv()) {
+    return {
+      budget: {
+        id: 'bdg_mock',
+        company_id: companyId || 'cmp_sample',
+        name: req.name,
+        from_date: req.from_date,
+        to_date: req.to_date,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      lines: req.lines.map((l, idx) => ({
+        id: `bdg_line_${idx}`,
+        company_id: companyId || 'cmp_sample',
+        budget_id: 'bdg_mock',
+        target_type: l.target_type,
+        target_id: l.target_id,
+        budget_type: l.budget_type,
+        amount: String(l.amount),
+        dr_cr: l.dr_cr,
+        created_at: new Date().toISOString(),
+      })),
+    };
+  }
+  return await invoke<BudgetDetails>('create_budget', {
+    companyId: companyId || null,
+    req,
+  });
+}
+
+export async function getBudget(
+  budgetId: string,
+  companyId?: string
+): Promise<BudgetDetails> {
+  if (!isTauriEnv()) {
+    return {
+      budget: {
+        id: budgetId,
+        company_id: companyId || 'cmp_sample',
+        name: 'Annual Operations Budget 2024-25',
+        from_date: '2024-04-01',
+        to_date: '2025-03-31',
+        created_at: '2024-04-01T00:00:00Z',
+        updated_at: '2024-04-01T00:00:00Z',
+      },
+      lines: [
+        {
+          id: 'line_1',
+          company_id: companyId || 'cmp_sample',
+          budget_id: budgetId,
+          target_type: 'Group',
+          target_id: 'grp_indirect_expenses',
+          budget_type: 'OnNetTransactions',
+          amount: '50000.00',
+          dr_cr: 'Dr',
+          created_at: '2024-04-01T00:00:00Z',
+        },
+      ],
+    };
+  }
+  return await invoke<BudgetDetails>('get_budget', {
+    companyId: companyId || null,
+    budgetId,
+  });
+}
+
+export async function deleteBudget(
+  budgetId: string,
+  companyId?: string
+): Promise<void> {
+  if (!isTauriEnv()) {
+    return;
+  }
+  return await invoke<void>('delete_budget', {
+    companyId: companyId || null,
+    budgetId,
+  });
+}
+
+export async function getBudgetVarianceReport(
+  budgetId: string,
+  asOfDate: string,
+  companyId?: string
+): Promise<BudgetVarianceReport> {
+  if (!isTauriEnv()) {
+    return {
+      budget_id: budgetId,
+      budget_name: 'Annual Operations Budget 2024-25',
+      company_id: companyId || 'cmp_sample',
+      as_of_date: asOfDate,
+      from_date: '2024-04-01',
+      to_date: '2025-03-31',
+      rows: [
+        {
+          line_id: 'l1',
+          target_type: 'Group',
+          target_id: 'grp_indirect_expenses',
+          target_name: 'Indirect Expenses',
+          budget_type: 'OnNetTransactions',
+          dr_cr: 'Dr',
+          budget_amount: '50000.00',
+          actual_amount: '42000.00',
+          variance_amount: '8000.00',
+          utilization_pct: '84.00%',
+          is_over_budget: false,
+        },
+      ],
+      total_budget: '50000.00',
+      total_actual: '42000.00',
+      total_variance: '8000.00',
+    };
+  }
+  return await invoke<BudgetVarianceReport>('get_budget_variance_report', {
+    companyId: companyId || null,
+    budgetId,
+    asOfDate,
+  });
+}
+
+export async function previewYearEndClosing(
+  periodEnd: string,
+  companyId?: string
+): Promise<YearEndClosingPreview> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'cmp_sample',
+      financial_year_label: 'FY 2024-25',
+      period_start: '2024-04-01',
+      period_end: periodEnd,
+      next_fy_start: '2025-04-01',
+      trial_balance_difference: '0.00',
+      is_equilibrium: true,
+      net_profit_or_loss: '235000.00',
+      is_profit: true,
+      nominal_transfers: [
+        {
+          ledger_id: 'led_sales',
+          ledger_name: 'Sales Accounts',
+          account_group_nature: 'Income',
+          closing_debit: '0.00',
+          closing_credit: '1250000.00',
+          transfer_entry_type: 'Dr',
+          transfer_amount: '1250000.00',
+        },
+        {
+          ledger_id: 'led_pur',
+          ledger_name: 'Purchase Accounts',
+          account_group_nature: 'Expenses',
+          closing_debit: '720000.00',
+          closing_credit: '0.00',
+          transfer_entry_type: 'Cr',
+          transfer_amount: '720000.00',
+        },
+      ],
+      balance_sheet_balances: [
+        {
+          ledger_id: 'led_bank',
+          ledger_name: 'HDFC Bank A/c',
+          account_group_nature: 'Assets',
+          balance_type: 'Dr',
+          amount: '380000.00',
+        },
+      ],
+    };
+  }
+  return await invoke<YearEndClosingPreview>('preview_year_end_closing', {
+    companyId: companyId || null,
+    periodEnd,
+  });
+}
+
+export async function executeYearEndClosing(
+  periodEnd: string,
+  closedBy?: string,
+  companyId?: string
+): Promise<FinancialYearClosingRecord> {
+  if (!isTauriEnv()) {
+    return {
+      id: 'fyc_mock',
+      company_id: companyId || 'cmp_sample',
+      financial_year_label: 'FY 2024-25',
+      period_start: '2024-04-01',
+      period_end: periodEnd,
+      next_fy_start: '2025-04-01',
+      closing_voucher_id: 'vch_closing_mock',
+      net_profit_or_loss: '235000.00',
+      is_locked: true,
+      closed_at: new Date().toISOString(),
+      closed_by: closedBy || 'system',
+    };
+  }
+  return await invoke<FinancialYearClosingRecord>('execute_year_end_closing', {
+    companyId: companyId || null,
+    periodEnd,
+    closedBy: closedBy || null,
+  });
+}
+
+export async function listClosedYears(
+  companyId?: string
+): Promise<FinancialYearClosingRecord[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<FinancialYearClosingRecord[]>('list_closed_years', {
+    companyId: companyId || null,
+  });
+}
+
+export async function verifyAuditTrailIntegrity(
+  companyId?: string
+): Promise<AuditCertificationReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'cmp_sample',
+      generated_at: new Date().toISOString(),
+      total_entries: 42,
+      chained_entries: 42,
+      legacy_unchained_entries: 0,
+      tampered_entries: 0,
+      broken_chain_links: 0,
+      is_valid: true,
+      certification_status: 'VERIFIED_CLEAN',
+      first_entry_timestamp: '2024-04-01T10:00:00Z',
+      latest_entry_timestamp: '2025-03-31T18:00:00Z',
+      latest_entry_hash: '3a7b9c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b',
+      issues: [],
+    };
+  }
+  return await invoke<AuditCertificationReport>('verify_audit_trail_integrity', {
+    companyId: companyId || null,
+  });
+}
+
+export async function exportAuditCertificationCsv(
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    return 'Summary Parameter,Value\nCompany ID,"cmp_sample"\nStatus,"VERIFIED_CLEAN"\n';
+  }
+  return await invoke<string>('export_audit_certification_csv', {
+    companyId: companyId || null,
+  });
+}
+
+// =========================================================================
+// MILESTONE 13: ORDER PROCESSING
+// =========================================================================
+
+export interface PurchaseOrder {
+  id: string;
+  company_id: string;
+  order_number: string;
+  order_date: string;
+  due_date: string | null;
+  party_ledger_id: string;
+  party_ledger_name?: string | null;
+  reference_no: string | null;
+  narration: string | null;
+  status: 'Open' | 'PartiallyFulfilled' | 'Fulfilled' | 'Cancelled';
+  total_amount: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PurchaseOrderLine {
+  id: string;
+  company_id: string;
+  order_id: string;
+  stock_item_id: string;
+  stock_item_name?: string | null;
+  godown_id: string | null;
+  godown_name?: string | null;
+  ordered_qty: string;
+  fulfilled_qty: string;
+  pending_qty: string;
+  unit_rate: string;
+  discount_kind?: string | null;
+  discount_value?: string | null;
+  line_amount: string;
+  created_at: string;
+}
+
+export interface PurchaseOrderWithLines {
+  order: PurchaseOrder;
+  lines: PurchaseOrderLine[];
+}
+
+export interface SalesOrder {
+  id: string;
+  company_id: string;
+  order_number: string;
+  order_date: string;
+  due_date: string | null;
+  party_ledger_id: string;
+  party_ledger_name?: string | null;
+  reference_no: string | null;
+  narration: string | null;
+  status: 'Open' | 'PartiallyFulfilled' | 'Fulfilled' | 'Cancelled';
+  total_amount: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SalesOrderLine {
+  id: string;
+  company_id: string;
+  order_id: string;
+  stock_item_id: string;
+  stock_item_name?: string | null;
+  godown_id: string | null;
+  godown_name?: string | null;
+  ordered_qty: string;
+  fulfilled_qty: string;
+  pending_qty: string;
+  unit_rate: string;
+  discount_kind?: string | null;
+  discount_value?: string | null;
+  line_amount: string;
+  created_at: string;
+}
+
+export interface SalesOrderWithLines {
+  order: SalesOrder;
+  lines: SalesOrderLine[];
+}
+
+export interface CreateOrderLineInput {
+  stock_item_id: string;
+  godown_id?: string | null;
+  ordered_qty: string;
+  unit_rate: string;
+  discount_kind?: string | null;
+  discount_value?: string | null;
+}
+
+export interface CreatePurchaseOrderInput {
+  order_number: string;
+  order_date: string;
+  due_date?: string | null;
+  party_ledger_id: string;
+  reference_no?: string | null;
+  narration?: string | null;
+  lines: CreateOrderLineInput[];
+}
+
+export interface CreateSalesOrderInput {
+  order_number: string;
+  order_date: string;
+  due_date?: string | null;
+  party_ledger_id: string;
+  reference_no?: string | null;
+  narration?: string | null;
+  lines: CreateOrderLineInput[];
+}
+
+export interface FulfillOrderLineInput {
+  order_line_id: string;
+  fulfill_qty: string;
+  unit_rate?: string | null;
+  godown_id?: string | null;
+  batch_number?: string | null;
+  mfg_date?: string | null;
+  expiry_date?: string | null;
+}
+
+export interface ConvertPurchaseOrderInput {
+  order_id: string;
+  invoice_date: string;
+  series_id: string;
+  commercial_account_ledger_id?: string | null;
+  lines: FulfillOrderLineInput[];
+  tax_lines?: any[] | null;
+  narration?: string | null;
+  reference_no?: string | null;
+}
+
+export interface ConvertSalesOrderInput {
+  order_id: string;
+  invoice_date: string;
+  series_id: string;
+  commercial_account_ledger_id?: string | null;
+  lines: FulfillOrderLineInput[];
+  tax_lines?: any[] | null;
+  narration?: string | null;
+  reference_no?: string | null;
+}
+
+export interface OrderFulfillmentRecord {
+  id: string;
+  company_id: string;
+  order_type: string;
+  order_id: string;
+  order_line_id: string;
+  voucher_id: string;
+  commercial_doc_id: string | null;
+  fulfilled_qty: string;
+  fulfillment_date: string;
+  is_cancelled: boolean;
+  created_at: string;
+}
+
+export interface ConvertOrderResult {
+  voucher_id: string;
+  voucher_number: string;
+  order_status: string;
+  fulfillments: OrderFulfillmentRecord[];
+}
+
+export interface PendingOrderItem {
+  order_id: string;
+  order_number: string;
+  order_date: string;
+  due_date: string | null;
+  party_ledger_id: string;
+  party_name: string;
+  stock_item_id: string;
+  stock_item_name: string;
+  godown_id: string | null;
+  godown_name: string | null;
+  ordered_qty: string;
+  fulfilled_qty: string;
+  pending_qty: string;
+  unit_rate: string;
+  pending_amount: string;
+  is_overdue: boolean;
+}
+
+export interface PendingOrdersReport {
+  company_id: string;
+  order_type: string;
+  as_of_date: string;
+  items: PendingOrderItem[];
+  total_pending_qty: string;
+  total_pending_amount: string;
+}
+
+export async function listPurchaseOrders(
+  statusFilter?: string,
+  companyId?: string
+): Promise<PurchaseOrder[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<PurchaseOrder[]>('list_purchase_orders', {
+    companyId: companyId || null,
+    statusFilter: statusFilter || null,
+  });
+}
+
+export async function createPurchaseOrder(
+  input: CreatePurchaseOrderInput,
+  companyId?: string
+): Promise<PurchaseOrderWithLines> {
+  if (!isTauriEnv()) {
+    return {
+      order: {
+        id: 'po_mock_1',
+        company_id: companyId || 'cmp_sample',
+        order_number: input.order_number,
+        order_date: input.order_date,
+        due_date: input.due_date || null,
+        party_ledger_id: input.party_ledger_id,
+        party_ledger_name: 'Mock Supplier',
+        reference_no: input.reference_no || null,
+        narration: input.narration || null,
+        status: 'Open',
+        total_amount: '50000.00',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      lines: [],
+    };
+  }
+  return await invoke<PurchaseOrderWithLines>('create_purchase_order', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function getPurchaseOrder(
+  orderId: string,
+  companyId?: string
+): Promise<PurchaseOrderWithLines> {
+  if (!isTauriEnv()) {
+    return {
+      order: {
+        id: orderId,
+        company_id: companyId || 'cmp_sample',
+        order_number: 'PO-001',
+        order_date: '2026-05-01',
+        due_date: '2026-05-15',
+        party_ledger_id: 'led_sup_1',
+        party_ledger_name: 'Acme Supplies',
+        reference_no: 'REF-101',
+        narration: 'Urgent order',
+        status: 'Open',
+        total_amount: '15000.00',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      lines: [],
+    };
+  }
+  return await invoke<PurchaseOrderWithLines>('get_purchase_order', {
+    companyId: companyId || null,
+    orderId,
+  });
+}
+
+export async function cancelPurchaseOrder(
+  orderId: string,
+  reason: string,
+  companyId?: string
+): Promise<void> {
+  if (!isTauriEnv()) {
+    return;
+  }
+  await invoke<void>('cancel_purchase_order', {
+    companyId: companyId || null,
+    orderId,
+    reason,
+  });
+}
+
+export async function convertPurchaseOrderToInvoice(
+  input: ConvertPurchaseOrderInput,
+  companyId?: string
+): Promise<ConvertOrderResult> {
+  if (!isTauriEnv()) {
+    return {
+      voucher_id: 'vch_inv_mock',
+      voucher_number: 'PUR-001',
+      order_status: 'Fulfilled',
+      fulfillments: [],
+    };
+  }
+  return await invoke<ConvertOrderResult>('convert_purchase_order_to_invoice', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function listSalesOrders(
+  statusFilter?: string,
+  companyId?: string
+): Promise<SalesOrder[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<SalesOrder[]>('list_sales_orders', {
+    companyId: companyId || null,
+    statusFilter: statusFilter || null,
+  });
+}
+
+export async function createSalesOrder(
+  input: CreateSalesOrderInput,
+  companyId?: string
+): Promise<SalesOrderWithLines> {
+  if (!isTauriEnv()) {
+    return {
+      order: {
+        id: 'so_mock_1',
+        company_id: companyId || 'cmp_sample',
+        order_number: input.order_number,
+        order_date: input.order_date,
+        due_date: input.due_date || null,
+        party_ledger_id: input.party_ledger_id,
+        party_ledger_name: 'Mock Customer',
+        reference_no: input.reference_no || null,
+        narration: input.narration || null,
+        status: 'Open',
+        total_amount: '40000.00',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      lines: [],
+    };
+  }
+  return await invoke<SalesOrderWithLines>('create_sales_order', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function getSalesOrder(
+  orderId: string,
+  companyId?: string
+): Promise<SalesOrderWithLines> {
+  if (!isTauriEnv()) {
+    return {
+      order: {
+        id: orderId,
+        company_id: companyId || 'cmp_sample',
+        order_number: 'SO-001',
+        order_date: '2026-05-01',
+        due_date: '2026-05-20',
+        party_ledger_id: 'led_cust_1',
+        party_ledger_name: 'Apex Traders',
+        reference_no: 'PO-CLIENT-99',
+        narration: 'Customer order',
+        status: 'Open',
+        total_amount: '25000.00',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      lines: [],
+    };
+  }
+  return await invoke<SalesOrderWithLines>('get_sales_order', {
+    companyId: companyId || null,
+    orderId,
+  });
+}
+
+export async function cancelSalesOrder(
+  orderId: string,
+  reason: string,
+  companyId?: string
+): Promise<void> {
+  if (!isTauriEnv()) {
+    return;
+  }
+  await invoke<void>('cancel_sales_order', {
+    companyId: companyId || null,
+    orderId,
+    reason,
+  });
+}
+
+export async function convertSalesOrderToInvoice(
+  input: ConvertSalesOrderInput,
+  companyId?: string
+): Promise<ConvertOrderResult> {
+  if (!isTauriEnv()) {
+    return {
+      voucher_id: 'vch_sales_mock',
+      voucher_number: 'SALES-001',
+      order_status: 'Fulfilled',
+      fulfillments: [],
+    };
+  }
+  return await invoke<ConvertOrderResult>('convert_sales_order_to_invoice', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function getPendingPurchaseOrders(
+  asOfDate: string,
+  companyId?: string
+): Promise<PendingOrdersReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'cmp_sample',
+      order_type: 'PurchaseOrder',
+      as_of_date: asOfDate,
+      items: [],
+      total_pending_qty: '0',
+      total_pending_amount: '0.00',
+    };
+  }
+  return await invoke<PendingOrdersReport>('get_pending_purchase_orders', {
+    companyId: companyId || null,
+    asOfDate,
+  });
+}
+
+export async function getPendingSalesOrders(
+  asOfDate: string,
+  companyId?: string
+): Promise<PendingOrdersReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'cmp_sample',
+      order_type: 'SalesOrder',
+      as_of_date: asOfDate,
+      items: [],
+      total_pending_qty: '0',
+      total_pending_amount: '0.00',
+    };
+  }
+  return await invoke<PendingOrdersReport>('get_pending_sales_orders', {
+    companyId: companyId || null,
+    asOfDate,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 14: Security Control & Role-Based Access Control (RBAC) API
+// ---------------------------------------------------------------------------
+
+export type UserRole = 'Admin' | 'Accountant' | 'DataEntry' | 'Auditor';
+
+export interface CompanyUser {
+  id: string;
+  company_id: string;
+  username: string;
+  role: string;
+  is_active: number;
+  created_at: string;
+  last_login_at?: string | null;
+}
+
+export interface AuthSessionInfo {
+  user_id: string;
+  username: string;
+  role: UserRole;
+  logged_in_at: string;
+}
+
+export interface SecurityStatusDto {
+  security_enabled: boolean;
+  has_users: boolean;
+  active_user?: AuthSessionInfo | null;
+}
+
+export interface EnableSecurityInput {
+  company_id: string;
+  admin_username: string;
+  admin_password: string;
+}
+
+export interface LoginInput {
+  company_id: string;
+  username: string;
+  password: string;
+}
+
+export interface CreateUserInput {
+  company_id: string;
+  username: string;
+  password: string;
+  role: UserRole;
+}
+
+export interface UpdateUserRoleInput {
+  company_id: string;
+  user_id: string;
+  role: UserRole;
+}
+
+export interface UpdateUserPasswordInput {
+  company_id: string;
+  user_id: string;
+  new_password: string;
+}
+
+export interface DeactivateUserInput {
+  company_id: string;
+  user_id: string;
+}
+
+export async function getCompanySecurityStatus(
+  companyId?: string
+): Promise<SecurityStatusDto> {
+  if (!isTauriEnv()) {
+    return {
+      security_enabled: false,
+      has_users: false,
+      active_user: null,
+    };
+  }
+  return await invoke<SecurityStatusDto>('get_company_security_status', {
+    companyId: companyId || null,
+  });
+}
+
+export async function enableCompanySecurity(
+  input: EnableSecurityInput
+): Promise<AuthSessionInfo> {
+  if (!isTauriEnv()) {
+    return {
+      user_id: 'usr_admin_mock',
+      username: input.admin_username,
+      role: 'Admin',
+      logged_in_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<AuthSessionInfo>('enable_company_security', { input });
+}
+
+export async function authenticateCompanyUser(
+  input: LoginInput
+): Promise<AuthSessionInfo> {
+  if (!isTauriEnv()) {
+    return {
+      user_id: 'usr_mock',
+      username: input.username,
+      role: 'Admin',
+      logged_in_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<AuthSessionInfo>('authenticate_company_user', { input });
+}
+
+export async function logoutCompanySession(companyId?: string): Promise<void> {
+  if (!isTauriEnv()) return;
+  await invoke<void>('logout_company_session', { companyId: companyId || null });
+}
+
+export async function listCompanyUsers(
+  companyId?: string
+): Promise<CompanyUser[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<CompanyUser[]>('list_company_users', {
+    companyId: companyId || null,
+  });
+}
+
+export async function createCompanyUser(
+  input: CreateUserInput
+): Promise<CompanyUser> {
+  if (!isTauriEnv()) {
+    return {
+      id: 'usr_new_mock',
+      company_id: input.company_id,
+      username: input.username,
+      role: input.role,
+      is_active: 1,
+      created_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<CompanyUser>('create_company_user', { input });
+}
+
+export async function updateCompanyUserRole(
+  input: UpdateUserRoleInput
+): Promise<CompanyUser> {
+  if (!isTauriEnv()) {
+    return {
+      id: input.user_id,
+      company_id: input.company_id,
+      username: 'mock_user',
+      role: input.role,
+      is_active: 1,
+      created_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<CompanyUser>('update_company_user_role', { input });
+}
+
+export async function updateCompanyUserPassword(
+  input: UpdateUserPasswordInput
+): Promise<void> {
+  if (!isTauriEnv()) return;
+  await invoke<void>('update_company_user_password', { input });
+}
+
+export async function deactivateCompanyUser(
+  input: DeactivateUserInput
+): Promise<void> {
+  if (!isTauriEnv()) return;
+  await invoke<void>('deactivate_company_user', { input });
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 14: Manufacturing Bill of Materials (BOM) & Production Journal API
+// ---------------------------------------------------------------------------
+
+export interface BomComponentDetail {
+  id: string;
+  raw_stock_item_id: string;
+  raw_stock_item_name: string;
+  source_godown_id?: string | null;
+  source_godown_name?: string | null;
+  required_qty: string;
+}
+
+export interface BomDetail {
+  id: string;
+  company_id: string;
+  finished_stock_item_id: string;
+  finished_stock_item_name: string;
+  bom_name: string;
+  base_output_qty: string;
+  default_godown_id?: string | null;
+  default_godown_name?: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  components: BomComponentDetail[];
+}
+
+export interface CreateBomComponentInput {
+  raw_stock_item_id: string;
+  source_godown_id?: string | null;
+  required_qty: string;
+}
+
+export interface CreateBomInput {
+  company_id: string;
+  finished_stock_item_id: string;
+  bom_name: string;
+  base_output_qty: string;
+  default_godown_id?: string | null;
+  components: CreateBomComponentInput[];
+}
+
+export interface AdditionalOverheadCostInput {
+  overhead_ledger_id: string;
+  amount: string;
+  description?: string | null;
+}
+
+export interface ExecuteManufacturingJournalInput {
+  company_id: string;
+  bom_id: string;
+  production_date: string;
+  produced_qty: string;
+  destination_godown_id: string;
+  batch_number?: string | null;
+  mfg_date?: string | null;
+  expiry_date?: string | null;
+  additional_overheads: AdditionalOverheadCostInput[];
+  narration?: string | null;
+}
+
+export interface ConsumedComponentResult {
+  raw_stock_item_id: string;
+  raw_stock_item_name: string;
+  godown_id: string;
+  consumed_qty: string;
+  consumed_cost: string;
+}
+
+export interface ManufacturingJournalResult {
+  stock_voucher_id: string;
+  finished_goods_cost_layer_id: string;
+  produced_qty: string;
+  landed_unit_cost: string;
+  total_raw_material_cost: string;
+  total_overhead_cost: string;
+  total_manufacturing_cost: string;
+  consumed_components: ConsumedComponentResult[];
+}
+
+export async function listBoms(
+  companyId?: string,
+  finishedStockItemId?: string
+): Promise<BomDetail[]> {
+  if (!isTauriEnv()) {
+    return [];
+  }
+  return await invoke<BomDetail[]>('list_boms', {
+    companyId: companyId || null,
+    finishedStockItemId: finishedStockItemId || null,
+  });
+}
+
+export async function getBomDetail(
+  bomId: string,
+  companyId?: string
+): Promise<BomDetail> {
+  if (!isTauriEnv()) {
+    return {
+      id: bomId,
+      company_id: companyId || 'cmp_sample',
+      finished_stock_item_id: 'item_sample',
+      finished_stock_item_name: 'Sample Finished Item',
+      bom_name: 'Standard Recipe',
+      base_output_qty: '1',
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      components: [],
+    };
+  }
+  return await invoke<BomDetail>('get_bom_detail', {
+    companyId: companyId || null,
+    bomId,
+  });
+}
+
+export async function createBom(input: CreateBomInput): Promise<BomDetail> {
+  if (!isTauriEnv()) {
+    return {
+      id: 'bom_new_mock',
+      company_id: input.company_id,
+      finished_stock_item_id: input.finished_stock_item_id,
+      finished_stock_item_name: 'Mock Item',
+      bom_name: input.bom_name,
+      base_output_qty: input.base_output_qty,
+      is_active: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      components: [],
+    };
+  }
+  return await invoke<BomDetail>('create_bom', { input });
+}
+
+export async function executeManufacturingJournal(
+  input: ExecuteManufacturingJournalInput
+): Promise<ManufacturingJournalResult> {
+  if (!isTauriEnv()) {
+    return {
+      stock_voucher_id: 'sv_mfg_mock',
+      finished_goods_cost_layer_id: 'layer_fg_mock',
+      produced_qty: input.produced_qty,
+      landed_unit_cost: '100.0000',
+      total_raw_material_cost: '90.00',
+      total_overhead_cost: '10.00',
+      total_manufacturing_cost: '100.00',
+      consumed_components: [],
+    };
+  }
+  return await invoke<ManufacturingJournalResult>('execute_manufacturing_journal', {
+    input,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 15: Indian Payroll Engine, Statutory PF/ESI/PT & Payslip PDF
+// ---------------------------------------------------------------------------
+
+export interface Employee {
+  id: string;
+  company_id: string;
+  employee_code: string;
+  name: string;
+  department_group_id?: string | null;
+  designation?: string | null;
+  date_of_joining: string;
+  date_of_exit?: string | null;
+  pan?: string | null;
+  uan?: string | null;
+  esic_number?: string | null;
+  bank_account_no?: string | null;
+  bank_ifsc?: string | null;
+  basic_salary: string;
+  hra: string;
+  other_allowances: string;
+  pf_applicable: boolean;
+  esi_applicable: boolean;
+  pt_applicable: boolean;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface CreateEmployeeInput {
+  employee_code: string;
+  name: string;
+  department_group_id?: string | null;
+  designation?: string | null;
+  date_of_joining: string;
+  date_of_exit?: string | null;
+  pan?: string | null;
+  uan?: string | null;
+  esic_number?: string | null;
+  bank_account_no?: string | null;
+  bank_ifsc?: string | null;
+  basic_salary: string;
+  hra?: string;
+  other_allowances?: string;
+  pf_applicable?: boolean;
+  esi_applicable?: boolean;
+  pt_applicable?: boolean;
+}
+
+export interface PayrollAttendanceInput {
+  employee_id: string;
+  total_working_days: string;
+  days_present: string;
+  other_deductions?: string;
+}
+
+export interface PayrollRunInput {
+  pay_period: string;
+  run_date: string;
+  narration?: string | null;
+  attendances: PayrollAttendanceInput[];
+}
+
+export interface ComputedPayslipPreview {
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  designation?: string | null;
+  total_working_days: string;
+  days_present: string;
+  lop_days: string;
+  prorated_basic: string;
+  prorated_hra: string;
+  prorated_allowances: string;
+  gross_earnings: string;
+  employee_pf: string;
+  employer_epf: string;
+  employer_eps: string;
+  employee_esi: string;
+  employer_esi: string;
+  professional_tax: string;
+  other_deductions: string;
+  total_deductions: string;
+  net_pay: string;
+}
+
+export interface PayrollPreviewResult {
+  pay_period: string;
+  total_gross: string;
+  total_deductions: string;
+  total_employer_contributions: string;
+  total_net_pay: string;
+  total_employee_pf: string;
+  total_employer_epf: string;
+  total_employer_eps: string;
+  total_employee_esi: string;
+  total_employer_esi: string;
+  total_pt: string;
+  payslips: ComputedPayslipPreview[];
+}
+
+export interface PayrollRun {
+  id: string;
+  company_id: string;
+  pay_period: string;
+  run_date: string;
+  voucher_id: string;
+  total_gross: string;
+  total_deductions: string;
+  total_employer_contributions: string;
+  total_net_pay: string;
+  status: 'Posted' | 'Cancelled' | string;
+  created_at: string;
+}
+
+export interface PayrollPayslip {
+  id: string;
+  company_id: string;
+  payroll_run_id: string;
+  employee_id: string;
+  total_working_days: string;
+  days_present: string;
+  lop_days: string;
+  prorated_basic: string;
+  prorated_hra: string;
+  prorated_allowances: string;
+  gross_earnings: string;
+  employee_pf: string;
+  employer_epf: string;
+  employer_eps: string;
+  employee_esi: string;
+  employer_esi: string;
+  professional_tax: string;
+  other_deductions: string;
+  total_deductions: string;
+  net_pay: string;
+  created_at: string;
+}
+
+export interface PayrollRunResult {
+  run: PayrollRun;
+  voucher_number: string;
+  payslips: PayrollPayslip[];
+}
+
+export interface PayrollStatutoryRow {
+  payslip_id: string;
+  employee_id: string;
+  employee_code: string;
+  employee_name: string;
+  pan?: string | null;
+  uan?: string | null;
+  esic_number?: string | null;
+  total_working_days: string;
+  days_present: string;
+  lop_days: string;
+  gross_earnings: string;
+  employee_pf: string;
+  employer_epf: string;
+  employer_eps: string;
+  employee_esi: string;
+  employer_esi: string;
+  professional_tax: string;
+  other_deductions: string;
+  total_deductions: string;
+  net_pay: string;
+}
+
+export interface PayrollStatutorySummary {
+  pay_period: string;
+  run_id?: string | null;
+  run_status?: string | null;
+  voucher_id?: string | null;
+  total_employees: number;
+  total_gross: string;
+  total_employee_pf: string;
+  total_employer_epf: string;
+  total_employer_eps: string;
+  total_pf_remittance: string;
+  total_employee_esi: string;
+  total_employer_esi: string;
+  total_esi_remittance: string;
+  total_pt_remittance: string;
+  total_net_pay: string;
+  rows: PayrollStatutoryRow[];
+}
+
+export async function listEmployees(
+  companyId?: string,
+  includeInactive = false
+): Promise<Employee[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<Employee[]>('list_employees', {
+    companyId: companyId || null,
+    includeInactive,
+  });
+}
+
+export async function createEmployee(
+  input: CreateEmployeeInput,
+  companyId?: string
+): Promise<Employee> {
+  if (!isTauriEnv()) {
+    return {
+      id: `emp_${Date.now()}`,
+      company_id: companyId || 'cmp_sample',
+      employee_code: input.employee_code,
+      name: input.name,
+      designation: input.designation || null,
+      date_of_joining: input.date_of_joining,
+      basic_salary: input.basic_salary,
+      hra: input.hra || '0',
+      other_allowances: input.other_allowances || '0',
+      pf_applicable: input.pf_applicable ?? true,
+      esi_applicable: input.esi_applicable ?? false,
+      pt_applicable: input.pt_applicable ?? true,
+      is_active: true,
+      created_at: new Date().toISOString(),
+    };
+  }
+  return await invoke<Employee>('create_employee', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function deactivateEmployee(
+  employeeId: string,
+  companyId?: string
+): Promise<void> {
+  if (!isTauriEnv()) return;
+  return await invoke<void>('deactivate_employee', {
+    companyId: companyId || null,
+    employeeId,
+  });
+}
+
+export async function previewPayrollRun(
+  input: PayrollRunInput,
+  companyId?: string
+): Promise<PayrollPreviewResult> {
+  if (!isTauriEnv()) {
+    return {
+      pay_period: input.pay_period,
+      total_gross: '0',
+      total_deductions: '0',
+      total_employer_contributions: '0',
+      total_net_pay: '0',
+      total_employee_pf: '0',
+      total_employer_epf: '0',
+      total_employer_eps: '0',
+      total_employee_esi: '0',
+      total_employer_esi: '0',
+      total_pt: '0',
+      payslips: [],
+    };
+  }
+  return await invoke<PayrollPreviewResult>('preview_payroll_run', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function executePayrollRun(
+  input: PayrollRunInput,
+  companyId?: string
+): Promise<PayrollRunResult> {
+  if (!isTauriEnv()) {
+    throw new Error('executePayrollRun requires Tauri backend');
+  }
+  return await invoke<PayrollRunResult>('execute_payroll_run', {
+    companyId: companyId || null,
+    input,
+  });
+}
+
+export async function listPayrollRuns(companyId?: string): Promise<PayrollRun[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<PayrollRun[]>('list_payroll_runs', {
+    companyId: companyId || null,
+  });
+}
+
+export async function getPayrollStatutorySummary(
+  payPeriod: string,
+  companyId?: string
+): Promise<PayrollStatutorySummary> {
+  if (!isTauriEnv()) {
+    return {
+      pay_period: payPeriod,
+      total_employees: 0,
+      total_gross: '0',
+      total_employee_pf: '0',
+      total_employer_epf: '0',
+      total_employer_eps: '0',
+      total_pf_remittance: '0',
+      total_employee_esi: '0',
+      total_employer_esi: '0',
+      total_esi_remittance: '0',
+      total_pt_remittance: '0',
+      total_net_pay: '0',
+      rows: [],
+    };
+  }
+  return await invoke<PayrollStatutorySummary>('get_payroll_statutory_summary', {
+    companyId: companyId || null,
+    payPeriod,
+  });
+}
+
+export async function exportPayslipPdf(
+  payslipId: string,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<number[]>('export_payslip_pdf', {
+    companyId: companyId || null,
+    payslipId,
+  });
+}
+
+export async function exportPayrollCsv(
+  payPeriod: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) return '';
+  return await invoke<string>('export_payroll_csv', {
+    companyId: companyId || null,
+    payPeriod,
+  });
+}
