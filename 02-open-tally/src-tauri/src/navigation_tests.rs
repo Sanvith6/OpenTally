@@ -8,7 +8,7 @@ use crate::vouchers::service::{VoucherDraftService, VoucherPostingService, Vouch
 use rust_decimal::Decimal;
 use std::sync::Arc;
 
-async fn setup_test_state() -> (AppState, String) {
+async fn setup_test_state() -> (tempfile::TempDir, AppState, String) {
     let temp_dir = tempfile::tempdir().unwrap();
     let db_path = temp_dir.path().join("nav_test.db");
     let db = DatabaseManager::init(&db_path).await.unwrap();
@@ -76,12 +76,12 @@ async fn setup_test_state() -> (AppState, String) {
     .await
     .unwrap();
 
-    (state, comp.id)
+    (temp_dir, state, comp.id)
 }
 
 #[tokio::test]
 async fn test_global_goto_search_multi_company_isolation() {
-    let (state, comp1_id) = setup_test_state().await;
+    let (_temp_dir, state, comp1_id) = setup_test_state().await;
 
     // Create Company 2
     let comp2 = crate::company::service::CompanyService::create_company(
@@ -170,7 +170,7 @@ async fn test_global_goto_search_multi_company_isolation() {
 
 #[tokio::test]
 async fn test_get_voucher_full_detail_end_to_end() {
-    let (state, comp_id) = setup_test_state().await;
+    let (_temp_dir, state, comp_id) = setup_test_state().await;
 
     // Create a series for payment
     let series = VoucherSeriesService::create_series(
