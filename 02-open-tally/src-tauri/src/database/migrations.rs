@@ -2782,6 +2782,1934 @@ pub async fn run_sprint6_stage18_sales_migration(
     Ok(())
 }
 
+/// Milestone 1 commercial posting migration.
+/// Expands sales_documents.status check to ('draft','posted','cancelled','reversed')
+/// and creates purchase_documents and purchase_document_lines.
+pub async fn run_milestone1_commercial_posting_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "0.4.7-commercial" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.6-sprint6" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.6-sprint6' for Commercial Posting migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(r#"
+        CREATE TABLE sales_documents_dg_tmp (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            party_id TEXT NOT NULL,
+            invoice_date TEXT NOT NULL,
+            document_reference TEXT,
+            due_date TEXT NOT NULL,
+            due_date_source TEXT NOT NULL CHECK (due_date_source IN ('party_default','explicit_override')),
+            due_date_override_reason TEXT,
+            narration TEXT,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','posted','cancelled','reversed')),
+            subtotal TEXT NOT NULL DEFAULT '0',
+            discount_total TEXT NOT NULL DEFAULT '0',
+            additional_charges TEXT NOT NULL DEFAULT '0',
+            net_total TEXT NOT NULL DEFAULT '0',
+            tax_status TEXT NOT NULL DEFAULT 'inactive',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, voucher_id),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_id) REFERENCES party_profiles(company_id, id) ON DELETE RESTRICT
+        );
+
+        INSERT INTO sales_documents_dg_tmp SELECT
+            id, company_id, voucher_id, party_id, invoice_date, document_reference,
+            due_date, due_date_source, due_date_override_reason, narration, status,
+            subtotal, discount_total, additional_charges, net_total, tax_status,
+            created_at, updated_at
+        FROM sales_documents;
+
+        DROP TABLE sales_documents;
+
+        ALTER TABLE sales_documents_dg_tmp RENAME TO sales_documents;
+
+        CREATE INDEX idx_sales_documents_company_date ON sales_documents(company_id, invoice_date, updated_at);
+        CREATE INDEX idx_sales_documents_party ON sales_documents(company_id, party_id, invoice_date);
+
+        CREATE TABLE purchase_documents (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            party_id TEXT NOT NULL,
+            bill_date TEXT NOT NULL,
+            supplier_invoice_no TEXT,
+            due_date TEXT NOT NULL,
+            due_date_source TEXT NOT NULL CHECK (due_date_source IN ('party_default','explicit_override')),
+            due_date_override_reason TEXT,
+            narration TEXT,
+            status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','posted','cancelled','reversed')),
+            subtotal TEXT NOT NULL DEFAULT '0',
+            discount_total TEXT NOT NULL DEFAULT '0',
+            additional_charges TEXT NOT NULL DEFAULT '0',
+            net_total TEXT NOT NULL DEFAULT '0',
+            tax_status TEXT NOT NULL DEFAULT 'inactive',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, voucher_id),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_id) REFERENCES party_profiles(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE purchase_document_lines (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            purchase_document_id TEXT NOT NULL,
+            line_number INTEGER NOT NULL,
+            description TEXT NOT NULL,
+            stock_item_id TEXT,
+            unit_id TEXT,
+            godown_id TEXT,
+            quantity TEXT NOT NULL,
+            rate TEXT NOT NULL,
+            discount_kind TEXT NOT NULL CHECK (discount_kind IN ('none','amount','percentage')),
+            discount_value TEXT NOT NULL,
+            discount_amount TEXT NOT NULL,
+            line_amount TEXT NOT NULL,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            UNIQUE (company_id, purchase_document_id, line_number),
+            FOREIGN KEY (company_id, purchase_document_id) REFERENCES purchase_documents(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, unit_id) REFERENCES units(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, godown_id) REFERENCES godowns(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX idx_purchase_documents_company_date ON purchase_documents(company_id, bill_date, updated_at);
+        CREATE INDEX idx_purchase_documents_party ON purchase_documents(company_id, party_id, bill_date);
+        CREATE INDEX idx_purchase_lines_document ON purchase_document_lines(company_id, purchase_document_id, line_number);
+    "#).execute(&mut *tx).await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = '0.4.7-commercial', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 2 Bill-Wise Outstanding Tracking (AR/AP) migration.
+/// Creates table bill_allocations and indexes for party bill tracking.
+pub async fn run_milestone2_billwise_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "0.5.0-billwise" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.4.7-commercial" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.4.7-commercial' for Bill-Wise Tracking migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(r#"
+        CREATE TABLE IF NOT EXISTS bill_allocations (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            voucher_line_id TEXT NOT NULL,
+            party_ledger_id TEXT NOT NULL,
+            bill_name TEXT NOT NULL,
+            allocation_type TEXT NOT NULL CHECK (allocation_type IN ('NewRef', 'AgstRef', 'Advance', 'OnAccount')),
+            amount TEXT NOT NULL CHECK (
+                length(amount) >= 1
+                AND length(amount) <= 30
+                AND amount NOT GLOB '*[^0-9.]*'
+                AND amount NOT GLOB '*..*'
+                AND amount NOT GLOB '.*'
+                AND amount NOT GLOB '*.'
+            ),
+            dr_cr TEXT NOT NULL CHECK (dr_cr IN ('Dr', 'Cr')),
+            bill_date TEXT NOT NULL CHECK (bill_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            due_date TEXT CHECK (due_date IS NULL OR due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            is_cancelled INTEGER NOT NULL DEFAULT 0 CHECK (is_cancelled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (company_id, id),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_line_id) REFERENCES voucher_lines(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bill_allocations_party ON bill_allocations(company_id, party_ledger_id, bill_name);
+        CREATE INDEX IF NOT EXISTS idx_bill_allocations_voucher ON bill_allocations(company_id, voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_bill_allocations_due ON bill_allocations(company_id, due_date);
+        CREATE INDEX IF NOT EXISTS idx_bill_allocations_status ON bill_allocations(company_id, is_cancelled, allocation_type);
+    "#).execute(&mut *tx).await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = '0.5.0-billwise', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 3 Indian GST Core Engine migration.
+/// Creates tables company_gst_profiles, ledger_gst_profiles, hsn_sac_codes,
+/// item_gst_mappings, gst_ledger_mappings, voucher_gst_details and associated indexes.
+pub async fn run_milestone3_gst_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v0.6.0-gst" || current == "0.6.0-gst" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "0.5.0-billwise" && current != "v0.5.0-billwise" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version '0.5.0-billwise' for GST migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS company_gst_profiles (
+            company_id TEXT NOT NULL PRIMARY KEY,
+            gstin TEXT CHECK (gstin IS NULL OR length(gstin) = 15),
+            state_code TEXT NOT NULL CHECK (length(state_code) = 2 AND state_code NOT GLOB '*[^0-9]*'),
+            registration_type TEXT NOT NULL CHECK (registration_type IN ('Regular', 'Composition', 'Unregistered')),
+            gst_enabled INTEGER NOT NULL DEFAULT 1 CHECK (gst_enabled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS ledger_gst_profiles (
+            id TEXT NOT NULL PRIMARY KEY,
+            company_id TEXT NOT NULL,
+            ledger_id TEXT NOT NULL,
+            gstin TEXT CHECK (gstin IS NULL OR length(gstin) = 15),
+            state_code TEXT NOT NULL CHECK (length(state_code) = 2 AND state_code NOT GLOB '*[^0-9]*'),
+            registration_type TEXT NOT NULL CHECK (registration_type IN ('Regular', 'Composition', 'Unregistered', 'Consumer')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, ledger_id) REFERENCES ledgers(company_id, id) ON DELETE CASCADE,
+            UNIQUE (company_id, ledger_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS hsn_sac_codes (
+            id TEXT NOT NULL PRIMARY KEY,
+            company_id TEXT NOT NULL,
+            code TEXT NOT NULL,
+            description TEXT,
+            code_type TEXT NOT NULL CHECK (code_type IN ('HSN', 'SAC')),
+            default_gst_rate TEXT NOT NULL CHECK (length(default_gst_rate) > 0 AND default_gst_rate NOT GLOB '*[^0-9.]*' AND default_gst_rate GLOB '*.*' AND length(substr(default_gst_rate, instr(default_gst_rate, '.') + 1)) <= 4),
+            cess_rate TEXT NOT NULL DEFAULT '0.00' CHECK (length(cess_rate) > 0 AND cess_rate NOT GLOB '*[^0-9.]*' AND cess_rate GLOB '*.*' AND length(substr(cess_rate, instr(cess_rate, '.') + 1)) <= 4),
+            effective_from TEXT NOT NULL CHECK (effective_from GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            UNIQUE (company_id, code)
+        );
+
+        CREATE TABLE IF NOT EXISTS item_gst_mappings (
+            id TEXT NOT NULL PRIMARY KEY,
+            company_id TEXT NOT NULL,
+            stock_item_id TEXT NOT NULL,
+            hsn_sac_code_id TEXT NOT NULL,
+            gst_rate TEXT NOT NULL CHECK (length(gst_rate) > 0 AND gst_rate NOT GLOB '*[^0-9.]*' AND gst_rate GLOB '*.*' AND length(substr(gst_rate, instr(gst_rate, '.') + 1)) <= 4),
+            cess_rate TEXT NOT NULL DEFAULT '0.00' CHECK (length(cess_rate) > 0 AND cess_rate NOT GLOB '*[^0-9.]*' AND cess_rate GLOB '*.*' AND length(substr(cess_rate, instr(cess_rate, '.') + 1)) <= 4),
+            taxability TEXT NOT NULL CHECK (taxability IN ('Taxable', 'Exempt', 'NilRated', 'NonGST')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (hsn_sac_code_id) REFERENCES hsn_sac_codes(id) ON DELETE RESTRICT,
+            UNIQUE (company_id, stock_item_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS gst_ledger_mappings (
+            company_id TEXT NOT NULL PRIMARY KEY,
+            output_cgst_ledger_id TEXT NOT NULL,
+            output_sgst_ledger_id TEXT NOT NULL,
+            output_igst_ledger_id TEXT NOT NULL,
+            output_cess_ledger_id TEXT,
+            input_cgst_ledger_id TEXT NOT NULL,
+            input_sgst_ledger_id TEXT NOT NULL,
+            input_igst_ledger_id TEXT NOT NULL,
+            input_cess_ledger_id TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, output_cgst_ledger_id) REFERENCES ledgers(company_id, id),
+            FOREIGN KEY (company_id, output_sgst_ledger_id) REFERENCES ledgers(company_id, id),
+            FOREIGN KEY (company_id, output_igst_ledger_id) REFERENCES ledgers(company_id, id),
+            FOREIGN KEY (company_id, input_cgst_ledger_id) REFERENCES ledgers(company_id, id),
+            FOREIGN KEY (company_id, input_sgst_ledger_id) REFERENCES ledgers(company_id, id),
+            FOREIGN KEY (company_id, input_igst_ledger_id) REFERENCES ledgers(company_id, id)
+        );
+
+        CREATE TABLE IF NOT EXISTS voucher_gst_details (
+            id TEXT NOT NULL PRIMARY KEY,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            party_ledger_id TEXT NOT NULL,
+            party_gstin TEXT CHECK (party_gstin IS NULL OR length(party_gstin) = 15),
+            hsn_sac_code TEXT NOT NULL,
+            place_of_supply_state_code TEXT NOT NULL CHECK (length(place_of_supply_state_code) = 2 AND place_of_supply_state_code NOT GLOB '*[^0-9]*'),
+            supply_type TEXT NOT NULL CHECK (supply_type IN ('IntraState', 'InterState')),
+            taxability TEXT NOT NULL CHECK (taxability IN ('Taxable', 'Exempt', 'NilRated', 'NonGST')),
+            taxable_value TEXT NOT NULL CHECK (length(taxable_value) > 0 AND taxable_value NOT GLOB '*[^0-9.]*' AND taxable_value GLOB '*.*' AND length(substr(taxable_value, instr(taxable_value, '.') + 1)) <= 4),
+            gst_rate TEXT NOT NULL CHECK (length(gst_rate) > 0 AND gst_rate NOT GLOB '*[^0-9.]*' AND gst_rate GLOB '*.*' AND length(substr(gst_rate, instr(gst_rate, '.') + 1)) <= 4),
+            cgst_amount TEXT NOT NULL CHECK (length(cgst_amount) > 0 AND cgst_amount NOT GLOB '*[^0-9.]*' AND cgst_amount GLOB '*.*' AND length(substr(cgst_amount, instr(cgst_amount, '.') + 1)) <= 4),
+            sgst_amount TEXT NOT NULL CHECK (length(sgst_amount) > 0 AND sgst_amount NOT GLOB '*[^0-9.]*' AND sgst_amount GLOB '*.*' AND length(substr(sgst_amount, instr(sgst_amount, '.') + 1)) <= 4),
+            igst_amount TEXT NOT NULL CHECK (length(igst_amount) > 0 AND igst_amount NOT GLOB '*[^0-9.]*' AND igst_amount GLOB '*.*' AND length(substr(igst_amount, instr(igst_amount, '.') + 1)) <= 4),
+            cess_amount TEXT NOT NULL CHECK (length(cess_amount) > 0 AND cess_amount NOT GLOB '*[^0-9.]*' AND cess_amount GLOB '*.*' AND length(substr(cess_amount, instr(cess_amount, '.') + 1)) <= 4),
+            is_reverse_charge INTEGER NOT NULL DEFAULT 0 CHECK (is_reverse_charge IN (0, 1)),
+            is_cancelled INTEGER NOT NULL DEFAULT 0 CHECK (is_cancelled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_ledger_id) REFERENCES ledgers(company_id, id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_ledger_gst_profiles_lookup ON ledger_gst_profiles(company_id, ledger_id);
+        CREATE INDEX IF NOT EXISTS idx_hsn_sac_codes_lookup ON hsn_sac_codes(company_id, code);
+        CREATE INDEX IF NOT EXISTS idx_item_gst_mappings_lookup ON item_gst_mappings(company_id, stock_item_id);
+        CREATE INDEX IF NOT EXISTS idx_voucher_gst_details_company_vch ON voucher_gst_details(company_id, voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_voucher_gst_details_party ON voucher_gst_details(company_id, party_ledger_id);
+        CREATE INDEX IF NOT EXISTS idx_voucher_gst_details_hsn ON voucher_gst_details(company_id, hsn_sac_code);
+        CREATE INDEX IF NOT EXISTS idx_voucher_gst_details_supply ON voucher_gst_details(company_id, supply_type, is_cancelled);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v0.6.0-gst', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 5 Commercial Notes (Credit Note / Debit Note) migration.
+/// Creates table commercial_note_linkages and bumps schema_version to 'v0.7.0-notes'.
+pub async fn run_milestone5_notes_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v0.7.0-notes" || current == "0.7.0-notes" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v0.6.0-gst" && current != "0.6.0-gst" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v0.6.0-gst' for Notes migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS commercial_note_linkages (
+            id TEXT NOT NULL PRIMARY KEY,
+            company_id TEXT NOT NULL,
+            note_voucher_id TEXT NOT NULL,
+            original_voucher_id TEXT NOT NULL,
+            note_type TEXT NOT NULL CHECK (note_type IN ('credit_note', 'debit_note')),
+            original_invoice_number TEXT NOT NULL,
+            original_invoice_date TEXT NOT NULL,
+            reason TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, note_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, original_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE RESTRICT,
+            UNIQUE (company_id, note_voucher_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_commercial_note_orig ON commercial_note_linkages(company_id, original_voucher_id);
+
+        CREATE TABLE IF NOT EXISTS database_backups (
+            id TEXT NOT NULL PRIMARY KEY,
+            backup_file TEXT NOT NULL,
+            destination_path TEXT NOT NULL,
+            sha256_checksum TEXT NOT NULL,
+            schema_version TEXT NOT NULL,
+            action TEXT NOT NULL CHECK (action IN ('BACKUP_CREATED', 'RESTORE_COMPLETED')),
+            size_bytes INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_database_backups_action ON database_backups(action, created_at);
+
+        CREATE TABLE IF NOT EXISTS database_backups (
+            id TEXT NOT NULL PRIMARY KEY,
+            backup_file TEXT NOT NULL,
+            destination_path TEXT NOT NULL,
+            sha256_checksum TEXT NOT NULL,
+            schema_version TEXT NOT NULL,
+            action TEXT NOT NULL CHECK (action IN ('BACKUP_CREATED', 'RESTORE_COMPLETED')),
+            size_bytes INTEGER NOT NULL,
+            created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_database_backups_action ON database_backups(action, created_at);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v0.7.0-notes', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 8 Banking and Bank Reconciliation Statement (BRS) migration.
+/// Creates table bank_allocations and bumps schema_version to 'v1.1.0-banking'.
+pub async fn run_milestone8_banking_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.1.0-banking" || current == "1.1.0-banking" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v0.7.0-notes" && current != "0.7.0-notes" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v0.7.0-notes' for Banking migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS bank_allocations (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            voucher_line_id TEXT NOT NULL,
+            bank_ledger_id TEXT NOT NULL,
+            transaction_type TEXT NOT NULL CHECK (transaction_type IN ('Cheque', 'NEFT', 'RTGS', 'IMPS', 'UPI', 'DD', 'Card', 'ECS', 'Other')),
+            instrument_number TEXT,
+            instrument_date TEXT CHECK (instrument_date IS NULL OR instrument_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            favouring_name TEXT,
+            bank_date TEXT CHECK (bank_date IS NULL OR bank_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            amount TEXT NOT NULL CHECK (
+                length(amount) >= 1
+                AND length(amount) <= 30
+                AND amount NOT GLOB '*[^0-9.]*'
+                AND amount NOT GLOB '*..*'
+                AND amount NOT GLOB '.*'
+                AND amount NOT GLOB '*.'
+            ),
+            dr_cr TEXT NOT NULL CHECK (dr_cr IN ('Dr', 'Cr')),
+            is_cancelled INTEGER NOT NULL DEFAULT 0 CHECK (is_cancelled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_line_id) REFERENCES voucher_lines(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, bank_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bank_alloc_reconcile ON bank_allocations(company_id, bank_ledger_id, bank_date);
+        CREATE INDEX IF NOT EXISTS idx_bank_alloc_voucher ON bank_allocations(company_id, voucher_id);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.1.0-banking', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 9 Indian TDS & TCS Engine, Challan Tracking & Form 26Q migration.
+/// Creates tables company_tds_profiles, ledger_tds_profiles, tds_nature_of_payments,
+/// and voucher_tds_details, and stamps schema_version to 'v1.2.0-tds'.
+pub async fn run_milestone9_tds_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.2.0-tds" || current == "1.2.0-tds" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.1.0-banking" && current != "1.1.0-banking" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.1.0-banking' for TDS migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS company_tds_profiles (
+            company_id TEXT PRIMARY KEY NOT NULL,
+            tan TEXT CHECK (tan IS NULL OR (length(tan) = 10 AND tan GLOB '[A-Z][A-Z][A-Z][A-Z][0-9][0-9][0-9][0-9][0-9][A-Z]')),
+            deductor_type TEXT NOT NULL DEFAULT 'Company' CHECK (deductor_type IN ('Company', 'Individual_HUF', 'Firm', 'Government', 'Other')),
+            tds_enabled INTEGER NOT NULL DEFAULT 0 CHECK (tds_enabled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS ledger_tds_profiles (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            ledger_id TEXT NOT NULL,
+            pan TEXT CHECK (pan IS NULL OR (length(pan) = 10 AND pan GLOB '[A-Z][A-Z][A-Z][A-Z][A-Z][0-9][0-9][0-9][0-9][A-Z]')),
+            deductee_type TEXT NOT NULL DEFAULT 'Company_Domestic' CHECK (deductee_type IN ('Individual_HUF', 'Company_Domestic', 'Company_Foreign', 'Firm', 'Other')),
+            lower_deduction_cert_no TEXT,
+            lower_deduction_rate TEXT CHECK (
+                lower_deduction_rate IS NULL OR (
+                    length(lower_deduction_rate) >= 1
+                    AND length(lower_deduction_rate) <= 30
+                    AND lower_deduction_rate NOT GLOB '*[^0-9.]*'
+                    AND lower_deduction_rate NOT GLOB '*..*'
+                    AND lower_deduction_rate NOT GLOB '.*'
+                    AND lower_deduction_rate NOT GLOB '*.'
+                )
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, ledger_id) REFERENCES ledgers(company_id, id) ON DELETE CASCADE,
+            CONSTRAINT uq_ledger_tds_profile UNIQUE (company_id, ledger_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS tds_nature_of_payments (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            section_code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            rate_individual_huf TEXT NOT NULL CHECK (
+                length(rate_individual_huf) >= 1
+                AND length(rate_individual_huf) <= 30
+                AND rate_individual_huf NOT GLOB '*[^0-9.]*'
+                AND rate_individual_huf NOT GLOB '*..*'
+                AND rate_individual_huf NOT GLOB '.*'
+                AND rate_individual_huf NOT GLOB '*.'
+            ),
+            rate_others TEXT NOT NULL CHECK (
+                length(rate_others) >= 1
+                AND length(rate_others) <= 30
+                AND rate_others NOT GLOB '*[^0-9.]*'
+                AND rate_others NOT GLOB '*..*'
+                AND rate_others NOT GLOB '.*'
+                AND rate_others NOT GLOB '*.'
+            ),
+            rate_without_pan TEXT NOT NULL DEFAULT '20.00' CHECK (
+                length(rate_without_pan) >= 1
+                AND length(rate_without_pan) <= 30
+                AND rate_without_pan NOT GLOB '*[^0-9.]*'
+                AND rate_without_pan NOT GLOB '*..*'
+                AND rate_without_pan NOT GLOB '.*'
+                AND rate_without_pan NOT GLOB '*.'
+            ),
+            single_threshold_limit TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(single_threshold_limit) >= 1
+                AND length(single_threshold_limit) <= 30
+                AND single_threshold_limit NOT GLOB '*[^0-9.]*'
+                AND single_threshold_limit NOT GLOB '*..*'
+                AND single_threshold_limit NOT GLOB '.*'
+                AND single_threshold_limit NOT GLOB '*.'
+            ),
+            aggregate_threshold_limit TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(aggregate_threshold_limit) >= 1
+                AND length(aggregate_threshold_limit) <= 30
+                AND aggregate_threshold_limit NOT GLOB '*[^0-9.]*'
+                AND aggregate_threshold_limit NOT GLOB '*..*'
+                AND aggregate_threshold_limit NOT GLOB '.*'
+                AND aggregate_threshold_limit NOT GLOB '*.'
+            ),
+            tds_payable_ledger_id TEXT,
+            is_tcs INTEGER NOT NULL DEFAULT 0 CHECK (is_tcs IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, tds_payable_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_tds_nature_of_payment UNIQUE (company_id, section_code)
+        );
+
+        CREATE TABLE IF NOT EXISTS voucher_tds_details (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            party_ledger_id TEXT NOT NULL,
+            party_pan TEXT,
+            section_code TEXT NOT NULL,
+            deductee_type TEXT NOT NULL,
+            gross_amount TEXT NOT NULL CHECK (
+                length(gross_amount) >= 1
+                AND length(gross_amount) <= 30
+                AND gross_amount NOT GLOB '*[^0-9.]*'
+                AND gross_amount NOT GLOB '*..*'
+                AND gross_amount NOT GLOB '.*'
+                AND gross_amount NOT GLOB '*.'
+            ),
+            tds_rate TEXT NOT NULL CHECK (
+                length(tds_rate) >= 1
+                AND length(tds_rate) <= 30
+                AND tds_rate NOT GLOB '*[^0-9.]*'
+                AND tds_rate NOT GLOB '*..*'
+                AND tds_rate NOT GLOB '.*'
+                AND tds_rate NOT GLOB '*.'
+            ),
+            tds_amount TEXT NOT NULL CHECK (
+                length(tds_amount) >= 1
+                AND length(tds_amount) <= 30
+                AND tds_amount NOT GLOB '*[^0-9.]*'
+                AND tds_amount NOT GLOB '*..*'
+                AND tds_amount NOT GLOB '.*'
+                AND tds_amount NOT GLOB '*.'
+            ),
+            net_payable_amount TEXT NOT NULL CHECK (
+                length(net_payable_amount) >= 1
+                AND length(net_payable_amount) <= 30
+                AND net_payable_amount NOT GLOB '*[^0-9.]*'
+                AND net_payable_amount NOT GLOB '*..*'
+                AND net_payable_amount NOT GLOB '.*'
+                AND net_payable_amount NOT GLOB '*.'
+            ),
+            is_pan_missing_higher_rate INTEGER NOT NULL DEFAULT 0 CHECK (is_pan_missing_higher_rate IN (0, 1)),
+            challan_bsr_code TEXT CHECK (challan_bsr_code IS NULL OR length(challan_bsr_code) = 7),
+            challan_date TEXT CHECK (challan_date IS NULL OR challan_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            challan_serial_no TEXT,
+            payment_voucher_id TEXT,
+            is_paid INTEGER NOT NULL DEFAULT 0 CHECK (is_paid IN (0, 1)),
+            is_cancelled INTEGER NOT NULL DEFAULT 0 CHECK (is_cancelled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, payment_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_voucher_tds_reconcile ON voucher_tds_details(company_id, section_code, is_paid, is_cancelled);
+        CREATE INDEX IF NOT EXISTS idx_voucher_tds_voucher ON voucher_tds_details(company_id, voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_voucher_tds_party_threshold ON voucher_tds_details(company_id, party_ledger_id, section_code, is_cancelled);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.2.0-tds', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 10: GSTR-2B Purchase ITC Reconciliation, e-Invoice JSON & e-Way Bill JSON
+/// Creates gstr2b_import_batches, gstr2b_portal_invoices, and voucher_einvoice_details,
+/// and stamps schema_version to 'v1.3.0-gst-compliance'.
+pub async fn run_milestone10_gst_compliance_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.3.0-gst-compliance" || current == "1.3.0-gst-compliance" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.2.0-tds" && current != "1.2.0-tds" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.2.0-tds' for GST compliance migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS gstr2b_import_batches (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            return_period TEXT NOT NULL CHECK (length(return_period) = 6 AND return_period GLOB '[0-1][0-9][0-9][0-9][0-9][0-9]'),
+            gstin TEXT NOT NULL CHECK (length(gstin) = 15),
+            imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            total_portal_invoices INTEGER NOT NULL DEFAULT 0,
+            total_portal_itc TEXT NOT NULL CHECK (
+                length(total_portal_itc) >= 1
+                AND length(total_portal_itc) <= 30
+                AND total_portal_itc NOT GLOB '*[^0-9.]*'
+                AND total_portal_itc NOT GLOB '*..*'
+                AND total_portal_itc NOT GLOB '.*'
+                AND total_portal_itc NOT GLOB '*.'
+            ),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_gstr2b_batch_period ON gstr2b_import_batches(company_id, return_period);
+
+        CREATE TABLE IF NOT EXISTS gstr2b_portal_invoices (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            batch_id TEXT NOT NULL,
+            supplier_gstin TEXT NOT NULL CHECK (length(supplier_gstin) = 15),
+            supplier_name TEXT,
+            invoice_number TEXT NOT NULL,
+            invoice_date TEXT NOT NULL CHECK (invoice_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+            invoice_value TEXT NOT NULL CHECK (
+                length(invoice_value) >= 1
+                AND length(invoice_value) <= 30
+                AND invoice_value NOT GLOB '*[^0-9.]*'
+                AND invoice_value NOT GLOB '*..*'
+                AND invoice_value NOT GLOB '.*'
+                AND invoice_value NOT GLOB '*.'
+            ),
+            taxable_value TEXT NOT NULL CHECK (
+                length(taxable_value) >= 1
+                AND length(taxable_value) <= 30
+                AND taxable_value NOT GLOB '*[^0-9.]*'
+                AND taxable_value NOT GLOB '*..*'
+                AND taxable_value NOT GLOB '.*'
+                AND taxable_value NOT GLOB '*.'
+            ),
+            cgst_amount TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(cgst_amount) >= 1
+                AND length(cgst_amount) <= 30
+                AND cgst_amount NOT GLOB '*[^0-9.]*'
+                AND cgst_amount NOT GLOB '*..*'
+                AND cgst_amount NOT GLOB '.*'
+                AND cgst_amount NOT GLOB '*.'
+            ),
+            sgst_amount TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(sgst_amount) >= 1
+                AND length(sgst_amount) <= 30
+                AND sgst_amount NOT GLOB '*[^0-9.]*'
+                AND sgst_amount NOT GLOB '*..*'
+                AND sgst_amount NOT GLOB '.*'
+                AND sgst_amount NOT GLOB '*.'
+            ),
+            igst_amount TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(igst_amount) >= 1
+                AND length(igst_amount) <= 30
+                AND igst_amount NOT GLOB '*[^0-9.]*'
+                AND igst_amount NOT GLOB '*..*'
+                AND igst_amount NOT GLOB '.*'
+                AND igst_amount NOT GLOB '*.'
+            ),
+            cess_amount TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(cess_amount) >= 1
+                AND length(cess_amount) <= 30
+                AND cess_amount NOT GLOB '*[^0-9.]*'
+                AND cess_amount NOT GLOB '*..*'
+                AND cess_amount NOT GLOB '.*'
+                AND cess_amount NOT GLOB '*.'
+            ),
+            itc_availability TEXT NOT NULL DEFAULT 'Y' CHECK (itc_availability IN ('Y', 'N')),
+            reconciliation_status TEXT NOT NULL CHECK (reconciliation_status IN ('Matched', 'Mismatch', 'MissingInBooks', 'MissingIn2B')),
+            matched_voucher_id TEXT,
+            tax_difference TEXT NOT NULL DEFAULT '0.00' CHECK (
+                length(tax_difference) >= 1
+                AND length(tax_difference) <= 30
+                AND (
+                    (tax_difference NOT GLOB '*[^0-9.]*' AND tax_difference NOT GLOB '*..*' AND tax_difference NOT GLOB '.*' AND tax_difference NOT GLOB '*.')
+                    OR (tax_difference GLOB '-*' AND length(tax_difference) >= 2 AND substr(tax_difference, 2) NOT GLOB '*[^0-9.]*' AND substr(tax_difference, 2) NOT GLOB '*..*' AND substr(tax_difference, 2) NOT GLOB '.*' AND substr(tax_difference, 2) NOT GLOB '*.')
+                )
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (batch_id) REFERENCES gstr2b_import_batches(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, matched_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE SET NULL
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_gstr2b_invoices_batch ON gstr2b_portal_invoices(company_id, batch_id);
+        CREATE INDEX IF NOT EXISTS idx_gstr2b_invoices_match ON gstr2b_portal_invoices(company_id, supplier_gstin, invoice_number);
+        CREATE INDEX IF NOT EXISTS idx_gstr2b_invoices_status ON gstr2b_portal_invoices(company_id, reconciliation_status);
+
+        CREATE TABLE IF NOT EXISTS voucher_einvoice_details (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            irn TEXT CHECK (irn IS NULL OR length(irn) = 64),
+            ack_no TEXT,
+            ack_date TEXT,
+            signed_qr_code TEXT,
+            einvoice_status TEXT NOT NULL DEFAULT 'Pending' CHECK (einvoice_status IN ('Pending', 'Generated', 'Cancelled')),
+            eway_bill_no TEXT CHECK (eway_bill_no IS NULL OR length(eway_bill_no) = 12),
+            eway_bill_date TEXT,
+            eway_valid_upto TEXT,
+            transporter_id TEXT CHECK (transporter_id IS NULL OR length(transporter_id) = 15),
+            transporter_name TEXT,
+            transport_mode TEXT CHECK (transport_mode IS NULL OR transport_mode IN ('Road', 'Rail', 'Air', 'Ship')),
+            vehicle_no TEXT,
+            distance_km INTEGER CHECK (distance_km IS NULL OR distance_km >= 0),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            CONSTRAINT uq_voucher_einvoice_voucher UNIQUE (company_id, voucher_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_voucher_einvoice_status ON voucher_einvoice_details(company_id, einvoice_status);
+        CREATE INDEX IF NOT EXISTS idx_voucher_einvoice_irn ON voucher_einvoice_details(company_id, irn);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.3.0-gst-compliance', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 11: Multi-Location Godowns, Stock Journals (Alt+F7), Batch/Expiry Tracking & Cost Centres.
+/// Extends godowns with address and is_external, creates stock_item_batches,
+/// extends inventory_cost_layers/stock_movements/stock_voucher_lines with batch_id,
+/// creates cost_categories, cost_centres, and voucher_cost_allocations,
+/// and stamps schema_version to 'v1.4.0-godowns-costing'.
+pub async fn run_milestone11_multi_location_and_costing_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.4.0-godowns-costing" || current == "1.4.0-godowns-costing" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.3.0-gst-compliance" && current != "1.3.0-gst-compliance" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.3.0-gst-compliance' for Godowns & Costing migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    // Safe column additions via pragma inspection
+    let godown_cols: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM pragma_table_info('godowns')")
+            .fetch_all(&mut *tx)
+            .await?;
+    if !godown_cols.contains(&"address".to_string()) {
+        sqlx::raw_sql("ALTER TABLE godowns ADD COLUMN address TEXT;")
+            .execute(&mut *tx)
+            .await?;
+    }
+    if !godown_cols.contains(&"is_external".to_string()) {
+        sqlx::raw_sql("ALTER TABLE godowns ADD COLUMN is_external INTEGER NOT NULL DEFAULT 0;")
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    let icl_cols: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM pragma_table_info('inventory_cost_layers')")
+            .fetch_all(&mut *tx)
+            .await?;
+    if !icl_cols.contains(&"batch_id".to_string()) {
+        sqlx::raw_sql("ALTER TABLE inventory_cost_layers ADD COLUMN batch_id TEXT;")
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    let sm_cols: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM pragma_table_info('stock_movements')")
+            .fetch_all(&mut *tx)
+            .await?;
+    if !sm_cols.contains(&"batch_id".to_string()) {
+        sqlx::raw_sql("ALTER TABLE stock_movements ADD COLUMN batch_id TEXT;")
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    let svl_cols: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM pragma_table_info('stock_voucher_lines')")
+            .fetch_all(&mut *tx)
+            .await?;
+    if !svl_cols.contains(&"batch_id".to_string()) {
+        sqlx::raw_sql("ALTER TABLE stock_voucher_lines ADD COLUMN batch_id TEXT;")
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS stock_item_batches (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            stock_item_id TEXT NOT NULL,
+            batch_number TEXT NOT NULL COLLATE NOCASE,
+            mfg_date TEXT CHECK (mfg_date IS NULL OR (mfg_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(mfg_date) IS NOT NULL)),
+            expiry_date TEXT CHECK (expiry_date IS NULL OR (expiry_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(expiry_date) IS NOT NULL)),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_stock_item_batch UNIQUE (company_id, stock_item_id, batch_number)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_stock_batches_item ON stock_item_batches(company_id, stock_item_id);
+        CREATE INDEX IF NOT EXISTS idx_stock_batches_expiry ON stock_item_batches(company_id, expiry_date);
+
+        CREATE TABLE IF NOT EXISTS cost_categories (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            allocate_revenue INTEGER NOT NULL DEFAULT 1 CHECK (allocate_revenue IN (0, 1)),
+            allocate_non_revenue INTEGER NOT NULL DEFAULT 0 CHECK (allocate_non_revenue IN (0, 1)),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            CONSTRAINT uq_cost_category_name UNIQUE (company_id, name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_cost_categories_company ON cost_categories(company_id);
+
+        CREATE TABLE IF NOT EXISTS cost_centres (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            category_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            parent_id TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (category_id) REFERENCES cost_categories(id) ON DELETE RESTRICT,
+            FOREIGN KEY (parent_id) REFERENCES cost_centres(id) ON DELETE RESTRICT,
+            CONSTRAINT uq_cost_centre_name UNIQUE (company_id, category_id, name),
+            CHECK (parent_id IS NULL OR parent_id <> id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_cost_centres_cat ON cost_centres(company_id, category_id);
+        CREATE INDEX IF NOT EXISTS idx_cost_centres_parent ON cost_centres(company_id, parent_id);
+
+        CREATE TABLE IF NOT EXISTS voucher_cost_allocations (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            voucher_line_id TEXT NOT NULL,
+            cost_centre_id TEXT NOT NULL,
+            amount TEXT NOT NULL CHECK (
+                length(amount) >= 1
+                AND length(amount) <= 30
+                AND amount NOT GLOB '*[^0-9.]*'
+                AND amount NOT GLOB '*..*'
+                AND amount NOT GLOB '.*'
+                AND amount NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_line_id) REFERENCES voucher_lines(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (cost_centre_id) REFERENCES cost_centres(id) ON DELETE RESTRICT,
+            CONSTRAINT uq_voucher_cost_alloc UNIQUE (company_id, voucher_line_id, cost_centre_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_vch_cost_alloc_vch ON voucher_cost_allocations(company_id, voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_vch_cost_alloc_line ON voucher_cost_allocations(company_id, voucher_line_id);
+        CREATE INDEX IF NOT EXISTS idx_vch_cost_alloc_centre ON voucher_cost_allocations(company_id, cost_centre_id);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.4.0-godowns-costing', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 12: Ratio Analysis, Budgets & Variance, Automated Financial Year-End Closing & MCA Audit Certification.
+/// Extends audit_log with prev_hash and entry_hash, creates budgets, budget_lines, and financial_year_closings,
+/// and stamps schema_version to 'v1.5.0-closing-budgets'.
+pub async fn run_milestone12_closing_budgets_audit_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.5.0-closing-budgets" || current == "1.5.0-closing-budgets" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.4.0-godowns-costing" && current != "1.4.0-godowns-costing" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.4.0-godowns-costing' for Closing & Budgets migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    // Safe column additions to audit_log via pragma inspection
+    let audit_cols: Vec<String> =
+        sqlx::query_scalar("SELECT name FROM pragma_table_info('audit_log')")
+            .fetch_all(&mut *tx)
+            .await?;
+    if !audit_cols.contains(&"prev_hash".to_string()) {
+        sqlx::raw_sql("ALTER TABLE audit_log ADD COLUMN prev_hash TEXT;")
+            .execute(&mut *tx)
+            .await?;
+    }
+    if !audit_cols.contains(&"entry_hash".to_string()) {
+        sqlx::raw_sql("ALTER TABLE audit_log ADD COLUMN entry_hash TEXT;")
+            .execute(&mut *tx)
+            .await?;
+    }
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS budgets (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            from_date TEXT NOT NULL CHECK (from_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(from_date) IS NOT NULL),
+            to_date TEXT NOT NULL CHECK (to_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(to_date) IS NOT NULL),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            CONSTRAINT uq_company_budget_name UNIQUE (company_id, name),
+            CHECK (to_date >= from_date)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_budgets_company ON budgets(company_id);
+        CREATE INDEX IF NOT EXISTS idx_budgets_period ON budgets(company_id, from_date, to_date);
+
+        CREATE TABLE IF NOT EXISTS budget_lines (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            budget_id TEXT NOT NULL,
+            target_type TEXT NOT NULL CHECK (target_type IN ('Group', 'Ledger', 'CostCenter')),
+            target_id TEXT NOT NULL,
+            budget_type TEXT NOT NULL CHECK (budget_type IN ('OnNetTransactions', 'OnClosingBalance')),
+            amount TEXT NOT NULL CHECK (
+                length(amount) >= 1
+                AND length(amount) <= 30
+                AND amount NOT GLOB '*[^0-9.]*'
+                AND amount NOT GLOB '*..*'
+                AND amount NOT GLOB '.*'
+                AND amount NOT GLOB '*.'
+            ),
+            dr_cr TEXT NOT NULL CHECK (dr_cr IN ('Dr', 'Cr')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE,
+            CONSTRAINT uq_budget_target UNIQUE (company_id, budget_id, target_type, target_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_budget_lines_budget ON budget_lines(company_id, budget_id);
+        CREATE INDEX IF NOT EXISTS idx_budget_lines_target ON budget_lines(company_id, target_type, target_id);
+
+        CREATE TABLE IF NOT EXISTS financial_year_closings (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            financial_year_label TEXT NOT NULL,
+            period_start TEXT NOT NULL CHECK (period_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(period_start) IS NOT NULL),
+            period_end TEXT NOT NULL CHECK (period_end GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(period_end) IS NOT NULL),
+            next_fy_start TEXT NOT NULL CHECK (next_fy_start GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(next_fy_start) IS NOT NULL),
+            closing_voucher_id TEXT NOT NULL,
+            net_profit_or_loss TEXT NOT NULL CHECK (
+                length(net_profit_or_loss) >= 1
+                AND net_profit_or_loss NOT GLOB '*[^0-9.-]*'
+                AND net_profit_or_loss NOT GLOB '*..*'
+            ),
+            is_locked INTEGER NOT NULL DEFAULT 1 CHECK (is_locked IN (0, 1)),
+            closed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            closed_by TEXT NOT NULL DEFAULT 'system',
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, closing_voucher_id) REFERENCES vouchers(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_company_fy_closing UNIQUE (company_id, period_end),
+            CHECK (period_end >= period_start)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_fy_closings_company ON financial_year_closings(company_id, period_end);
+        CREATE INDEX IF NOT EXISTS idx_fy_closings_lock ON financial_year_closings(company_id, is_locked);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.5.0-closing-budgets', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Executes Milestone 13 Order Processing migration:
+/// - purchase_orders & purchase_order_lines
+/// - sales_orders & sales_order_lines
+/// - order_fulfillments
+///
+/// Stamps schema_version to 'v1.6.0-orders'.
+pub async fn run_milestone13_order_processing_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.6.0-orders" || current == "1.6.0-orders" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.5.0-closing-budgets" && current != "1.5.0-closing-budgets" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.5.0-closing-budgets' for Order Processing migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS purchase_orders (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            order_number TEXT NOT NULL COLLATE NOCASE,
+            order_date TEXT NOT NULL CHECK (order_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(order_date) IS NOT NULL),
+            due_date TEXT CHECK (due_date IS NULL OR (due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(due_date) IS NOT NULL)),
+            party_ledger_id TEXT NOT NULL,
+            reference_no TEXT,
+            narration TEXT,
+            status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'PartiallyFulfilled', 'Fulfilled', 'Cancelled')),
+            total_amount TEXT NOT NULL CHECK (
+                length(total_amount) >= 1
+                AND length(total_amount) <= 30
+                AND total_amount NOT GLOB '*[^0-9.]*'
+                AND total_amount NOT GLOB '*..*'
+                AND total_amount NOT GLOB '.*'
+                AND total_amount NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_company_po_number UNIQUE (company_id, order_number)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_po_company ON purchase_orders(company_id);
+        CREATE INDEX IF NOT EXISTS idx_po_party ON purchase_orders(company_id, party_ledger_id);
+        CREATE INDEX IF NOT EXISTS idx_po_status ON purchase_orders(company_id, status);
+        CREATE INDEX IF NOT EXISTS idx_po_date ON purchase_orders(company_id, order_date);
+
+        CREATE TABLE IF NOT EXISTS purchase_order_lines (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            order_id TEXT NOT NULL,
+            stock_item_id TEXT NOT NULL,
+            godown_id TEXT,
+            ordered_qty TEXT NOT NULL CHECK (
+                length(ordered_qty) >= 1
+                AND length(ordered_qty) <= 20
+                AND ordered_qty NOT GLOB '*[^0-9.]*'
+                AND ordered_qty NOT GLOB '*..*'
+                AND ordered_qty NOT GLOB '.*'
+                AND ordered_qty NOT GLOB '*.'
+            ),
+            fulfilled_qty TEXT NOT NULL DEFAULT '0' CHECK (
+                length(fulfilled_qty) >= 1
+                AND length(fulfilled_qty) <= 20
+                AND fulfilled_qty NOT GLOB '*[^0-9.]*'
+                AND fulfilled_qty NOT GLOB '*..*'
+                AND fulfilled_qty NOT GLOB '.*'
+                AND fulfilled_qty NOT GLOB '*.'
+            ),
+            unit_rate TEXT NOT NULL CHECK (
+                length(unit_rate) >= 1
+                AND length(unit_rate) <= 20
+                AND unit_rate NOT GLOB '*[^0-9.]*'
+                AND unit_rate NOT GLOB '*..*'
+                AND unit_rate NOT GLOB '.*'
+                AND unit_rate NOT GLOB '*.'
+            ),
+            discount_kind TEXT CHECK (discount_kind IS NULL OR discount_kind IN ('Percentage', 'FixedAmount')),
+            discount_value TEXT CHECK (
+                discount_value IS NULL
+                OR (
+                    length(discount_value) >= 1
+                    AND length(discount_value) <= 20
+                    AND discount_value NOT GLOB '*[^0-9.]*'
+                    AND discount_value NOT GLOB '*..*'
+                    AND discount_value NOT GLOB '.*'
+                    AND discount_value NOT GLOB '*.'
+                )
+            ),
+            line_amount TEXT NOT NULL CHECK (
+                length(line_amount) >= 1
+                AND length(line_amount) <= 30
+                AND line_amount NOT GLOB '*[^0-9.]*'
+                AND line_amount NOT GLOB '*..*'
+                AND line_amount NOT GLOB '.*'
+                AND line_amount NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_po_lines_order ON purchase_order_lines(company_id, order_id);
+        CREATE INDEX IF NOT EXISTS idx_po_lines_item ON purchase_order_lines(company_id, stock_item_id);
+
+        CREATE TABLE IF NOT EXISTS sales_orders (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            order_number TEXT NOT NULL COLLATE NOCASE,
+            order_date TEXT NOT NULL CHECK (order_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(order_date) IS NOT NULL),
+            due_date TEXT CHECK (due_date IS NULL OR (due_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(due_date) IS NOT NULL)),
+            party_ledger_id TEXT NOT NULL,
+            reference_no TEXT,
+            narration TEXT,
+            status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'PartiallyFulfilled', 'Fulfilled', 'Cancelled')),
+            total_amount TEXT NOT NULL CHECK (
+                length(total_amount) >= 1
+                AND length(total_amount) <= 30
+                AND total_amount NOT GLOB '*[^0-9.]*'
+                AND total_amount NOT GLOB '*..*'
+                AND total_amount NOT GLOB '.*'
+                AND total_amount NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, party_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_company_so_number UNIQUE (company_id, order_number)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_so_company ON sales_orders(company_id);
+        CREATE INDEX IF NOT EXISTS idx_so_party ON sales_orders(company_id, party_ledger_id);
+        CREATE INDEX IF NOT EXISTS idx_so_status ON sales_orders(company_id, status);
+        CREATE INDEX IF NOT EXISTS idx_so_date ON sales_orders(company_id, order_date);
+
+        CREATE TABLE IF NOT EXISTS sales_order_lines (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            order_id TEXT NOT NULL,
+            stock_item_id TEXT NOT NULL,
+            godown_id TEXT,
+            ordered_qty TEXT NOT NULL CHECK (
+                length(ordered_qty) >= 1
+                AND length(ordered_qty) <= 20
+                AND ordered_qty NOT GLOB '*[^0-9.]*'
+                AND ordered_qty NOT GLOB '*..*'
+                AND ordered_qty NOT GLOB '.*'
+                AND ordered_qty NOT GLOB '*.'
+            ),
+            fulfilled_qty TEXT NOT NULL DEFAULT '0' CHECK (
+                length(fulfilled_qty) >= 1
+                AND length(fulfilled_qty) <= 20
+                AND fulfilled_qty NOT GLOB '*[^0-9.]*'
+                AND fulfilled_qty NOT GLOB '*..*'
+                AND fulfilled_qty NOT GLOB '.*'
+                AND fulfilled_qty NOT GLOB '*.'
+            ),
+            unit_rate TEXT NOT NULL CHECK (
+                length(unit_rate) >= 1
+                AND length(unit_rate) <= 20
+                AND unit_rate NOT GLOB '*[^0-9.]*'
+                AND unit_rate NOT GLOB '*..*'
+                AND unit_rate NOT GLOB '.*'
+                AND unit_rate NOT GLOB '*.'
+            ),
+            discount_kind TEXT CHECK (discount_kind IS NULL OR discount_kind IN ('Percentage', 'FixedAmount')),
+            discount_value TEXT CHECK (
+                discount_value IS NULL
+                OR (
+                    length(discount_value) >= 1
+                    AND length(discount_value) <= 20
+                    AND discount_value NOT GLOB '*[^0-9.]*'
+                    AND discount_value NOT GLOB '*..*'
+                    AND discount_value NOT GLOB '.*'
+                    AND discount_value NOT GLOB '*.'
+                )
+            ),
+            line_amount TEXT NOT NULL CHECK (
+                length(line_amount) >= 1
+                AND length(line_amount) <= 30
+                AND line_amount NOT GLOB '*[^0-9.]*'
+                AND line_amount NOT GLOB '*..*'
+                AND line_amount NOT GLOB '.*'
+                AND line_amount NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (order_id) REFERENCES sales_orders(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_so_lines_order ON sales_order_lines(company_id, order_id);
+        CREATE INDEX IF NOT EXISTS idx_so_lines_item ON sales_order_lines(company_id, stock_item_id);
+
+        CREATE TABLE IF NOT EXISTS order_fulfillments (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            order_type TEXT NOT NULL CHECK (order_type IN ('PurchaseOrder', 'SalesOrder')),
+            order_id TEXT NOT NULL,
+            order_line_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            commercial_doc_id TEXT,
+            fulfilled_qty TEXT NOT NULL CHECK (
+                length(fulfilled_qty) >= 1
+                AND length(fulfilled_qty) <= 20
+                AND fulfilled_qty NOT GLOB '*[^0-9.]*'
+                AND fulfilled_qty NOT GLOB '*..*'
+                AND fulfilled_qty NOT GLOB '.*'
+                AND fulfilled_qty NOT GLOB '*.'
+            ),
+            fulfillment_date TEXT NOT NULL CHECK (fulfillment_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(fulfillment_date) IS NOT NULL),
+            is_cancelled INTEGER NOT NULL DEFAULT 0 CHECK (is_cancelled IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_fulfillments_order ON order_fulfillments(company_id, order_id);
+        CREATE INDEX IF NOT EXISTS idx_fulfillments_voucher ON order_fulfillments(company_id, voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_fulfillments_line ON order_fulfillments(company_id, order_line_id);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.6.0-orders', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Applies Milestone 14 migration: Company Security (Users & RBAC) and Manufacturing Bill of Materials (BOM).
+///
+/// Stamps schema_version to 'v1.7.0-security-bom'.
+pub async fn run_milestone14_security_and_bom_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.7.0-security-bom" || current == "1.7.0-security-bom" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.6.0-orders" && current != "1.6.0-orders" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.6.0-orders' for Security & BOM migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS company_security_config (
+            company_id TEXT PRIMARY KEY NOT NULL,
+            security_enabled INTEGER NOT NULL DEFAULT 0 CHECK (security_enabled IN (0, 1)),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS company_users (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            username TEXT NOT NULL COLLATE NOCASE,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL CHECK (role IN ('Admin', 'Accountant', 'DataEntry', 'Auditor')),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            last_login_at TEXT,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            CONSTRAINT uq_company_username UNIQUE (company_id, username)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_company_users_comp ON company_users(company_id);
+        CREATE INDEX IF NOT EXISTS idx_company_users_role ON company_users(company_id, role);
+
+        CREATE TABLE IF NOT EXISTS bill_of_materials (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            finished_stock_item_id TEXT NOT NULL,
+            bom_name TEXT NOT NULL COLLATE NOCASE,
+            base_output_qty TEXT NOT NULL CHECK (
+                length(base_output_qty) >= 1
+                AND length(base_output_qty) <= 20
+                AND base_output_qty NOT GLOB '*[^0-9.]*'
+                AND base_output_qty NOT GLOB '*..*'
+                AND base_output_qty NOT GLOB '.*'
+                AND base_output_qty NOT GLOB '*.'
+            ),
+            default_godown_id TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, finished_stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_company_item_bom UNIQUE (company_id, finished_stock_item_id, bom_name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bom_company ON bill_of_materials(company_id);
+        CREATE INDEX IF NOT EXISTS idx_bom_item ON bill_of_materials(company_id, finished_stock_item_id);
+
+        CREATE TABLE IF NOT EXISTS bom_components (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            bom_id TEXT NOT NULL,
+            raw_stock_item_id TEXT NOT NULL,
+            source_godown_id TEXT,
+            required_qty TEXT NOT NULL CHECK (
+                length(required_qty) >= 1
+                AND length(required_qty) <= 20
+                AND required_qty NOT GLOB '*[^0-9.]*'
+                AND required_qty NOT GLOB '*..*'
+                AND required_qty NOT GLOB '.*'
+                AND required_qty NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (bom_id) REFERENCES bill_of_materials(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, raw_stock_item_id) REFERENCES stock_items(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_bom_raw_item UNIQUE (bom_id, raw_stock_item_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_bom_comp_bom ON bom_components(company_id, bom_id);
+        CREATE INDEX IF NOT EXISTS idx_bom_comp_item ON bom_components(company_id, raw_stock_item_id);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.7.0-security-bom', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+/// Milestone 15: Indian Payroll Engine, Statutory PF/ESI/PT & Monthly Payroll GL Posting.
+/// Creates employee_groups, employees, payroll_ledger_mappings, payroll_runs, and payroll_payslips
+/// and stamps schema_version to 'v1.8.0-payroll'.
+pub async fn run_milestone15_payroll_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+    if current == "v1.8.0-payroll" || current == "1.8.0-payroll" {
+        tx.commit().await?;
+        return Ok(());
+    }
+    if current != "v1.7.0-security-bom" && current != "1.7.0-security-bom" {
+        return Err(OpenTallyError::Migration(format!(
+            "Expected schema version 'v1.7.0-security-bom' for Payroll migration, found '{}'",
+            current
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        CREATE TABLE IF NOT EXISTS employee_groups (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL COLLATE NOCASE,
+            parent_id TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, parent_id) REFERENCES employee_groups(company_id, id) ON DELETE RESTRICT,
+            UNIQUE (company_id, id),
+            CONSTRAINT uq_company_emp_grp_name UNIQUE (company_id, name)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_emp_groups_company ON employee_groups(company_id);
+
+        CREATE TABLE IF NOT EXISTS employees (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            employee_code TEXT NOT NULL COLLATE NOCASE,
+            name TEXT NOT NULL,
+            department_group_id TEXT,
+            designation TEXT,
+            date_of_joining TEXT NOT NULL CHECK (date_of_joining GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(date_of_joining) IS NOT NULL),
+            date_of_exit TEXT CHECK (date_of_exit IS NULL OR (date_of_exit GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(date_of_exit) IS NOT NULL)),
+            pan TEXT CHECK (pan IS NULL OR length(pan) = 10),
+            uan TEXT CHECK (uan IS NULL OR (length(uan) = 12 AND uan NOT GLOB '*[^0-9]*')),
+            esic_number TEXT,
+            bank_account_no TEXT,
+            bank_ifsc TEXT,
+            basic_salary TEXT NOT NULL CHECK (
+                length(basic_salary) >= 1 AND length(basic_salary) <= 30
+                AND basic_salary NOT GLOB '*[^0-9.]*' AND basic_salary NOT GLOB '*..*'
+                AND basic_salary NOT GLOB '.*' AND basic_salary NOT GLOB '*.'
+            ),
+            hra TEXT NOT NULL DEFAULT '0' CHECK (
+                length(hra) >= 1 AND length(hra) <= 30
+                AND hra NOT GLOB '*[^0-9.]*' AND hra NOT GLOB '*..*'
+                AND hra NOT GLOB '.*' AND hra NOT GLOB '*.'
+            ),
+            other_allowances TEXT NOT NULL DEFAULT '0' CHECK (
+                length(other_allowances) >= 1 AND length(other_allowances) <= 30
+                AND other_allowances NOT GLOB '*[^0-9.]*' AND other_allowances NOT GLOB '*..*'
+                AND other_allowances NOT GLOB '.*' AND other_allowances NOT GLOB '*.'
+            ),
+            pf_applicable INTEGER NOT NULL DEFAULT 1 CHECK (pf_applicable IN (0, 1)),
+            esi_applicable INTEGER NOT NULL DEFAULT 0 CHECK (esi_applicable IN (0, 1)),
+            pt_applicable INTEGER NOT NULL DEFAULT 1 CHECK (pt_applicable IN (0, 1)),
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, department_group_id) REFERENCES employee_groups(company_id, id) ON DELETE SET NULL,
+            UNIQUE (company_id, id),
+            CONSTRAINT uq_company_emp_code UNIQUE (company_id, employee_code)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_employees_company ON employees(company_id);
+        CREATE INDEX IF NOT EXISTS idx_employees_active ON employees(company_id, is_active);
+
+        CREATE TABLE IF NOT EXISTS payroll_ledger_mappings (
+            company_id TEXT PRIMARY KEY NOT NULL,
+            salary_expense_ledger_id TEXT NOT NULL,
+            employer_pf_expense_ledger_id TEXT NOT NULL,
+            employer_esi_expense_ledger_id TEXT NOT NULL,
+            salary_payable_ledger_id TEXT NOT NULL,
+            pf_payable_ledger_id TEXT NOT NULL,
+            esi_payable_ledger_id TEXT NOT NULL,
+            pt_payable_ledger_id TEXT NOT NULL,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, salary_expense_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, employer_pf_expense_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, employer_esi_expense_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, salary_payable_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, pf_payable_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, esi_payable_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT,
+            FOREIGN KEY (company_id, pt_payable_ledger_id) REFERENCES ledgers(company_id, id) ON DELETE RESTRICT
+        );
+
+        CREATE TABLE IF NOT EXISTS payroll_runs (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            pay_period TEXT NOT NULL CHECK (pay_period GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'),
+            run_date TEXT NOT NULL CHECK (run_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]' AND date(run_date) IS NOT NULL),
+            voucher_id TEXT NOT NULL,
+            total_gross TEXT NOT NULL CHECK (
+                length(total_gross) >= 1 AND length(total_gross) <= 30
+                AND total_gross NOT GLOB '*[^0-9.]*' AND total_gross NOT GLOB '*..*'
+                AND total_gross NOT GLOB '.*' AND total_gross NOT GLOB '*.'
+            ),
+            total_deductions TEXT NOT NULL CHECK (
+                length(total_deductions) >= 1 AND length(total_deductions) <= 30
+                AND total_deductions NOT GLOB '*[^0-9.]*' AND total_deductions NOT GLOB '*..*'
+                AND total_deductions NOT GLOB '.*' AND total_deductions NOT GLOB '*.'
+            ),
+            total_employer_contributions TEXT NOT NULL CHECK (
+                length(total_employer_contributions) >= 1 AND length(total_employer_contributions) <= 30
+                AND total_employer_contributions NOT GLOB '*[^0-9.]*' AND total_employer_contributions NOT GLOB '*..*'
+                AND total_employer_contributions NOT GLOB '.*' AND total_employer_contributions NOT GLOB '*.'
+            ),
+            total_net_pay TEXT NOT NULL CHECK (
+                length(total_net_pay) >= 1 AND length(total_net_pay) <= 30
+                AND total_net_pay NOT GLOB '*[^0-9.]*' AND total_net_pay NOT GLOB '*..*'
+                AND total_net_pay NOT GLOB '.*' AND total_net_pay NOT GLOB '*.'
+            ),
+            status TEXT NOT NULL DEFAULT 'Posted' CHECK (status IN ('Posted', 'Cancelled')),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE RESTRICT,
+            UNIQUE (company_id, id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_payroll_runs_company ON payroll_runs(company_id);
+        CREATE INDEX IF NOT EXISTS idx_payroll_runs_voucher ON payroll_runs(company_id, voucher_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_active_payroll_run ON payroll_runs(company_id, pay_period) WHERE status = 'Posted';
+
+        CREATE TABLE IF NOT EXISTS payroll_payslips (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            payroll_run_id TEXT NOT NULL,
+            employee_id TEXT NOT NULL,
+            total_working_days TEXT NOT NULL CHECK (
+                length(total_working_days) >= 1 AND length(total_working_days) <= 20
+                AND total_working_days NOT GLOB '*[^0-9.]*' AND total_working_days NOT GLOB '*..*'
+                AND total_working_days NOT GLOB '.*' AND total_working_days NOT GLOB '*.'
+            ),
+            days_present TEXT NOT NULL CHECK (
+                length(days_present) >= 1 AND length(days_present) <= 20
+                AND days_present NOT GLOB '*[^0-9.]*' AND days_present NOT GLOB '*..*'
+                AND days_present NOT GLOB '.*' AND days_present NOT GLOB '*.'
+            ),
+            lop_days TEXT NOT NULL CHECK (
+                length(lop_days) >= 1 AND length(lop_days) <= 20
+                AND lop_days NOT GLOB '*[^0-9.]*' AND lop_days NOT GLOB '*..*'
+                AND lop_days NOT GLOB '.*' AND lop_days NOT GLOB '*.'
+            ),
+            prorated_basic TEXT NOT NULL CHECK (
+                length(prorated_basic) >= 1 AND length(prorated_basic) <= 30
+                AND prorated_basic NOT GLOB '*[^0-9.]*' AND prorated_basic NOT GLOB '*..*'
+                AND prorated_basic NOT GLOB '.*' AND prorated_basic NOT GLOB '*.'
+            ),
+            prorated_hra TEXT NOT NULL CHECK (
+                length(prorated_hra) >= 1 AND length(prorated_hra) <= 30
+                AND prorated_hra NOT GLOB '*[^0-9.]*' AND prorated_hra NOT GLOB '*..*'
+                AND prorated_hra NOT GLOB '.*' AND prorated_hra NOT GLOB '*.'
+            ),
+            prorated_allowances TEXT NOT NULL CHECK (
+                length(prorated_allowances) >= 1 AND length(prorated_allowances) <= 30
+                AND prorated_allowances NOT GLOB '*[^0-9.]*' AND prorated_allowances NOT GLOB '*..*'
+                AND prorated_allowances NOT GLOB '.*' AND prorated_allowances NOT GLOB '*.'
+            ),
+            gross_earnings TEXT NOT NULL CHECK (
+                length(gross_earnings) >= 1 AND length(gross_earnings) <= 30
+                AND gross_earnings NOT GLOB '*[^0-9.]*' AND gross_earnings NOT GLOB '*..*'
+                AND gross_earnings NOT GLOB '.*' AND gross_earnings NOT GLOB '*.'
+            ),
+            employee_pf TEXT NOT NULL CHECK (
+                length(employee_pf) >= 1 AND length(employee_pf) <= 30
+                AND employee_pf NOT GLOB '*[^0-9.]*' AND employee_pf NOT GLOB '*..*'
+                AND employee_pf NOT GLOB '.*' AND employee_pf NOT GLOB '*.'
+            ),
+            employer_epf TEXT NOT NULL CHECK (
+                length(employer_epf) >= 1 AND length(employer_epf) <= 30
+                AND employer_epf NOT GLOB '*[^0-9.]*' AND employer_epf NOT GLOB '*..*'
+                AND employer_epf NOT GLOB '.*' AND employer_epf NOT GLOB '*.'
+            ),
+            employer_eps TEXT NOT NULL CHECK (
+                length(employer_eps) >= 1 AND length(employer_eps) <= 30
+                AND employer_eps NOT GLOB '*[^0-9.]*' AND employer_eps NOT GLOB '*..*'
+                AND employer_eps NOT GLOB '.*' AND employer_eps NOT GLOB '*.'
+            ),
+            employee_esi TEXT NOT NULL CHECK (
+                length(employee_esi) >= 1 AND length(employee_esi) <= 30
+                AND employee_esi NOT GLOB '*[^0-9.]*' AND employee_esi NOT GLOB '*..*'
+                AND employee_esi NOT GLOB '.*' AND employee_esi NOT GLOB '*.'
+            ),
+            employer_esi TEXT NOT NULL CHECK (
+                length(employer_esi) >= 1 AND length(employer_esi) <= 30
+                AND employer_esi NOT GLOB '*[^0-9.]*' AND employer_esi NOT GLOB '*..*'
+                AND employer_esi NOT GLOB '.*' AND employer_esi NOT GLOB '*.'
+            ),
+            professional_tax TEXT NOT NULL CHECK (
+                length(professional_tax) >= 1 AND length(professional_tax) <= 30
+                AND professional_tax NOT GLOB '*[^0-9.]*' AND professional_tax NOT GLOB '*..*'
+                AND professional_tax NOT GLOB '.*' AND professional_tax NOT GLOB '*.'
+            ),
+            other_deductions TEXT NOT NULL DEFAULT '0' CHECK (
+                length(other_deductions) >= 1 AND length(other_deductions) <= 30
+                AND other_deductions NOT GLOB '*[^0-9.]*' AND other_deductions NOT GLOB '*..*'
+                AND other_deductions NOT GLOB '.*' AND other_deductions NOT GLOB '*.'
+            ),
+            total_deductions TEXT NOT NULL CHECK (
+                length(total_deductions) >= 1 AND length(total_deductions) <= 30
+                AND total_deductions NOT GLOB '*[^0-9.]*' AND total_deductions NOT GLOB '*..*'
+                AND total_deductions NOT GLOB '.*' AND total_deductions NOT GLOB '*.'
+            ),
+            net_pay TEXT NOT NULL CHECK (
+                length(net_pay) >= 1 AND length(net_pay) <= 30
+                AND net_pay NOT GLOB '*[^0-9.]*' AND net_pay NOT GLOB '*..*'
+                AND net_pay NOT GLOB '.*' AND net_pay NOT GLOB '*.'
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, payroll_run_id) REFERENCES payroll_runs(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, employee_id) REFERENCES employees(company_id, id) ON DELETE RESTRICT,
+            CONSTRAINT uq_run_employee UNIQUE (payroll_run_id, employee_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_payslips_run ON payroll_payslips(company_id, payroll_run_id);
+        CREATE INDEX IF NOT EXISTS idx_payslips_emp ON payroll_payslips(company_id, employee_id);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v1.8.0-payroll', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+fn schema_version_rank(ver: &str) -> usize {
+    match ver.trim_start_matches('v') {
+        "0.1.0-sprint0" => 0,
+        "0.2.0-sprint1" => 1,
+        "0.2.1-sprint1" => 2,
+        "0.3.0-sprint2" => 3,
+        "0.3.1-sprint2" => 4,
+        "0.4.0-sprint4" => 5,
+        "0.4.1-sprint4" => 6,
+        "0.4.2-sprint4" => 7,
+        "0.4.3-sprint5" => 8,
+        "0.4.4-sprint5" => 9,
+        "0.4.5-sprint6" => 10,
+        "0.4.6-sprint6" => 11,
+        "0.4.7-commercial" => 12,
+        "0.5.0-billwise" => 13,
+        "0.6.0-gst" => 14,
+        "0.7.0-notes" => 15,
+        "1.1.0-banking" => 16,
+        "1.2.0-tds" => 17,
+        "1.3.0-gst-compliance" => 18,
+        "1.4.0-godowns-costing" => 19,
+        "1.5.0-closing-budgets" => 20,
+        "1.6.0-orders" => 21,
+        "1.7.0-security-bom" => 22,
+        "1.8.0-payroll" => 23,
+        _ => 0,
+    }
+}
+
+/// Idempotently runs all pending migrations from the current schema_version up to `v1.8.0-payroll`.
+pub async fn run_all_migrations(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
+    let current: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await?;
+    let rank = schema_version_rank(&current);
+
+    if rank < 1 {
+        run_sprint1_migration(pool).await?;
+    }
+    if rank < 2 {
+        run_stage3_migration(pool).await?;
+    }
+    if rank < 3 {
+        run_sprint2_migration(pool).await?;
+    }
+    if rank < 4 {
+        run_sprint2_stage4_hardening_migration(pool).await?;
+    }
+    if rank < 5 {
+        run_sprint4_inventory_migration(pool).await?;
+    }
+    if rank < 6 {
+        run_sprint4_stage11_stock_migration(pool).await?;
+    }
+    if rank < 7 {
+        run_sprint4_stage12_valuation_migration(pool).await?;
+    }
+    if rank < 8 {
+        run_sprint5_stage14_integration_migration(pool).await?;
+    }
+    if rank < 9 {
+        run_sprint5_stage15_valuation_attribution_migration(pool).await?;
+    }
+    if rank < 10 {
+        run_sprint6_stage17_party_migration(pool).await?;
+    }
+    if rank < 11 {
+        run_sprint6_stage18_sales_migration(pool).await?;
+    }
+    if rank < 12 {
+        run_milestone1_commercial_posting_migration(pool).await?;
+    }
+    if rank < 13 {
+        run_milestone2_billwise_migration(pool).await?;
+    }
+    if rank < 14 {
+        run_milestone3_gst_migration(pool).await?;
+    }
+    if rank < 15 {
+        run_milestone5_notes_migration(pool).await?;
+    }
+    if rank < 16 {
+        run_milestone8_banking_migration(pool).await?;
+    }
+    if rank < 17 {
+        run_milestone9_tds_migration(pool).await?;
+    }
+    if rank < 18 {
+        run_milestone10_gst_compliance_migration(pool).await?;
+    }
+    if rank < 19 {
+        run_milestone11_multi_location_and_costing_migration(pool).await?;
+    }
+    if rank < 20 {
+        run_milestone12_closing_budgets_audit_migration(pool).await?;
+    }
+    if rank < 21 {
+        run_milestone13_order_processing_migration(pool).await?;
+    }
+    if rank < 22 {
+        run_milestone14_security_and_bom_migration(pool).await?;
+    }
+    if rank < 23 {
+        run_milestone15_payroll_migration(pool).await?;
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

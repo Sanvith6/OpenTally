@@ -349,6 +349,7 @@ async fn accounting_failure_retry_and_repeated_integration_are_idempotent() {
 
 #[tokio::test]
 async fn accounting_mapping_branches_have_exact_ledgers_and_directions() {
+    let _failure_guard = test_integration_failure_lock().lock().await;
     let db = accounting_fixture().await;
     configure_accounts(&db).await;
     let receipt = post(&db, "receipt", "2026-04-02", vec![line(Some("10"), "2")]).await;
@@ -473,6 +474,7 @@ async fn reconciliation_reports_accounting_imbalance_without_repair() {
 
 #[tokio::test]
 async fn reconciliation_reports_independently_persisted_duplicate_accounting_vouchers() {
+    let _failure_guard = test_integration_failure_lock().lock().await;
     let db = accounting_fixture().await;
     configure_accounts(&db).await;
     let receipt = post(&db, "receipt", "2026-04-02", vec![line(Some("10"), "2")]).await;

@@ -9,16 +9,22 @@ use uuid::Uuid;
 
 pub mod accounting;
 pub mod attribution;
+pub mod batches;
+pub mod bom;
 pub mod reports;
 #[cfg(test)]
 mod stage15_tests;
 pub mod stock_balance;
+pub mod stock_journal;
 pub mod stock_vouchers;
 pub mod valuation;
 pub use accounting::*;
 pub use attribution::*;
+pub use batches::*;
+pub use bom::*;
 pub use reports::*;
 pub use stock_balance::*;
+pub use stock_journal::*;
 pub use stock_vouchers::*;
 pub use valuation::*;
 
@@ -87,6 +93,10 @@ pub struct Godown {
     pub is_active: bool,
     pub created_at: String,
     pub updated_at: String,
+    #[serde(default)]
+    pub address: Option<String>,
+    #[serde(default)]
+    pub is_external: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -124,11 +134,15 @@ pub struct StockItemRequest {
     pub opening_value: String,
     pub reorder_level: String,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct GodownRequest {
     pub name: String,
     pub parent_id: Option<String>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub address: Option<String>,
+    #[serde(default)]
+    pub is_external: bool,
 }
 
 fn name(value: &str, field: &str) -> Result<String, OpenTallyError> {
@@ -655,7 +669,7 @@ impl InventoryService {
         search: Option<&str>,
     ) -> Result<Vec<Godown>, OpenTallyError> {
         let p = search.map(|s| format!("%{}%", s.trim()));
-        Ok(sqlx::query_as::<_,Godown>("SELECT id,company_id,name,parent_id,description,is_active,created_at,updated_at FROM godowns WHERE company_id=? AND (? IS NULL OR name LIKE ? COLLATE NOCASE) ORDER BY name,id").bind(c).bind(p.as_deref()).bind(p.as_deref()).fetch_all(pool).await?)
+        Ok(sqlx::query_as::<_,Godown>("SELECT id,company_id,name,parent_id,description,is_active,created_at,updated_at,address,is_external FROM godowns WHERE company_id=? AND (? IS NULL OR name LIKE ? COLLATE NOCASE) ORDER BY name,id").bind(c).bind(p.as_deref()).bind(p.as_deref()).fetch_all(pool).await?)
     }
     pub async fn create_godown(
         pool: &SqlitePool,
@@ -669,13 +683,15 @@ impl InventoryService {
         }
         let id = Uuid::new_v4().to_string();
         sqlx::query(
-            "INSERT INTO godowns(id,company_id,name,parent_id,description) VALUES(?,?,?,?,?)",
+            "INSERT INTO godowns(id,company_id,name,parent_id,description,address,is_external) VALUES(?,?,?,?,?,?,?)",
         )
         .bind(&id)
         .bind(c)
         .bind(n)
         .bind(&r.parent_id)
         .bind(r.description)
+        .bind(r.address)
+        .bind(r.is_external)
         .execute(pool)
         .await?;
         audit(pool, c, "godown", &id, "CREATE").await?;
@@ -686,7 +702,7 @@ impl InventoryService {
         c: &str,
         id: &str,
     ) -> Result<Godown, OpenTallyError> {
-        sqlx::query_as::<_,Godown>("SELECT id,company_id,name,parent_id,description,is_active,created_at,updated_at FROM godowns WHERE company_id=? AND id=?").bind(c).bind(id).fetch_optional(pool).await?.ok_or_else(||OpenTallyError::NotFound(format!("Godown '{}' not found",id)))
+        sqlx::query_as::<_,Godown>("SELECT id,company_id,name,parent_id,description,is_active,created_at,updated_at,address,is_external FROM godowns WHERE company_id=? AND id=?").bind(c).bind(id).fetch_optional(pool).await?.ok_or_else(||OpenTallyError::NotFound(format!("Godown '{}' not found",id)))
     }
     pub async fn update_godown(
         pool: &SqlitePool,
@@ -701,7 +717,7 @@ impl InventoryService {
             exists(pool, "godowns", c, p, "Parent godown").await?;
             cycle(pool, "godowns", c, id, Some(p)).await?;
         }
-        sqlx::query("UPDATE godowns SET name=?,parent_id=?,description=?,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND id=?").bind(n).bind(r.parent_id).bind(r.description).bind(c).bind(id).execute(pool).await?;
+        sqlx::query("UPDATE godowns SET name=?,parent_id=?,description=?,address=?,is_external=?,updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND id=?").bind(n).bind(r.parent_id).bind(r.description).bind(r.address).bind(r.is_external).bind(c).bind(id).execute(pool).await?;
         audit(pool, c, "godown", id, "UPDATE").await?;
         Self::get_godown(pool, c, id).await
     }

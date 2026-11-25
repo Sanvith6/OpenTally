@@ -1,0 +1,92 @@
+.ot-breadcrumb-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 16px;
+  background-color: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  min-height: 38px;
+  user-select: none;
+}
+
+.ot-breadcrumb-trail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.ot-breadcrumb-separator {
+  color: #64748b;
+  font-size: 0.75rem;
+  margin: 0 4px;
+  font-weight: 700;
+}
+
+.ot-breadcrumb-item {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.12s ease;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-breadcrumb-item:hover:not(:disabled) {
+  background-color: #1e293b;
+  color: #f1c40f;
+}
+
+.ot-breadcrumb-item-active {
+  color: #f8fafc;
+  font-weight: 700;
+  cursor: default;
+}
+
+.ot-breadcrumb-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ot-goto-pill-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  color: #e2e8f0;
+  padding: 3px 10px;
+  border-radius: 14px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.ot-goto-pill-btn:hover {
+  background-color: #2e3d54;
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.ot-goto-pill-icon {
+  font-size: 0.85rem;
+}
+
+.ot-goto-pill-kbd {
+  background-color: #0f172a;
+  border: 1px solid #475569;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 0.68rem;
+  color: #f1c40f;
+  font-family: monospace;
+}

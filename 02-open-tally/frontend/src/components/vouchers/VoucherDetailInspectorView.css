@@ -1,0 +1,427 @@
+.ot-inspector-view {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #0b1120;
+  color: #f8fafc;
+  overflow-y: auto;
+  font-family: inherit;
+}
+
+.ot-inspector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background-color: #0f172a;
+  border-bottom: 1px solid #1e293b;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.ot-inspector-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.ot-inspector-title-row h2 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ot-inspector-subtitle {
+  margin: 4px 0 0 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.ot-inspector-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ot-inspector-content {
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1300px;
+}
+
+.ot-inspector-card {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+}
+
+.ot-meta-card {
+  padding: 16px 20px;
+}
+
+.ot-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.ot-meta-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.ot-meta-field-full {
+  grid-column: 1 / -1;
+}
+
+.ot-meta-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  color: #8da2c0;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.ot-meta-val {
+  font-size: 0.95rem;
+  color: #f8fafc;
+  font-weight: 500;
+}
+
+.ot-money-highlight {
+  font-size: 1.15rem;
+  color: #f1c40f;
+  font-weight: 700;
+  font-family: monospace;
+}
+
+.ot-narration-val {
+  background-color: #0f172a;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 3px solid #38bdf8;
+  font-style: italic;
+  color: #cbd5e1;
+}
+
+.ot-meta-cancellation {
+  background-color: #451a24;
+  padding: 8px 12px;
+  border-radius: 4px;
+  border-left: 3px solid #ef4444;
+}
+
+.ot-danger-text {
+  color: #fca5a5;
+  font-weight: 600;
+}
+
+.ot-link-val {
+  color: #38bdf8;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.ot-link-val:hover {
+  color: #7dd3fc;
+}
+
+.ot-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background-color: #162032;
+  border-bottom: 1px solid #334155;
+}
+
+.ot-card-header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+.ot-badge {
+  font-size: 0.72rem;
+  background-color: #334155;
+  color: #94a3b8;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 600;
+}
+
+.ot-inspector-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.ot-inspector-table th {
+  background-color: #162032;
+  color: #94a3b8;
+  font-weight: 600;
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #334155;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.ot-inspector-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #283548;
+  color: #e2e8f0;
+}
+
+.ot-inspector-table tbody tr:hover {
+  background-color: #243044;
+}
+
+.ot-table-total-row td {
+  background-color: #162032;
+  border-top: 2px solid #3d4f70;
+  color: #f1c40f;
+  font-size: 0.92rem;
+}
+
+.ot-inline-link-btn {
+  background: none;
+  border: none;
+  color: #38bdf8;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+  font-size: 0.88rem;
+}
+
+.ot-inline-link-btn:hover {
+  text-decoration: underline;
+  color: #7dd3fc;
+}
+
+.ot-line-narration {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.ot-status-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.ot-status-posted {
+  background-color: #065f46;
+  color: #6ee7b7;
+}
+
+.ot-status-draft {
+  background-color: #854d0e;
+  color: #fef08a;
+}
+
+.ot-status-cancelled {
+  background-color: #991b1b;
+  color: #fca5a5;
+}
+
+.ot-status-reversed {
+  background-color: #9a3412;
+  color: #fdba74;
+}
+
+.ot-entry-badge {
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+.ot-entry-dr {
+  background-color: #0369a1;
+  color: #e0f2fe;
+}
+
+.ot-entry-cr {
+  background-color: #b45309;
+  color: #fef3c7;
+}
+
+.ot-ref-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background-color: #4338ca;
+  color: #e0e7ff;
+}
+
+.ot-movement-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background-color: #065f46;
+  color: #a7f3d0;
+  text-transform: capitalize;
+}
+
+.ot-lineage-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.ot-lineage-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #283548;
+  cursor: pointer;
+  transition: background-color 0.1s ease;
+}
+
+.ot-lineage-row:hover:not(.ot-lineage-current) {
+  background-color: #243044;
+}
+
+.ot-lineage-current {
+  background-color: #1a273b;
+  border-left: 3px solid #f1c40f;
+  cursor: default;
+}
+
+.ot-lineage-type {
+  font-weight: 600;
+  width: 140px;
+}
+
+.ot-lineage-num {
+  font-weight: 700;
+  color: #38bdf8;
+  width: 160px;
+}
+
+.ot-lineage-date {
+  color: #94a3b8;
+  width: 120px;
+}
+
+.ot-lineage-amt {
+  margin-left: auto;
+  font-weight: 600;
+  color: #f1c40f;
+}
+
+.ot-inspector-loading {
+  padding: 60px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 1.1rem;
+}
+
+/* Modals */
+.ot-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.ot-modal-container {
+  background-color: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  width: 500px;
+  max-width: 90vw;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.ot-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background-color: #0f172a;
+  border-bottom: 1px solid #334155;
+}
+
+.ot-modal-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #ffffff;
+}
+
+.ot-modal-close {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.ot-modal-form {
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ot-modal-desc {
+  font-size: 0.85rem;
+  color: #cbd5e1;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.ot-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  font-weight: 500;
+}
+
+.ot-form-field textarea,
+.ot-form-field input {
+  background-color: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  color: #f8fafc;
+  padding: 8px 10px;
+  font-family: inherit;
+  font-size: 0.9rem;
+}
+
+.ot-form-field textarea:focus,
+.ot-form-field input:focus {
+  outline: none;
+  border-color: #38bdf8;
+}
+
+.ot-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+}

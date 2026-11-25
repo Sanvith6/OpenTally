@@ -191,6 +191,8 @@ export interface VoucherLineInput {
   entry_type: VoucherEntryType;
   amount: string;
   narration?: string | null;
+  bill_allocations?: any[];
+  bank_allocation?: any;
 }
 
 export interface CreateVoucherDraftRequest {
