@@ -69,10 +69,29 @@ jobs:
           workspaces: 02-open-tally/src-tauri
 
       - name: Run Rust fmt, clippy, and tests
+        shell: bash
+        env:
+          RUST_BACKTRACE: 1
         run: |
           cargo fmt --manifest-path 02-open-tally/src-tauri/Cargo.toml --check
           cargo clippy --manifest-path 02-open-tally/src-tauri/Cargo.toml -- -D warnings
-          cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
+          cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml -- --nocapture 2>&1 | tee cargo-test.log
+
+      - name: Summarize test failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "### Test Failures (verify)" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          grep -E "FAILED|failures:" cargo-test.log -A 30 >> $GITHUB_STEP_SUMMARY || tail -n 50 cargo-test.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-test-log-verify
+          path: cargo-test.log
 
   build:
     name: Build Tauri Bundles (${{ matrix.label }})
