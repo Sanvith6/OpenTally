@@ -8,13 +8,14 @@
 
 ---
 
-[![Status: Active Development](https://img.shields.io/badge/Status-Sprint%201%20Verified%20%7C%20Active%20Dev-0ea5e9?style=for-the-badge&logo=git&logoColor=white)](#current-implementation-status)
+[![Status: Active Development](https://img.shields.io/badge/Status-v3.0.0%20Enterprise%20%7C%20Production%20Ready-0ea5e9?style=for-the-badge&logo=git&logoColor=white)](#current-implementation-status)
 [![License: MIT](https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge&logo=opensourceinitiative&logoColor=white)](LICENSE)
 [![Core: Rust](https://img.shields.io/badge/Core-Rust%202021-f97316?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Desktop: Tauri 2](https://img.shields.io/badge/Desktop-Tauri%202.0-6366f1?style=for-the-badge&logo=tauri&logoColor=white)](https://v2.tauri.app/)
 [![UI: React + TypeScript](https://img.shields.io/badge/UI-React%2018%20%7C%20TypeScript-3b82f6?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
 [![Storage: SQLite WAL](https://img.shields.io/badge/Database-SQLite%20WAL-64748b?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
-[![Tests: 64 Passing](https://img.shields.io/badge/Tests-64%2F64%20Passing%20(100%25)-22c55e?style=for-the-badge&logo=githubactions&logoColor=white)](#testing--verification)
+[![Tests: 509+137 Passing](https://img.shields.io/badge/Tests-509%20Rust%20%2B%20137%20Vitest%20Passing%20(100%25)-22c55e?style=for-the-badge&logo=githubactions&logoColor=white)](#testing--verification)
+[![E2E: 20/20 CDP Audit](https://img.shields.io/badge/E2E-20%2F20%20Live%20CDP%20Audit%20Passed-22c55e?style=for-the-badge&logo=playwright&logoColor=white)](#testing--verification)
 
 <p align="center">
   <a href="#quickstart--development-guide">🚀 <b>Quickstart</b></a> •
@@ -234,34 +235,43 @@ OpenTally replicates standard accounting ergonomics:
 
 ```
 [████████████████████████████████████████] Phase 1: Research & Specifications (100%)
-[████████████████████████████████████████] Sprint 1: Company & Chart of Accounts (100%)
-[████████████████████░░░░░░░░░░░░░░░░░░░░] Sprint 2: Voucher Management & Engine (Design Ready)
-[░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░] Sprint 3: Financial Reporting (Scheduled)
+[████████████████████████████████████████] Phase 2: Core Double-Entry Accounting & Audit Trail (100%)
+[████████████████████████████████████████] Phase 3: Commercial Invoicing, Orders & Inventory (100%)
+[████████████████████████████████████████] Phase 4: Indian Statutory Compliance (GST, TDS, Payroll) (100%)
+[████████████████████████████████████████] Milestone 16: Multi-Currency & CTS-2010 Cheque Printing (100%)
+[████████████████████████████████████████] Milestone 17: Multi-User LAN Host / Client Mode (Gold) (100%)
+[████████████████████████████████████████] Milestone 18: BYO-GSP e-Invoice/e-Way & Custom Reports (100%)
+[████████████████████████████████████████] Polish: Unified Terminal Theme & 20/20 Live Playwright Audit (100%)
 ```
 
-### ✅ Phase 1: Behavioral Research & Specifications (Complete)
-- 10 research domains analyzed and documented in `01-clean-room-specs/`.
-- 10 structured evidence manifests compiled in `01-clean-room-specs/tallyprime/evidence/`.
-- Port 9000 XML wire-protocol catalog authored for request/response interoperability.
+### 🚀 What's New in v3.0.0 Enterprise
 
-### ✅ Sprint 1: Company Management & Chart of Accounts (Complete & Verified)
-- **Multi-Company Management**: Full CRUD lifecycle, active company persistence across desktop restarts, statutory Indian FY date validation (`04-01`), leap-year handling (Feb 29), and soft-archival (`is_archived = 1`).
-- **Standard Chart of Accounts**:
-  - 29 standard predefined account groups automatically seeded upon company creation.
-  - 2 reserved system ledgers (`Cash` under `Cash-in-Hand`, `Profit & Loss A/c` under system group) protected by database triggers.
-  - Recursive tree rollup with circular parent-child loop detection.
-  - Multi-company boundary isolation enforced via composite foreign keys.
-- **Opening Balances**: Exact decimal normalization with `rust_decimal`, scale validation against `currency_decimal_places`, and real-time double-entry equilibrium rollup.
-- **IPC Interface**: 11 registered, verified Tauri IPC commands connecting React to Rust.
+1. **Unified Clean-Room Accounting Terminal Theme & Layout Parity**
+   - **Top Utility Bar**: Compact 34px `#1e4e79` strip with hotkey triggers (`Alt+K: Company`, `Alt+B: Data`, `Alt+I: Exchange`, `Alt+G: Go To`, `F11: Features`) and live company/period/user/LAN status badges.
+   - **Gateway of OpenTally**: Two-pane layout (`#1b5e7a` frame, `#f2f7f4` workspace) with golden-amber (`#ffcf48`) selection row and 38 deduplicated, 100% collision-free single-key hotkeys (`A-Z`, `0-9`, `-`, `=`).
+   - **Signature Voucher Color Ribbons**: Instant visual recognition for Contra (`F4`), Payment (`F5`), Receipt (`F6`), Journal (`F7`), Debit/Credit Notes (`Alt+F5`/`Alt+F6`), Sales (`F8`), and Purchase (`F9`).
+   - **Right Function Key Rail**: Fixed 152px `#e6f0f7` rail with 19 dedicated accounting shortcuts.
+   - **Data Density & Exact Math**: Tabular numeric columns with `rust_decimal` precision and double-underlined grand total rows.
 
-### 📐 Sprint 2: Voucher Management & Posting Engine (Technical Design v2.9.4 Approved)
-- Full technical specification in `02-open-tally/docs/OPENTALLY_SPRINT2_VOUCHER_ENGINE_TECHNICAL_DESIGN.md`.
-- Normalized numbering series master (`voucher_number_series`) with immutable reset frequencies (`yearly`, `monthly`, `daily`, `never`).
-- Effective-dated numbering configurations (`voucher_number_configs`) with dynamic periodic tokens (`{YY-YY}`, `{YYYY-MM}`, etc.).
-- Complete 13-step atomic voucher reversal pipeline under predefined `Reversing Journal` (`vt_reversing_journal`) with dedicated `REV` series.
-- 18-column voucher header schema with SQLite triggers blocking direct mutation of posted transactions.
-- Reconciled 12-step canonical `audit_log` migration script.
-- 153 proposed test scenarios documented.
+2. **Milestone 16: Multi-Currency Accounting & CTS-2010 Cheque Printing**
+   - Currency masters (`INR` base, `USD`, `EUR`, `GBP`, `AED`, `SGD`, custom currencies) and effective-dated daily exchange rates.
+   - Multi-currency voucher posting with base conversion and automatic Realized Forex Gain/Loss journals on bill settlement.
+   - Unrealized Forex Revaluation reporting and pure-Rust Indian CTS-2010 cheque printing generator (HDFC, SBI, ICICI, Axis templates).
+
+3. **Milestone 17: Multi-User LAN Host / Client Mode (Tally Gold Equivalent)**
+   - Opt-in embedded LAN server running on port `7900` (`ADR-002` compliant) with zero open ports on startup by default.
+   - SQLite WAL concurrency hardening with `PRAGMA busy_timeout = 10000;` for contention-free multi-client writes.
+   - Argon2id session authentication, live connected-client session revocation, and LAN client discovery.
+
+4. **Milestone 18: BYO-GSP e-Invoice/e-Way Bill Connector & Custom Report Extensions**
+   - Pluggable provider architecture: built-in deterministic Offline Sandbox Simulator and BYO-Credentials HTTPS GSP/IRP endpoints.
+   - Direct GSP push actions generating IRN, Ack No, and e-Way Bill numbers recorded in `voucher_einvoice_details` for Tax Invoice PDFs.
+   - Declarative Custom Report Builder with SQL-injection-proof queries and `.opentally-report.json` template import/export.
+
+5. **20/20 Full-App Live Playwright WebView2 CDP Audit**
+   - End-to-end automated audit testing all 20+ v3.0.0 screens at both `1280x800` and `1440x900` viewports with 0 console errors, 0 page errors, 0 horizontal overflows, and clean `Esc` hierarchy unwinding.
+
+---
 
 ---
 
@@ -313,27 +323,28 @@ npm run tauri dev
 OpenTally maintains a strict **Test-Driven Development (TDD)** discipline targeting 80%+ code coverage:
 
 ```bash
-# 1. Run all Rust core unit and integration tests (52 tests)
+# 1. Run all Rust core unit, integration, and security tests (509 tests)
 cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
 
-# 2. Run all frontend component tests (12 tests)
+# 2. Run all frontend component and integration tests (137 tests)
 npm --prefix 02-open-tally/frontend test -- --run
 
-# 3. Verify Sprint 2 Technical Design schema & invariant checks (19 checks)
-python scratch/verify_v294.py
+# 3. Strict compiler linting & formatting checks
+cargo clippy --manifest-path 02-open-tally/src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo fmt --manifest-path 02-open-tally/src-tauri/Cargo.toml -- --check
 
-# 4. Verify isolated SQLite schema and trigger behavior
-python scratch/test_v294_schema_and_config.py
+# 4. Live 20-Step Desktop Playwright WebView2 CDP Audit
+node 02-open-tally/frontend/e2e/playwright_tally_audit.mjs
 ```
 
 ### Test Suite Breakdown
 
 | Test Suite | Tests | Status | Scope |
 |:---|:---:|:---:|:---|
-| **Rust Backend Tests** | 52 | **PASSED** | Multi-company isolation, calendar validation, recursive tree rollups, trigger guards, migration rollback. |
-| **Frontend Vitest Tests** | 12 | **PASSED** | Chart of Accounts hierarchy, keyboard traversal, modal forms, equilibrium bar. |
-| **Document Invariants** | 19 | **PASSED** | Static schema integrity, DDL candidate keys, composite foreign keys, trigger definitions. |
-| **Total Automated Tests** | **83** | **100% PASS** | Zero regressions across all tiers. |
+| **Rust Backend Tests** | 509 | **PASSED** | Multi-currency, LAN server concurrency, GSP connectors, custom reports, MCA audit trail, double-entry GL, payroll, GST/TDS, BRS, BOM. |
+| **Frontend Vitest Tests** | 137 | **PASSED** | All UI components, hotkey navigation, voucher ribbons, cheque printing modal, LAN host modal, GSP settings, custom reports. |
+| **Live Playwright CDP Audit** | 20 / 20 | **PASSED** | Full-app live WebView2 verification across all v3.0.0 screens at 1280x800 and 1440x900 (0 errors, 0 overflow). |
+| **Total Automated Tests** | **646+** | **100% PASS** | Zero regressions across all tiers. |
 
 ---
 

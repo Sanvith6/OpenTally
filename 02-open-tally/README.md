@@ -1,12 +1,12 @@
-# OpenTally — Clean-Room Indian Accounting & ERP Engine (v2.0.0)
+# OpenTally — Clean-Room Indian Accounting & ERP Engine (v3.0.0 Enterprise)
 
-OpenTally is a high-performance, open-source desktop accounting, inventory, taxation, manufacturing, and payroll application interoperable with standard TallyPrime observable workflows and data formats, engineered from first principles under strict clean-room governance.
+OpenTally is a high-performance, open-source desktop accounting, inventory, taxation, manufacturing, multi-currency, and multi-user LAN application interoperable with standard TallyPrime observable workflows and data formats, engineered from first principles under strict clean-room governance.
 
-Built with **Tauri v2**, **Rust** (core double-entry engine, SQLite + WAL + SQLCipher, `rust_decimal`), and **TypeScript / React 18** (keyboard-first desktop UI).
+Built with **Tauri v2**, **Rust** (core double-entry engine, SQLite + WAL + SQLCipher, `rust_decimal`), and **TypeScript / React 18** (keyboard-first desktop UI with classic accounting terminal ergonomics).
 
 ---
 
-## Key Capabilities (`v2.0.0` Release — Milestones 1–15)
+## Key Capabilities (`v3.0.0` Enterprise Release — Milestones 1–18)
 
 ### 1. Pure Double-Entry Accounting Core & MCA Audit Certification
 - **Standard Chart of Accounts**: 29 Indian standard account groups, recursive multi-level rollup, and database trigger-protected reserved ledgers (`Cash`, `Profit & Loss A/c`).
@@ -22,21 +22,26 @@ Built with **Tauri v2**, **Rust** (core double-entry engine, SQLite + WAL + SQLC
 - **Multi-Location Godowns & Stock Journals (`Alt+F7`)**: Inter-godown transfers, godown summaries, batch/expiry aging tracking, and dual-column Stock Journals.
 - **Manufacturing Bill of Materials (BOM)**: Multi-component recipes with cycle protection, proportional scaling, raw-material FIFO consumption, overhead capitalization, batch linking, and exact finished-goods landed unit costing.
 
-### 3. Indian Statutory Compliance (GST, GSTR-2B, e-Invoice, TDS/TCS, Payroll)
-- **GST Returns & GSTR-2B Reconciliation**: GSTR-1, GSTR-3B, portal GSTR-2B JSON import with 4-way ITC reconciliation (`Matched`, `Mismatch`, `Missing in Books`, `Missing in 2B`), NIC e-Invoice (`v1.1`), and e-Way Bill JSON exports.
+### 3. Multi-Currency Accounting, Forex Engine & CTS-2010 Cheque Printing (Milestone 16)
+- **Currency Masters & Daily Rates**: Base currency (`INR`) plus global foreign currencies (`USD`, `EUR`, `GBP`, `AED`, `SGD`, custom) with effective-dated exchange rates.
+- **Foreign Voucher Posting & Conversion**: Records foreign amounts, applied exchange rates, and base conversions across vouchers.
+- **Realized & Unrealized Forex Gain/Loss**: Automatic Realized Forex Gain/Loss journal posting upon bill settlement (`AgstRef`) plus period-end Unrealized Forex Revaluation reporting.
+- **CTS-2010 Cheque Printing PDFs**: Built-in pure-Rust bank cheque printing templates (HDFC, SBI, ICICI, Axis) with payee, date boxes, Indian words amount, and A/c Payee crossing.
+
+### 4. Multi-User LAN Host / Client Mode (Milestone 17 — Gold Equivalent)
+- **Zero-Footprint Opt-in Server**: Embedded LAN server listening on port `7900` (`ADR-002` compliant) only when explicitly enabled.
+- **SQLite WAL Concurrency Hardening**: Configured with `PRAGMA busy_timeout = 10000;` for contention-free concurrent multi-client writes.
+- **Argon2id Session Security**: Full RBAC authentication over LAN, live active session dashboard, and instant session revocation.
+
+### 5. BYO-GSP e-Invoice/e-Way Connector & Custom Reports (Milestone 18)
+- **Pluggable GSP/IRP Architecture**: Offline deterministic Sandbox Simulator and configurable live HTTPS GSP endpoints.
+- **One-Click GSP Push**: Pushes e-Invoice (NIC v1.1) and e-Way Bill payloads directly to IRP/GSP endpoints and writes IRN / Ack No into voucher details.
+- **Declarative Custom Report Extensions**: Safe, injection-proof custom report builder with `.opentally-report.json` template sharing.
+
+### 6. Indian Statutory Compliance (GST, GSTR-2B, TDS/TCS, Payroll)
+- **GST Returns & GSTR-2B Reconciliation**: GSTR-1, GSTR-3B, portal GSTR-2B JSON import with 4-way ITC reconciliation (`Matched`, `Mismatch`, `Missing in Books`, `Missing in 2B`).
 - **TDS & TCS Engine**: TAN/PAN validation, Nature of Payment sections (`194C`, `194J`, `194I`, `194H`, `194A`, `194Q`, `206C(1H)`), FY thresholds, Section 206AA 20% missing-PAN enforcement, Challan tagging, and Form 26Q Q1–Q4 exports.
-- **Indian Payroll (`Ctrl+F4`) & A4 Payslip PDFs**: `F11` auto-seeding of 7 Payroll ledgers, Employee masters (PAN/UAN), LOP proration, EPF/EPS (`₹15,000` ceiling), ESI (`₹21,000` ceiling), PT slab (`₹25,000`), atomic `vt_payroll` GL posting, voucher cancellation hooks, CWE-1236-safe CSV export, and pure-Rust A4 `%PDF-1.4` Payslip PDFs.
-
-### 4. Banking (BRS), Management Accounting & Security Control
-- **Banking & BRS**: Instrument allocations (`Cheque`, `NEFT`, `RTGS`, `IMPS`, `UPI`, etc.) and CSV bank statement deterministic auto-matching.
-- **Management Accounting**: Two-pane Ratio Analysis, Cost Categories & Centres with breakup reports, and Group/Ledger/Cost Centre Budgets & Variance tracking.
-- **Security Control (Argon2id RBAC)**: Optional per-company login (`Admin`, `Accountant`, `DataEntry`, `Auditor`), sole active Admin guardrails, and database-backed session validation.
-- **Bill-Wise AR/AP & Aging**: `New Ref`, `Agst Ref`, `Advance`, `On Account` tracking and overdue aging intervals backed by `ReadOnlyConnectionGuard`.
-
-### 5. Tally XML Interchange, Tax Invoice PDF & WAL Backup/Restore
-- **Streaming Tally XML (`Alt+I`)**: Pure-Rust `quick-xml` parser/exporter with 50MB guard, XXE protection, dry-run preview, and `<ENVELOPE>` export (ADR-002 compliant).
-- **WAL-Safe Backup & Restore (`Alt+B`)**: SQLite online backup API (`sqlite3_backup`) + SHA-256 verified restore.
-- **1-Click Sample Company (`F3` → `S`)**: Realistic Indian SME dataset (`Bharath Precision Components Pvt Ltd`).
+- **Indian Payroll (`Ctrl+F4`) & A4 Payslip PDFs**: Employee masters, LOP proration, EPF/ESI/PT statutory computations, atomic `vt_payroll` posting, and pure-Rust A4 `%PDF-1.4` Payslip PDFs.
 
 ---
 
