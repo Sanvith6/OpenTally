@@ -216,6 +216,10 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
 
   return (
     <section className="ot-report-screen">
+      <div className="ot-voucher-ribbon ot-ribbon-sales" data-testid="voucher-ribbon-sales">
+        <span>Sales Voucher (F8)</span>
+        <span>Outward Taxable Supply &amp; Inventory Delivery</span>
+      </div>
       <div className="ot-report-header">
         <div>
           <h2>Sales Vouchers</h2>

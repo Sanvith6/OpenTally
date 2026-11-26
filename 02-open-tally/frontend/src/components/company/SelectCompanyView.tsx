@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Company } from '../../types';
-import { listCompanies, selectCompany, createSampleCompany } from '../../services/api';
+import {
+  listCompanies,
+  selectCompany,
+  createSampleCompany,
+  testLanHealth,
+  loginLanClient,
+} from '../../services/api';
 import './SelectCompanyView.css';
 
 export interface SelectCompanyViewProps {
@@ -28,6 +34,18 @@ export const SelectCompanyView: React.FC<SelectCompanyViewProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [filterText, setFilterText] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+
+  // TallyPrime Gold LAN Client Connection State
+  const [showLanPanel, setShowLanPanel] = useState(false);
+  const [lanHost, setLanHost] = useState('127.0.0.1');
+  const [lanPort, setLanPort] = useState('7900');
+  const [lanHealthOk, setLanHealthOk] = useState(false);
+  const [lanCompanies, setLanCompanies] = useState<Company[]>([]);
+  const [lanCompanyId, setLanCompanyId] = useState('');
+  const [lanUsername, setLanUsername] = useState('');
+  const [lanPassword, setLanPassword] = useState('');
+  const [lanLoading, setLanLoading] = useState(false);
+  const [lanError, setLanError] = useState<string | null>(null);
 
   const filterInputRef = useRef<HTMLInputElement>(null);
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -93,16 +111,88 @@ export const SelectCompanyView: React.FC<SelectCompanyViewProps> = ({
     }
   }, [fetchCompanies, onCompanySelected]);
 
+  const handleTestLanHealth = async () => {
+    const portNum = parseInt(lanPort, 10) || 7900;
+    setLanLoading(true);
+    setLanError(null);
+    setLanHealthOk(false);
+    try {
+      const health = await testLanHealth(lanHost.trim(), portNum);
+      if (health.status !== 'ok') {
+        throw new Error(`Unexpected LAN health status: ${health.status}`);
+      }
+      setLanHealthOk(true);
+      const res = await fetch(`http://${lanHost.trim()}:${portNum}/api/v1/companies`);
+      if (res.ok) {
+        const list: Company[] = await res.json();
+        setLanCompanies(list);
+        if (list.length > 0 && !lanCompanyId) {
+          setLanCompanyId(list[0].id);
+        }
+      }
+    } catch (err) {
+      setLanError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLanLoading(false);
+    }
+  };
+
+  const handleConnectLan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const portNum = parseInt(lanPort, 10) || 7900;
+    if (!lanCompanyId.trim()) {
+      setLanError('Please select or enter a Company ID.');
+      return;
+    }
+    setLanLoading(true);
+    setLanError(null);
+    try {
+      await loginLanClient(
+        lanHost.trim(),
+        portNum,
+        lanCompanyId.trim(),
+        lanUsername.trim() || 'lan_user',
+        lanPassword || undefined
+      );
+      const matched = lanCompanies.find((c) => c.id === lanCompanyId.trim()) || {
+        id: lanCompanyId.trim(),
+        name: `LAN: ${lanCompanyId.trim()}`,
+        mailing_name: lanCompanyId.trim(),
+        country: 'India',
+        state: 'Karnataka',
+        financial_year_begins: '2026-04-01',
+        books_beginning_from: '2026-04-01',
+        currency_symbol: '₹',
+        currency_formal_name: 'INR',
+        currency_decimal_places: 2,
+        status: 'active',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      setShowLanPanel(false);
+      onCompanySelected(matched);
+    } catch (err) {
+      setLanError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLanLoading(false);
+    }
+  };
+
   // Global Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
-      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+      const isInput =
+        target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
 
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
-        if (onClose) onClose();
+        if (showLanPanel) {
+          setShowLanPanel(false);
+        } else if (onClose) {
+          onClose();
+        }
         return;
       }
 
@@ -124,6 +214,10 @@ export const SelectCompanyView: React.FC<SelectCompanyViewProps> = ({
           e.preventDefault();
           onRestoreBackup();
           return;
+        } else if (key === 'L') {
+          e.preventDefault();
+          setShowLanPanel((prev) => !prev);
+          return;
         }
       }
 
@@ -143,7 +237,7 @@ export const SelectCompanyView: React.FC<SelectCompanyViewProps> = ({
 
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [filtered, selectedIndex, handleSelect, onCreateCompany, handleLoadSample, onImportXml, onRestoreBackup, onClose]);
+  }, [filtered, selectedIndex, handleSelect, onCreateCompany, handleLoadSample, onImportXml, onRestoreBackup, onClose, showLanPanel]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -221,7 +315,142 @@ export const SelectCompanyView: React.FC<SelectCompanyViewProps> = ({
           <span className="ot-action-key">R</span>
           <span className="ot-action-label">Restore Backup</span>
         </button>
+
+        <button
+          type="button"
+          className={`ot-action-btn ${showLanPanel ? 'ot-action-btn-highlight' : ''}`}
+          onClick={() => setShowLanPanel((prev) => !prev)}
+          title="Connect to LAN Server (TallyPrime Gold) [L]"
+          data-testid="btn-connect-lan"
+        >
+          <span className="ot-action-key">L</span>
+          <span className="ot-action-label">Connect to LAN Server</span>
+        </button>
       </div>
+
+      {showLanPanel && (
+        <form className="ot-hub-lan-panel" onSubmit={handleConnectLan} data-testid="lan-connect-panel">
+          <div className="ot-hub-lan-header">
+            <strong>Connect to OpenTally LAN Host (TallyPrime Gold)</strong>
+            <button
+              type="button"
+              className="ot-btn-close"
+              onClick={() => setShowLanPanel(false)}
+              aria-label="Close LAN Connect Panel"
+            >
+              &times;
+            </button>
+          </div>
+          {lanError && (
+            <div className="ot-hub-error" role="alert">
+              {lanError}
+            </div>
+          )}
+          <div className="ot-hub-lan-grid">
+            <div>
+              <label htmlFor="lan-client-host">Host IP / Hostname</label>
+              <input
+                id="lan-client-host"
+                type="text"
+                value={lanHost}
+                onChange={(e) => setLanHost(e.target.value)}
+                placeholder="192.168.1.10"
+              />
+            </div>
+            <div>
+              <label htmlFor="lan-client-port">Port (Default 7900)</label>
+              <input
+                id="lan-client-port"
+                type="number"
+                value={lanPort}
+                onChange={(e) => setLanPort(e.target.value)}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+              <button
+                type="button"
+                className="ot-btn ot-btn-secondary"
+                onClick={handleTestLanHealth}
+                disabled={lanLoading}
+                data-testid="btn-test-lan-health"
+              >
+                {lanLoading ? 'Testing...' : 'Test Health'}
+              </button>
+            </div>
+          </div>
+
+          {lanHealthOk && (
+            <div style={{ color: '#10b981', fontSize: '0.85rem', marginTop: '6px' }}>
+              LAN Host reachable at http://{lanHost}:{lanPort}
+            </div>
+          )}
+
+          <div className="ot-hub-lan-grid" style={{ marginTop: '10px' }}>
+            <div>
+              <label htmlFor="lan-client-company">Company</label>
+              {lanCompanies.length > 0 ? (
+                <select
+                  id="lan-client-company"
+                  value={lanCompanyId}
+                  onChange={(e) => setLanCompanyId(e.target.value)}
+                >
+                  {lanCompanies.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.id})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  id="lan-client-company"
+                  type="text"
+                  value={lanCompanyId}
+                  onChange={(e) => setLanCompanyId(e.target.value)}
+                  placeholder="Enter Company ID"
+                />
+              )}
+            </div>
+            <div>
+              <label htmlFor="lan-client-user">Username</label>
+              <input
+                id="lan-client-user"
+                type="text"
+                value={lanUsername}
+                onChange={(e) => setLanUsername(e.target.value)}
+                placeholder="admin"
+              />
+            </div>
+            <div>
+              <label htmlFor="lan-client-pass">Password</label>
+              <input
+                id="lan-client-pass"
+                type="password"
+                value={lanPassword}
+                onChange={(e) => setLanPassword(e.target.value)}
+                placeholder="Optional if security off"
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+            <button
+              type="button"
+              className="ot-btn ot-btn-secondary"
+              onClick={() => setShowLanPanel(false)}
+            >
+              Cancel (Esc)
+            </button>
+            <button
+              type="submit"
+              className="ot-btn ot-btn-primary"
+              disabled={lanLoading}
+              data-testid="btn-submit-lan-login"
+            >
+              {lanLoading ? 'Connecting...' : 'Connect & Login'}
+            </button>
+          </div>
+        </form>
+      )}
 
       {error && <div className="ot-hub-error" role="alert">{error}</div>}
 

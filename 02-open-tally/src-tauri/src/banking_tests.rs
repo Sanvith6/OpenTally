@@ -212,15 +212,15 @@ async fn test_voucher_auto_allocations() {
     .await;
 
     // Verify auto-created allocation
-    let allocs: Vec<(String, String, Option<String>, Option<String>, String, i64)> =
-        sqlx::query_as(
-            "SELECT transaction_type, amount, instrument_number, bank_date, dr_cr, is_cancelled 
+    type AutoAllocRow = (String, String, Option<String>, Option<String>, String, i64);
+    let allocs: Vec<AutoAllocRow> = sqlx::query_as(
+        "SELECT transaction_type, amount, instrument_number, bank_date, dr_cr, is_cancelled 
          FROM bank_allocations WHERE company_id = 'cmp_bank_1' AND voucher_id = ?",
-        )
-        .bind(&pmt_id)
-        .fetch_all(db.pool())
-        .await
-        .unwrap();
+    )
+    .bind(&pmt_id)
+    .fetch_all(db.pool())
+    .await
+    .unwrap();
 
     assert_eq!(allocs.len(), 1);
     assert_eq!(allocs[0].0, "Other");
@@ -253,7 +253,15 @@ async fn test_voucher_auto_allocations() {
     )
     .await;
 
-    let r_allocs: Vec<(String, String, Option<String>, Option<String>, Option<String>, String)> = sqlx::query_as(
+    type ExplicitAllocRow = (
+        String,
+        String,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        String,
+    );
+    let r_allocs: Vec<ExplicitAllocRow> = sqlx::query_as(
         "SELECT transaction_type, amount, instrument_number, instrument_date, favouring_name, dr_cr 
          FROM bank_allocations WHERE company_id = 'cmp_bank_1' AND voucher_id = ?",
     )

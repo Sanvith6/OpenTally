@@ -16,6 +16,8 @@ import {
   saveVoucherEinvoiceMetadata,
   exportEinvoiceJson,
   exportEwayBillJson,
+  pushEinvoiceToGsp,
+  pushEwayBillToGsp,
 } from '../../services/api';
 import './VoucherDetailInspectorView.css';
 
@@ -59,6 +61,8 @@ export const VoucherDetailInspectorView: React.FC<VoucherDetailInspectorViewProp
   const [isEditMetaOpen, setIsEditMetaOpen] = useState(false);
   const [exportingEinvoice, setExportingEinvoice] = useState(false);
   const [exportingEway, setExportingEway] = useState(false);
+  const [pushingEinvoiceGsp, setPushingEinvoiceGsp] = useState(false);
+  const [pushingEwayGsp, setPushingEwayGsp] = useState(false);
   const [savingMeta, setSavingMeta] = useState(false);
 
   // e-Way transport form
@@ -215,6 +219,48 @@ export const VoucherDetailInspectorView: React.FC<VoucherDetailInspectorViewProp
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setExportingEway(false);
+    }
+  };
+
+  const handlePushEinvoiceGsp = async () => {
+    if (!detail?.voucher) return;
+    setPushingEinvoiceGsp(true);
+    setError(null);
+    try {
+      const res = await pushEinvoiceToGsp(detail.voucher.id);
+      const updatedMeta = await getVoucherEinvoiceMetadata(detail.voucher.id);
+      setEinvoiceMeta(updatedMeta);
+      if (updatedMeta) {
+        setMetaIrn(updatedMeta.irn || res.irn || '');
+        setMetaAckNo(updatedMeta.ack_no || res.ack_no || '');
+        setMetaAckDate(updatedMeta.ack_date || res.ack_date || '');
+        setMetaStatus(updatedMeta.einvoice_status || 'Generated');
+      }
+      setNotification(`e-Invoice pushed via ${res.provider_mode}. IRN: ${res.irn} (Ack #${res.ack_no})`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPushingEinvoiceGsp(false);
+    }
+  };
+
+  const handlePushEwayGsp = async () => {
+    if (!detail?.voucher) return;
+    setPushingEwayGsp(true);
+    setError(null);
+    try {
+      const res = await pushEwayBillToGsp(detail.voucher.id);
+      const updatedMeta = await getVoucherEinvoiceMetadata(detail.voucher.id);
+      setEinvoiceMeta(updatedMeta);
+      if (updatedMeta) {
+        setMetaEwbNo(updatedMeta.eway_bill_no || res.ewb_no || '');
+        setMetaEwbValid(updatedMeta.eway_valid_upto || res.ewb_valid_upto || '');
+      }
+      setNotification(`e-Way Bill generated via ${res.provider_mode}. EWB No: ${res.ewb_no} (Valid upto ${res.ewb_valid_upto})`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setPushingEwayGsp(false);
     }
   };
 
@@ -593,6 +639,26 @@ export const VoucherDetailInspectorView: React.FC<VoucherDetailInspectorViewProp
                 <button
                   type="button"
                   className="ot-primary-btn"
+                  onClick={handlePushEinvoiceGsp}
+                  disabled={pushingEinvoiceGsp}
+                  style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                  data-testid="push-einvoice-gsp-btn"
+                >
+                  {pushingEinvoiceGsp ? 'Pushing to IRP…' : 'Push e-Invoice (GSP/Sandbox)'}
+                </button>
+                <button
+                  type="button"
+                  className="ot-primary-btn"
+                  onClick={handlePushEwayGsp}
+                  disabled={pushingEwayGsp}
+                  style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}
+                  data-testid="push-eway-gsp-btn"
+                >
+                  {pushingEwayGsp ? 'Pushing e-Way…' : 'Push e-Way Bill (GSP/Sandbox)'}
+                </button>
+                <button
+                  type="button"
+                  className="ot-btn"
                   onClick={handleExportEinvoice}
                   disabled={exportingEinvoice}
                   style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}

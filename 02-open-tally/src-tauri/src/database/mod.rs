@@ -41,7 +41,7 @@ impl DatabaseManager {
     /// - `PRAGMA journal_mode = WAL;`
     /// - `PRAGMA synchronous = NORMAL;`
     /// - `PRAGMA foreign_keys = ON;`
-    /// - `PRAGMA busy_timeout = 5000;`
+    /// - `PRAGMA busy_timeout = 10000;`
     pub async fn init(db_path: &Path) -> Result<Self, OpenTallyError> {
         let path_str = db_path.to_str().ok_or_else(|| {
             OpenTallyError::Config("Database path contains invalid UTF-8 characters".to_string())
@@ -65,7 +65,7 @@ impl DatabaseManager {
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
         .foreign_keys(true)
-        .busy_timeout(std::time::Duration::from_millis(5000));
+        .busy_timeout(std::time::Duration::from_millis(10000));
 
         // For in-memory testing, restrict pool to 1 connection to prevent isolated memory DBs
         let max_connections = if is_in_memory { 1 } else { 10 };
@@ -73,7 +73,7 @@ impl DatabaseManager {
         let pool = SqlitePoolOptions::new()
             .max_connections(max_connections)
             .min_connections(1)
-            .acquire_timeout(std::time::Duration::from_secs(5))
+            .acquire_timeout(std::time::Duration::from_secs(15))
             .after_release(|conn, _meta| {
                 Box::pin(async move {
                     // Execute PRAGMA query_only first so the FIFO SQLite worker drains any

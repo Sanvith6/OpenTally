@@ -1,0 +1,92 @@
+.ot-cheque-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+}
+
+.ot-cheque-modal {
+  background: var(--ot-bg-card, #1e2530);
+  border: 1px solid var(--ot-border, #3b4252);
+  border-radius: 8px;
+  width: 460px;
+  max-width: 90vw;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+}
+
+.ot-cheque-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--ot-border, #2e3440);
+}
+
+.ot-cheque-modal-header h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: var(--ot-cyan, #88c0d0);
+}
+
+.ot-cheque-vch-badge {
+  background: #2e3440;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  color: #eceff4;
+  font-family: monospace;
+}
+
+.ot-cheque-modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ot-cheque-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ot-cheque-field label {
+  font-size: 0.85rem;
+  color: #d8dee9;
+}
+
+.ot-cheque-field select,
+.ot-cheque-field input {
+  background: #141a22;
+  border: 1px solid #3b4252;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: #eceff4;
+  font-size: 0.95rem;
+}
+
+.ot-cheque-checkbox-field label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #eceff4;
+  cursor: pointer;
+}
+
+.ot-cheque-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--ot-border, #2e3440);
+  background: #19202a;
+}

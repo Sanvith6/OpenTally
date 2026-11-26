@@ -9,6 +9,17 @@ pub enum UserRole {
     Auditor,
 }
 
+impl std::fmt::Display for UserRole {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Admin => write!(f, "Admin"),
+            Self::Accountant => write!(f, "Accountant"),
+            Self::DataEntry => write!(f, "DataEntry"),
+            Self::Auditor => write!(f, "Auditor"),
+        }
+    }
+}
+
 impl UserRole {
     pub fn as_str(&self) -> &'static str {
         match self {
@@ -50,12 +61,16 @@ pub enum ActionPermission {
     ManageBom,
     ExecuteManufacturingJournal,
     ManagePayroll,
+    ManageMultiCurrency,
+    PrintCheque,
+    ManageLanServer,
 }
 
 impl UserRole {
     pub fn can_perform(&self, action: ActionPermission) -> bool {
         match action {
             ActionPermission::ManageUsers => matches!(self, Self::Admin),
+            ActionPermission::ManageLanServer => matches!(self, Self::Admin),
             ActionPermission::BackupDatabase => matches!(self, Self::Admin | Self::Accountant),
             ActionPermission::RestoreDatabase => matches!(self, Self::Admin),
             ActionPermission::YearEndClosing => matches!(self, Self::Admin),
@@ -79,6 +94,10 @@ impl UserRole {
                 matches!(self, Self::Admin | Self::Accountant | Self::DataEntry)
             }
             ActionPermission::ManagePayroll => matches!(self, Self::Admin | Self::Accountant),
+            ActionPermission::ManageMultiCurrency => matches!(self, Self::Admin | Self::Accountant),
+            ActionPermission::PrintCheque => {
+                matches!(self, Self::Admin | Self::Accountant | Self::DataEntry)
+            }
         }
     }
 }

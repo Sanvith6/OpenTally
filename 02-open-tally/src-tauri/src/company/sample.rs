@@ -89,6 +89,8 @@ impl SampleCompanyService {
                 auto_seed_tds_defaults: false,
                 enable_payroll: Some(false),
                 auto_seed_payroll_ledgers: false,
+                enable_multi_currency: Some(false),
+                auto_seed_currency_defaults: false,
             },
         )
         .await?;

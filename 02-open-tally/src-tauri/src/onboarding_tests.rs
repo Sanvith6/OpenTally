@@ -118,6 +118,8 @@ async fn test_f11_features_auto_seeding_and_idempotency() {
             auto_seed_tds_defaults: false,
             enable_payroll: Some(false),
             auto_seed_payroll_ledgers: false,
+            enable_multi_currency: Some(false),
+            auto_seed_currency_defaults: false,
         },
     )
     .await
@@ -186,6 +188,8 @@ async fn test_f11_features_auto_seeding_and_idempotency() {
             auto_seed_tds_defaults: false,
             enable_payroll: Some(false),
             auto_seed_payroll_ledgers: false,
+            enable_multi_currency: Some(false),
+            auto_seed_currency_defaults: false,
         },
     )
     .await

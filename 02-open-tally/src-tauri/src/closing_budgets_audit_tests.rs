@@ -392,7 +392,7 @@ async fn test_budgets_creation_variance_reporting_and_deletion() {
     // Allocate cost centre to line 1
     let mut conn = pool.acquire().await.unwrap();
     CostCentreService::save_voucher_cost_allocations(
-        &mut *conn,
+        &mut conn,
         &company_id,
         &vch_id,
         &line1_id,

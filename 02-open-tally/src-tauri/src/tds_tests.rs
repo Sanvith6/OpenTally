@@ -152,6 +152,8 @@ async fn setup_tds_test_db() -> (
             auto_seed_tds_defaults: true,
             enable_payroll: Some(false),
             auto_seed_payroll_ledgers: false,
+            enable_multi_currency: Some(false),
+            auto_seed_currency_defaults: false,
         },
     )
     .await
@@ -295,7 +297,7 @@ async fn test_preview_tds_calculation_threshold_and_higher_rate() {
     )
     .await
     .unwrap();
-    assert_eq!(preview_under.threshold_exceeded, false);
+    assert!(!preview_under.threshold_exceeded);
     assert_eq!(preview_under.tds_amount, "0.00");
 
     // 2. Transaction exceeding single threshold for 194C (₹35,000 > ₹30,000)
@@ -311,7 +313,7 @@ async fn test_preview_tds_calculation_threshold_and_higher_rate() {
     )
     .await
     .unwrap();
-    assert_eq!(preview_over.threshold_exceeded, true);
+    assert!(preview_over.threshold_exceeded);
     // Company deductee under 194C = 2% of 35000 = 700.00
     assert_eq!(preview_over.applicable_rate, "2.00");
     assert_eq!(preview_over.tds_amount, "700.00");
@@ -364,7 +366,7 @@ async fn test_preview_tds_calculation_threshold_and_higher_rate() {
     )
     .await
     .unwrap();
-    assert_eq!(preview_missing_pan.is_pan_missing_higher_rate, true);
+    assert!(preview_missing_pan.is_pan_missing_higher_rate);
     assert_eq!(preview_missing_pan.applicable_rate, "20.00");
     // 20% on 100,000 = 20,000.00
     assert_eq!(preview_missing_pan.tds_amount, "20000.00");

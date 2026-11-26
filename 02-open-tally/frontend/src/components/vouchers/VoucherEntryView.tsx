@@ -334,8 +334,40 @@ export function VoucherEntryView({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleKeyDown]);
 
+  const currentTypeName = useMemo(() => {
+    return voucherTypes.find((vt) => vt.id === selectedTypeId)?.name || 'Accounting Voucher';
+  }, [voucherTypes, selectedTypeId]);
+
+  const ribbonMeta = useMemo(() => {
+    switch (selectedTypeId) {
+      case 'vt_contra':
+        return { cls: 'ot-ribbon-contra', label: 'Contra Voucher (F4)', sub: 'Cash / Bank Fund Transfer' };
+      case 'vt_payment':
+        return { cls: 'ot-ribbon-payment', label: 'Payment Voucher (F5)', sub: 'Cash / Bank Disbursement' };
+      case 'vt_receipt':
+        return { cls: 'ot-ribbon-receipt', label: 'Receipt Voucher (F6)', sub: 'Cash / Bank Collection' };
+      case 'vt_jnl':
+        return { cls: 'ot-ribbon-journal', label: 'Journal Voucher (F7)', sub: 'Non-Cash Adjustment & Accrual' };
+      case 'vt_sales':
+        return { cls: 'ot-ribbon-sales', label: 'Sales Voucher (F8)', sub: 'Outward Commercial Entry' };
+      case 'vt_pur':
+        return { cls: 'ot-ribbon-purchase', label: 'Purchase Voucher (F9)', sub: 'Inward Commercial Entry' };
+      case 'vt_debit_note':
+      case 'vt_credit_note':
+        return { cls: 'ot-ribbon-notes', label: `${currentTypeName}`, sub: 'Debit / Credit Note Adjustment' };
+      default:
+        return { cls: 'ot-ribbon-journal', label: currentTypeName, sub: 'Double-Entry Voucher Posting' };
+    }
+  }, [selectedTypeId, currentTypeName]);
+
   return (
     <div className="ot-voucher-entry-workspace">
+      {/* Signature Voucher Color Ribbon */}
+      <div className={`ot-voucher-ribbon ${ribbonMeta.cls}`} data-testid="voucher-entry-ribbon">
+        <span>{ribbonMeta.label}</span>
+        <span>{ribbonMeta.sub}</span>
+      </div>
+
       {/* Top Breadcrumb & Navigation */}
       <div className="ot-voucher-top-bar">
         <div className="ot-breadcrumb">

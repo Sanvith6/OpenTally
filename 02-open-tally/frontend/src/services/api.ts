@@ -92,6 +92,25 @@ import {
   FinancialYearClosingRecord,
   YearEndClosingPreview,
   AuditCertificationReport,
+  Currency,
+  CreateCurrencyInput,
+  ExchangeRate,
+  SetExchangeRateInput,
+  EffectiveRateDto,
+  OpenForeignBill,
+  SettleForeignBillInput,
+  RealizedForexResult,
+  UnrealizedForexReport,
+  ChequeTemplateDto,
+  UpsertChequeTemplateInput,
+  CurrencySeedSummary,
+  CompanyGspConfigDto,
+  SaveCompanyGspConfigInput,
+  GspEinvoiceResponse,
+  GspEwayBillResponse,
+  CustomReportDefinitionDto,
+  SaveCustomReportInput,
+  CustomReportExecutionResult,
 } from '../types';
 
 function getWebPreviewMock(): HealthResponse {
@@ -173,6 +192,9 @@ export async function fetchHealth(): Promise<HealthResponse> {
 }
 
 export async function listCompanies(): Promise<Company[]> {
+  if (isLanClientMode()) {
+    return await callLanRpc<Company[]>('list_companies');
+  }
   if (!isTauriEnv()) {
     return [...mockCompanies];
   }
@@ -497,6 +519,13 @@ export async function postPurchaseDocument(
   purchaseLedgerId?: string,
   tdsSectionCode?: string
 ): Promise<CommercialPostingResult> {
+  if (isLanClientMode()) {
+    return await callLanRpc<CommercialPostingResult>('post_purchase_document', {
+      id,
+      purchase_ledger_id: purchaseLedgerId || null,
+      tds_section_code: tdsSectionCode || null,
+    });
+  }
   if (!isTauriEnv()) throw new Error('Posting purchase documents requires the native OpenTally application');
   return invoke<CommercialPostingResult>('post_purchase_document', {
     id,
@@ -506,6 +535,9 @@ export async function postPurchaseDocument(
 }
 
 export async function getDayBook(request: DayBookRequest): Promise<ReportPage<DayBookEntry>> {
+  if (isLanClientMode()) {
+    return await callLanRpc<ReportPage<DayBookEntry>>('get_daybook', request as unknown as Record<string, unknown>);
+  }
   if (!isTauriEnv()) {
     return { items: [], total: 0, page: request.page.page, page_size: request.page.page_size, total_pages: 0 };
   }
@@ -513,6 +545,9 @@ export async function getDayBook(request: DayBookRequest): Promise<ReportPage<Da
 }
 
 export async function getLedgerReport(request: LedgerReportRequest): Promise<LedgerReport> {
+  if (isLanClientMode()) {
+    return await callLanRpc<LedgerReport>('get_ledger_report', request as unknown as Record<string, unknown>);
+  }
   if (!isTauriEnv()) {
     throw new Error('Ledger reports require the native OpenTally application');
   }
@@ -520,6 +555,9 @@ export async function getLedgerReport(request: LedgerReportRequest): Promise<Led
 }
 
 export async function getTrialBalance(request: TrialBalanceRequest): Promise<TrialBalanceReport> {
+  if (isLanClientMode()) {
+    return await callLanRpc<TrialBalanceReport>('get_trial_balance', request as unknown as Record<string, unknown>);
+  }
   if (!isTauriEnv()) {
     return { as_of_date: request.as_of_date, rows: [], total_debit: '0', total_credit: '0', difference: '0', ledger_count: 0 };
   }
@@ -527,6 +565,9 @@ export async function getTrialBalance(request: TrialBalanceRequest): Promise<Tri
 }
 
 export async function getProfitAndLoss(request: ProfitAndLossRequest): Promise<ProfitAndLossReport> {
+  if (isLanClientMode()) {
+    return await callLanRpc<ProfitAndLossReport>('get_profit_and_loss', request as unknown as Record<string, unknown>);
+  }
   if (!isTauriEnv()) {
     return {
       company_id: mockActiveCompanyId || 'cmp_demo_01', date_from: request.period.date_from, date_to: request.period.date_to,
@@ -540,6 +581,9 @@ export async function getProfitAndLoss(request: ProfitAndLossRequest): Promise<P
 }
 
 export async function getBalanceSheet(request: BalanceSheetRequest): Promise<BalanceSheetReport> {
+  if (isLanClientMode()) {
+    return await callLanRpc<BalanceSheetReport>('get_balance_sheet', request as unknown as Record<string, unknown>);
+  }
   if (!isTauriEnv()) {
     return {
       company_id: mockActiveCompanyId || 'cmp_demo_01', as_of_date: request.as_of_date,
@@ -574,11 +618,17 @@ export async function exportReportPreview(
 }
 
 export async function getBillsReceivable(asOfDate: string): Promise<PendingBill[]> {
+  if (isLanClientMode()) {
+    return await callLanRpc<PendingBill[]>('get_bills_receivable', { as_of_date: asOfDate });
+  }
   if (!isTauriEnv()) return [];
   return invoke<PendingBill[]>('get_bills_receivable', { asOfDate });
 }
 
 export async function getBillsPayable(asOfDate: string): Promise<PendingBill[]> {
+  if (isLanClientMode()) {
+    return await callLanRpc<PendingBill[]>('get_bills_payable', { as_of_date: asOfDate });
+  }
   if (!isTauriEnv()) return [];
   return invoke<PendingBill[]>('get_bills_payable', { asOfDate });
 }
@@ -1557,6 +1607,9 @@ export async function getGstr1Summary(
   fromDate: string,
   toDate: string
 ): Promise<Gstr1SummaryReport> {
+  if (isLanClientMode()) {
+    return await callLanRpc<Gstr1SummaryReport>('get_gstr1_summary', { from_date: fromDate, to_date: toDate });
+  }
   if (!isTauriEnv()) {
     return {
       company_id: '',
@@ -1582,6 +1635,9 @@ export async function getGstr3bSummary(
   fromDate: string,
   toDate: string
 ): Promise<Gstr3bSummaryReport> {
+  if (isLanClientMode()) {
+    return await callLanRpc<Gstr3bSummaryReport>('get_gstr3b_summary', { from_date: fromDate, to_date: toDate });
+  }
   if (!isTauriEnv()) {
     const zeroSummary = {
       integrated_tax: '0.00',
@@ -1609,6 +1665,9 @@ export async function globalGotoSearch(
   query: string,
   limit?: number
 ): Promise<GotoSearchResult[]> {
+  if (isLanClientMode()) {
+    return await callLanRpc<GotoSearchResult[]>('global_goto_search', { query, limit: limit || 20 });
+  }
   if (!isTauriEnv()) {
     return [];
   }
@@ -1618,6 +1677,9 @@ export async function globalGotoSearch(
 export async function getVoucherFullDetail(
   voucherId: string
 ): Promise<VoucherFullDetail> {
+  if (isLanClientMode()) {
+    return await callLanRpc<VoucherFullDetail>('get_voucher_full_detail', { voucher_id: voucherId });
+  }
   if (!isTauriEnv()) {
     throw new Error('Voucher full detail requires the native OpenTally application');
   }
@@ -1628,6 +1690,13 @@ export async function cancelVoucher(
   voucherId: string,
   reason: string
 ): Promise<VoucherWithLines> {
+  if (isLanClientMode()) {
+    return await callLanRpc<VoucherWithLines>('cancel_voucher', {
+      voucher_id: voucherId,
+      reason,
+      actor_id: 'operator',
+    });
+  }
   if (!isTauriEnv()) {
     throw new Error('Voucher cancellation requires the native OpenTally application');
   }
@@ -1645,6 +1714,14 @@ export async function reverseVoucher(
   reversalDate: string,
   reason: string
 ): Promise<VoucherWithLines> {
+  if (isLanClientMode()) {
+    return await callLanRpc<VoucherWithLines>('reverse_voucher', {
+      voucher_id: voucherId,
+      reversal_date: reversalDate,
+      reason,
+      actor_id: 'operator',
+    });
+  }
   if (!isTauriEnv()) {
     throw new Error('Voucher reversal requires the native OpenTally application');
   }
@@ -4272,4 +4349,548 @@ export async function exportPayrollCsv(
     companyId: companyId || null,
     payPeriod,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 17: Multi-User LAN Host / Client Mode API & Transport
+// ---------------------------------------------------------------------------
+
+import type {
+  LanSessionDto,
+  LanServerStatusDto,
+  LanClientConfig,
+  LanLoginResponse,
+} from '../types';
+
+export type {
+  LanSessionDto,
+  LanServerStatusDto,
+  LanClientConfig,
+  LanLoginResponse,
+};
+
+let currentLanClientConfig: LanClientConfig | null = null;
+
+try {
+  const cached = sessionStorage.getItem('opentally_lan_client');
+  if (cached) {
+    currentLanClientConfig = JSON.parse(cached);
+  }
+} catch {
+  // Ignore sessionStorage errors
+}
+
+export function getLanClientConfig(): LanClientConfig | null {
+  return currentLanClientConfig;
+}
+
+export function setLanClientConfig(config: LanClientConfig | null): void {
+  currentLanClientConfig = config;
+  try {
+    if (config) {
+      sessionStorage.setItem('opentally_lan_client', JSON.stringify(config));
+    } else {
+      sessionStorage.removeItem('opentally_lan_client');
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+export function isLanClientMode(): boolean {
+  return currentLanClientConfig !== null;
+}
+
+export async function callLanRpc<T>(command: string, params: Record<string, unknown> = {}): Promise<T> {
+  if (!currentLanClientConfig) {
+    throw new Error('Not connected to a LAN server');
+  }
+
+  const url = `http://${currentLanClientConfig.host}:${currentLanClientConfig.port}/api/v1/rpc`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${currentLanClientConfig.token}`,
+    },
+    body: JSON.stringify({
+      command,
+      params: {
+        company_id: currentLanClientConfig.company_id,
+        ...params,
+      },
+    }),
+  });
+
+  if (res.status === 401) {
+    setLanClientConfig(null);
+    throw new Error('LAN session expired or unauthorized. Please re-authenticate.');
+  }
+
+  if (res.status === 403) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error?.message || 'Access Denied: You do not have permission to perform this action.');
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error?.message || `LAN Server Error (${res.status})`);
+  }
+
+  const data = await res.json();
+  if (data.error) {
+    throw new Error(data.error.message || 'LAN RPC Error');
+  }
+
+  return data.result as T;
+}
+
+export async function startLanServer(
+  bindAddress?: string,
+  port?: number
+): Promise<LanServerStatusDto> {
+  if (!isTauriEnv()) {
+    return {
+      is_running: true,
+      bind_address: bindAddress || '0.0.0.0',
+      port: port || 7900,
+      local_ip_addresses: ['192.168.1.100', '127.0.0.1'],
+      active_sessions: [],
+    };
+  }
+  return await invoke<LanServerStatusDto>('start_lan_server', {
+    bindAddress: bindAddress || null,
+    port: port || null,
+  });
+}
+
+export async function stopLanServer(): Promise<LanServerStatusDto> {
+  if (!isTauriEnv()) {
+    return {
+      is_running: false,
+      bind_address: '0.0.0.0',
+      port: 7900,
+      local_ip_addresses: ['127.0.0.1'],
+      active_sessions: [],
+    };
+  }
+  return await invoke<LanServerStatusDto>('stop_lan_server');
+}
+
+export async function getLanServerStatus(): Promise<LanServerStatusDto> {
+  if (!isTauriEnv()) {
+    return {
+      is_running: false,
+      bind_address: '0.0.0.0',
+      port: 7900,
+      local_ip_addresses: ['127.0.0.1'],
+      active_sessions: [],
+    };
+  }
+  return await invoke<LanServerStatusDto>('get_lan_server_status');
+}
+
+export async function revokeLanSession(sessionId: string): Promise<LanServerStatusDto> {
+  if (!isTauriEnv()) {
+    return {
+      is_running: true,
+      bind_address: '0.0.0.0',
+      port: 7900,
+      local_ip_addresses: ['127.0.0.1'],
+      active_sessions: [],
+    };
+  }
+  return await invoke<LanServerStatusDto>('revoke_lan_session', { sessionId });
+}
+
+export async function testLanHealth(
+  host: string,
+  port: number
+): Promise<{ app: string; version: string; mode: string; status: string }> {
+  const res = await fetch(`http://${host}:${port}/api/v1/health`);
+  if (!res.ok) {
+    throw new Error(`LAN server health check failed with status ${res.status}`);
+  }
+  return await res.json();
+}
+
+export async function loginLanClient(
+  host: string,
+  port: number,
+  companyId: string,
+  username: string,
+  password?: string
+): Promise<LanLoginResponse> {
+  const res = await fetch(`http://${host}:${port}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      company_id: companyId,
+      username,
+      password: password || null,
+    }),
+  });
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || `LAN login failed (${res.status})`);
+  }
+
+  const data: LanLoginResponse = await res.json();
+  setLanClientConfig({
+    host,
+    port,
+    company_id: data.company_id,
+    username: data.username,
+    token: data.token,
+    role: data.role,
+  });
+  return data;
+}
+
+export async function logoutLanClient(): Promise<void> {
+  if (currentLanClientConfig) {
+    try {
+      await fetch(
+        `http://${currentLanClientConfig.host}:${currentLanClientConfig.port}/api/v1/auth/logout`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${currentLanClientConfig.token}`,
+          },
+        }
+      );
+    } catch {
+      // Ignore network failures on logout
+    }
+    setLanClientConfig(null);
+  }
+}
+
+// ==========================================
+// Milestone 16: Multi-Currency & Cheque Printing
+// ==========================================
+
+export async function seedCompanyCurrencyDefaults(companyId?: string): Promise<CurrencySeedSummary> {
+  if (!isTauriEnv()) {
+    return {
+      base_currency_seeded: true,
+      currencies_seeded_count: 5,
+      forex_ledger_id: 'mock_led_forex',
+      cheque_templates_seeded_count: 4,
+    };
+  }
+  return invoke<CurrencySeedSummary>('seed_company_currency_defaults', { companyId: companyId || null });
+}
+
+export async function listCurrencies(companyId?: string): Promise<Currency[]> {
+  if (!isTauriEnv()) {
+    return [
+      { id: 'cur_inr', company_id: 'default', code: 'INR', symbol: '₹', formal_name: 'Indian Rupee', decimal_places: 2, is_base: true, created_at: '2026-04-01' },
+      { id: 'cur_usd', company_id: 'default', code: 'USD', symbol: '$', formal_name: 'US Dollar', decimal_places: 2, is_base: false, created_at: '2026-04-01' },
+      { id: 'cur_eur', company_id: 'default', code: 'EUR', symbol: '€', formal_name: 'Euro', decimal_places: 2, is_base: false, created_at: '2026-04-01' },
+      { id: 'cur_gbp', company_id: 'default', code: 'GBP', symbol: '£', formal_name: 'British Pound', decimal_places: 2, is_base: false, created_at: '2026-04-01' },
+      { id: 'cur_aed', company_id: 'default', code: 'AED', symbol: 'د.إ', formal_name: 'UAE Dirham', decimal_places: 2, is_base: false, created_at: '2026-04-01' },
+    ];
+  }
+  return invoke<Currency[]>('list_currencies', { companyId: companyId || null });
+}
+
+export async function createCurrency(input: CreateCurrencyInput, companyId?: string): Promise<Currency> {
+  if (!isTauriEnv()) {
+    return {
+      id: `cur_${input.code.toLowerCase()}`,
+      company_id: companyId || 'default',
+      code: input.code,
+      symbol: input.symbol,
+      formal_name: input.formal_name,
+      decimal_places: input.decimal_places ?? 2,
+      is_base: false,
+      created_at: new Date().toISOString(),
+    };
+  }
+  return invoke<Currency>('create_currency', { input, companyId: companyId || null });
+}
+
+export async function setExchangeRate(input: SetExchangeRateInput, companyId?: string): Promise<ExchangeRate> {
+  if (!isTauriEnv()) {
+    return {
+      id: `exr_${input.currency_code.toLowerCase()}_${input.effective_date}`,
+      company_id: companyId || 'default',
+      currency_code: input.currency_code,
+      effective_date: input.effective_date,
+      standard_rate: input.standard_rate,
+      selling_rate: input.selling_rate || input.standard_rate,
+      buying_rate: input.buying_rate || input.standard_rate,
+      created_at: new Date().toISOString(),
+    };
+  }
+  return invoke<ExchangeRate>('set_exchange_rate', { input, companyId: companyId || null });
+}
+
+export async function listExchangeRates(currencyCode?: string, companyId?: string): Promise<ExchangeRate[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<ExchangeRate[]>('list_exchange_rates', {
+    currencyCode: currencyCode || null,
+    companyId: companyId || null,
+  });
+}
+
+export async function lookupExchangeRate(
+  currencyCode: string,
+  date: string,
+  companyId?: string
+): Promise<EffectiveRateDto> {
+  if (!isTauriEnv()) {
+    return {
+      currency_code: currencyCode,
+      effective_date: date,
+      standard_rate: '83.50',
+      selling_rate: '83.50',
+      buying_rate: '83.50',
+      is_base: currencyCode === 'INR',
+    };
+  }
+  return invoke<EffectiveRateDto>('lookup_exchange_rate', {
+    currencyCode,
+    date,
+    companyId: companyId || null,
+  });
+}
+
+export async function convertCurrencyAmount(
+  foreignAmount: string,
+  fromCurrency: string,
+  toCurrency: string,
+  date: string,
+  rateType?: string,
+  companyId?: string
+): Promise<{ converted_amount: string; effective_rate: string }> {
+  if (!isTauriEnv()) {
+    return {
+      converted_amount: (parseFloat(foreignAmount) * 83.5).toFixed(2),
+      effective_rate: '83.50',
+    };
+  }
+  return invoke<{ converted_amount: string; effective_rate: string }>('convert_currency_amount', {
+    foreignAmount,
+    fromCurrency,
+    toCurrency,
+    date,
+    rateType: rateType || null,
+    companyId: companyId || null,
+  });
+}
+
+export async function listOpenForeignBills(
+  partyLedgerId?: string,
+  companyId?: string
+): Promise<OpenForeignBill[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<OpenForeignBill[]>('list_open_foreign_bills', {
+    partyLedgerId: partyLedgerId || null,
+    companyId: companyId || null,
+  });
+}
+
+export async function settleForeignBillWithForex(
+  input: SettleForeignBillInput,
+  companyId?: string
+): Promise<RealizedForexResult> {
+  if (!isTauriEnv()) {
+    throw new Error('Settling foreign bills requires the native OpenTally application');
+  }
+  return invoke<RealizedForexResult>('settle_foreign_bill_with_forex', {
+    input,
+    companyId: companyId || null,
+  });
+}
+
+export async function getUnrealizedForexReport(
+  asOfDate: string,
+  companyId?: string
+): Promise<UnrealizedForexReport> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || 'default',
+      as_of_date: asOfDate,
+      bills: [],
+      total_book_value_inr: '0.00',
+      total_revalued_value_inr: '0.00',
+      total_unrealized_gain: '0.00',
+      total_unrealized_loss: '0.00',
+      net_unrealized_gain_loss: '0.00',
+    };
+  }
+  return invoke<UnrealizedForexReport>('get_unrealized_forex_report', {
+    asOfDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function listChequeTemplates(companyId?: string): Promise<ChequeTemplateDto[]> {
+  if (!isTauriEnv()) {
+    return [
+      { id: 'tmpl_hdfc', company_id: 'default', bank_name: 'HDFC Bank', width_mm: 202, height_mm: 92, date_x_mm: 148, date_y_mm: 9, payee_x_mm: 22, payee_y_mm: 25, words_x_mm: 26, words_y_mm: 36, amount_x_mm: 152, amount_y_mm: 42, is_account_payee_default: true },
+      { id: 'tmpl_sbi', company_id: 'default', bank_name: 'State Bank of India', width_mm: 202, height_mm: 92, date_x_mm: 147, date_y_mm: 8.5, payee_x_mm: 20, payee_y_mm: 24, words_x_mm: 24, words_y_mm: 35, amount_x_mm: 150, amount_y_mm: 41, is_account_payee_default: true },
+      { id: 'tmpl_icici', company_id: 'default', bank_name: 'ICICI Bank', width_mm: 202, height_mm: 92, date_x_mm: 149, date_y_mm: 9, payee_x_mm: 22, payee_y_mm: 25, words_x_mm: 26, words_y_mm: 36, amount_x_mm: 152, amount_y_mm: 42, is_account_payee_default: true },
+      { id: 'tmpl_axis', company_id: 'default', bank_name: 'Axis Bank', width_mm: 202, height_mm: 92, date_x_mm: 148, date_y_mm: 9, payee_x_mm: 21, payee_y_mm: 24.5, words_x_mm: 25, words_y_mm: 35.5, amount_x_mm: 151, amount_y_mm: 41.5, is_account_payee_default: true },
+    ];
+  }
+  return invoke<ChequeTemplateDto[]>('list_cheque_templates', { companyId: companyId || null });
+}
+
+export async function upsertChequeTemplate(
+  input: UpsertChequeTemplateInput,
+  companyId?: string
+): Promise<ChequeTemplateDto> {
+  if (!isTauriEnv()) {
+    throw new Error('Cheque templates require the native OpenTally application');
+  }
+  return invoke<ChequeTemplateDto>('upsert_cheque_template', {
+    input,
+    companyId: companyId || null,
+  });
+}
+
+export async function generateChequePdfBytes(
+  voucherId: string,
+  templateId?: string,
+  isAccountPayee?: boolean,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<number[]>('generate_cheque_pdf_bytes', {
+    voucherId,
+    templateId: templateId || null,
+    isAccountPayee: isAccountPayee ?? null,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportChequePdf(
+  voucherId: string,
+  outputPath: string,
+  templateId?: string,
+  isAccountPayee?: boolean,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) return outputPath;
+  return invoke<string>('export_cheque_pdf', {
+    voucherId,
+    outputPath,
+    templateId: templateId || null,
+    isAccountPayee: isAccountPayee ?? null,
+    companyId: companyId || null,
+  });
+}
+
+
+// ==========================================
+// Milestone 18: BYO-GSP & Custom Report Extensions
+// ==========================================
+
+export async function getCompanyGspConfig(): Promise<CompanyGspConfigDto> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: 'default',
+      provider_mode: 'Sandbox',
+      provider_name: 'OpenTally Sandbox',
+      base_url: null,
+      client_id: null,
+      has_api_secret: false,
+      is_enabled: true,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return invoke<CompanyGspConfigDto>('get_company_gsp_config');
+}
+
+export async function saveCompanyGspConfig(
+  input: SaveCompanyGspConfigInput
+): Promise<CompanyGspConfigDto> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: 'default',
+      provider_mode: input.provider_mode,
+      provider_name: input.provider_name,
+      base_url: input.base_url || null,
+      client_id: input.client_id || null,
+      has_api_secret: Boolean(input.api_secret_ref),
+      is_enabled: input.is_enabled,
+      updated_at: new Date().toISOString(),
+    };
+  }
+  return invoke<CompanyGspConfigDto>('save_company_gsp_config', { input });
+}
+
+export async function pushEinvoiceToGsp(voucherId: string): Promise<GspEinvoiceResponse> {
+  if (!isTauriEnv()) {
+    return {
+      irn: 'a'.repeat(64),
+      ack_no: '112233445566778',
+      ack_date: new Date().toISOString(),
+      signed_qr_code: 'SANDBOX-QR',
+      provider_mode: 'Sandbox',
+    };
+  }
+  return invoke<GspEinvoiceResponse>('push_einvoice_to_gsp', { voucherId });
+}
+
+export async function pushEwayBillToGsp(voucherId: string): Promise<GspEwayBillResponse> {
+  if (!isTauriEnv()) {
+    return {
+      ewb_no: '123456789012',
+      ewb_date: new Date().toISOString(),
+      ewb_valid_upto: new Date(Date.now() + 86400000 * 3).toISOString(),
+      provider_mode: 'Sandbox',
+    };
+  }
+  return invoke<GspEwayBillResponse>('push_eway_bill_to_gsp', { voucherId });
+}
+
+export async function listCustomReports(): Promise<CustomReportDefinitionDto[]> {
+  if (!isTauriEnv()) return [];
+  return invoke<CustomReportDefinitionDto[]>('list_custom_reports');
+}
+
+export async function saveCustomReport(
+  input: SaveCustomReportInput
+): Promise<CustomReportDefinitionDto> {
+  if (!isTauriEnv()) {
+    throw new Error('Custom reports require the native OpenTally application');
+  }
+  return invoke<CustomReportDefinitionDto>('save_custom_report', { input });
+}
+
+export async function deleteCustomReport(reportId: string): Promise<void> {
+  if (!isTauriEnv()) return;
+  return invoke<void>('delete_custom_report', { reportId });
+}
+
+export async function runCustomReport(reportId: string): Promise<CustomReportExecutionResult> {
+  if (!isTauriEnv()) {
+    throw new Error('Running custom reports requires the native OpenTally application');
+  }
+  return invoke<CustomReportExecutionResult>('run_custom_report', { reportId });
+}
+
+export async function exportCustomReportCsv(reportId: string): Promise<string> {
+  if (!isTauriEnv()) return '';
+  return invoke<string>('export_custom_report_csv', { reportId });
+}
+
+export async function exportCustomReportTemplate(reportId: string): Promise<string> {
+  if (!isTauriEnv()) return '{}';
+  return invoke<string>('export_custom_report_template', { reportId });
+}
+
+export async function importCustomReportTemplate(
+  templateJson: string
+): Promise<CustomReportDefinitionDto> {
+  if (!isTauriEnv()) {
+    throw new Error('Importing custom report templates requires the native OpenTally application');
+  }
+  return invoke<CustomReportDefinitionDto>('import_custom_report_template', { templateJson });
 }

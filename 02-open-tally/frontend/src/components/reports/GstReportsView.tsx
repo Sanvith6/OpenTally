@@ -20,6 +20,8 @@ import {
   getGstr2bReconciliationReport,
   importAndReconcileGstr2b,
   exportGstr2bReconciliationCsv,
+  getCompanyGspConfig,
+  saveCompanyGspConfig,
 } from '../../services/api';
 import './Reports.css';
 
@@ -74,6 +76,16 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
   const [newHsnRate, setNewHsnRate] = useState('18.00');
   const [newHsnCess, setNewHsnCess] = useState('0.00');
 
+  // BYO-GSP / IRP Connector states
+  const [gspMode, setGspMode] = useState<'Sandbox' | 'HttpGsp'>('Sandbox');
+  const [gspName, setGspName] = useState('Deterministic IRP Sandbox');
+  const [gspBaseUrl, setGspBaseUrl] = useState('');
+  const [gspClientId, setGspClientId] = useState('');
+  const [gspSecretRef, setGspSecretRef] = useState('');
+  const [gspEnabled, setGspEnabled] = useState(true);
+  const [gspHasSecret, setGspHasSecret] = useState(false);
+  const [savingGsp, setSavingGsp] = useState(false);
+
   const loadData = useCallback(async () => {
     if (!activeCompany) return;
     setLoading(true);
@@ -89,10 +101,13 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
         const data = await getGstr2bReconciliationReport(returnPeriod);
         setGstr2b(data);
       } else if (tab === 'settings') {
-        const [profile, codes, mapping] = await Promise.all([
+        const [profile, codes, mapping, gspCfg] = await Promise.all([
           getCompanyGstProfile(),
           listHsnSacCodes(),
           getGstLedgerMapping(),
+          typeof getCompanyGspConfig === 'function'
+            ? getCompanyGspConfig().catch(() => null)
+            : Promise.resolve(null),
         ]);
         setHsnCodes(codes);
         setLedgerMapping(mapping);
@@ -101,6 +116,14 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
           setStateCodeInput(profile.state_code);
           setRegTypeInput(profile.registration_type);
           setGstEnabledInput(profile.gst_enabled === 1 || profile.gst_enabled === true);
+        }
+        if (gspCfg) {
+          setGspMode(gspCfg.provider_mode);
+          setGspName(gspCfg.provider_name);
+          setGspBaseUrl(gspCfg.base_url || '');
+          setGspClientId(gspCfg.client_id || '');
+          setGspEnabled(gspCfg.is_enabled);
+          setGspHasSecret(gspCfg.has_api_secret);
         }
       }
     } catch (err) {
@@ -193,6 +216,31 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
       setNewHsnDesc('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleSaveGsp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCompany) return;
+    setError(null);
+    setNotice(null);
+    setSavingGsp(true);
+    try {
+      const saved = await saveCompanyGspConfig({
+        provider_mode: gspMode,
+        provider_name: gspName.trim() || 'Deterministic IRP Sandbox',
+        base_url: gspBaseUrl.trim() || undefined,
+        client_id: gspClientId.trim() || undefined,
+        api_secret_ref: gspSecretRef.trim() || undefined,
+        is_enabled: gspEnabled,
+      });
+      setGspHasSecret(saved.has_api_secret);
+      setGspSecretRef('');
+      setNotice(`GSP / IRP connector saved (${saved.provider_mode}: ${saved.provider_name}).`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingGsp(false);
     }
   };
 
@@ -1046,6 +1094,81 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
                 </div>
                 <button type="submit" style={{ marginTop: '1rem' }}>
                   Save GST Profile
+                </button>
+              </form>
+            </div>
+
+            {/* BYO-GSP / IRP Connector Settings */}
+            <div className="ot-inventory-form" style={{ marginBottom: '2rem' }} data-testid="gsp-settings-card">
+              <h3>BYO-GSP / IRP Connector (e-Invoice &amp; e-Way Bill)</h3>
+              <p className="ot-report-muted">
+                Configure offline deterministic Sandbox Simulator or live HTTPS GSP credentials.
+              </p>
+              <form onSubmit={handleSaveGsp}>
+                <div className="ot-inventory-fields">
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <span>Provider Mode:</span>
+                    <select
+                      aria-label="GSP Provider Mode"
+                      value={gspMode}
+                      onChange={(e) => setGspMode(e.target.value as 'Sandbox' | 'HttpGsp')}
+                    >
+                      <option value="Sandbox">Sandbox Simulator (Offline Deterministic)</option>
+                      <option value="HttpGsp">BYO-GSP HTTPS Endpoint</option>
+                    </select>
+                  </label>
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <span>Provider Display Name:</span>
+                    <input
+                      aria-label="GSP Provider Name"
+                      value={gspName}
+                      onChange={(e) => setGspName(e.target.value)}
+                      placeholder="e.g. Deterministic IRP Sandbox"
+                    />
+                  </label>
+                  {gspMode === 'HttpGsp' && (
+                    <>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span>IRP / GSP Base URL (HTTPS):</span>
+                        <input
+                          aria-label="GSP Base URL"
+                          value={gspBaseUrl}
+                          onChange={(e) => setGspBaseUrl(e.target.value)}
+                          placeholder="https://gsp.example.in/api/v1"
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span>Client ID:</span>
+                        <input
+                          aria-label="GSP Client ID"
+                          value={gspClientId}
+                          onChange={(e) => setGspClientId(e.target.value)}
+                        />
+                      </label>
+                      <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span>API Secret {gspHasSecret ? '(Configured — leave blank to keep)' : ''}:</span>
+                        <input
+                          type="password"
+                          aria-label="GSP API Secret"
+                          value={gspSecretRef}
+                          onChange={(e) => setGspSecretRef(e.target.value)}
+                          placeholder="Secret / token"
+                        />
+                      </label>
+                    </>
+                  )}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.5rem' }}>
+                    <input
+                      type="checkbox"
+                      aria-label="GSP Connector Enabled"
+                      checked={gspEnabled}
+                      onChange={(e) => setGspEnabled(e.target.checked)}
+                    />
+                    <span>Enable GSP Push from Voucher Inspector</span>
+                  </label>
+                </div>
+                <button type="submit" disabled={savingGsp} style={{ marginTop: '1rem' }}>
+                  {savingGsp ? 'Saving GSP Config...' : 'Save GSP Settings'}
                 </button>
               </form>
             </div>

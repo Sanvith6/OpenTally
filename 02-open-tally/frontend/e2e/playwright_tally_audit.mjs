@@ -18,18 +18,46 @@ function recordStep(step, name, status, errors, notes = '') {
 async function checkLayout(page, label) {
   const layout = await page.evaluate(() => {
     const docEl = document.documentElement;
-    const body = document.body;
+    const bodyText = document.body.innerText || '';
     const hOverflow = docEl.scrollWidth > window.innerWidth + 2;
+
+    const workspace = document.querySelector('.ot-workspace');
+    const fnBar = document.querySelector('[data-testid="function-key-bar"]');
+    let railOverlap = null;
+    if (workspace && fnBar) {
+      const wsRect = workspace.getBoundingClientRect();
+      const fnRect = fnBar.getBoundingClientRect();
+      if (wsRect.width > 0 && fnRect.width > 0 && wsRect.right > fnRect.left + 2) {
+        railOverlap = `workspace.right(${wsRect.right.toFixed(1)}) > fnBar.left(${fnRect.left.toFixed(1)})`;
+      }
+    }
+
+    const hasNaN = /\bNaN\b/.test(bodyText);
+    const hasUndefined = /\bundefined\b/.test(bodyText);
+    const hasObjectObject = bodyText.includes('[object Object]');
+
     return {
       innerWidth: window.innerWidth,
       scrollWidth: docEl.scrollWidth,
       hOverflow,
-      bodyTextLen: body.innerText.trim().length,
+      railOverlap,
+      hasNaN,
+      hasUndefined,
+      hasObjectObject,
+      bodyTextLen: bodyText.trim().length,
     };
   });
   if (layout.hOverflow) {
     throw new Error(
       `Horizontal overflow on ${label}: scrollWidth=${layout.scrollWidth} > innerWidth=${layout.innerWidth}`
+    );
+  }
+  if (layout.railOverlap) {
+    throw new Error(`Right rail overlap on ${label}: ${layout.railOverlap}`);
+  }
+  if (layout.hasNaN || layout.hasUndefined || layout.hasObjectObject) {
+    throw new Error(
+      `Corrupt render token on ${label}: NaN=${layout.hasNaN}, undefined=${layout.hasUndefined}, [object Object]=${layout.hasObjectObject}`
     );
   }
   return layout;
@@ -147,10 +175,29 @@ async function runAudit() {
   });
 
   // =========================================================================
-  // STEP 2: Gateway, Breadcrumbs & Right-Side FunctionKeyBar (1280x800 & 1440x900)
+  // STEP 2: Top Bar, Gateway Theme, Hotkey Uniqueness, Breadcrumbs & Right Rail
   // =========================================================================
-  await execStep(2, 'Gateway, Breadcrumbs & FunctionKeyBar + F11 Esc unwind', async () => {
+  await execStep(2, 'Top Utility Bar, Gateway Uniqueness, FunctionKeyBar & F11 Esc unwind', async () => {
     await checkLayout(page, 'Gateway (1280x800)');
+
+    const topBar = page.locator('[data-testid="top-utility-bar"]');
+    if (!(await topBar.isVisible())) throw new Error('Top Utility Bar not visible');
+    const topBarText = await topBar.innerText();
+    if (!topBarText.includes('OpenTally') || !topBarText.includes('Go To')) {
+      throw new Error(`Top Utility Bar missing expected triggers: ${topBarText}`);
+    }
+
+    // Verify 0 colliding Gateway hotkeys
+    const hotkeys = await page.locator('.ot-menu-row').evaluateAll((els) =>
+      els.map((el) => el.getAttribute('data-hotkey'))
+    );
+    const seen = new Set();
+    for (const hk of hotkeys) {
+      if (!hk) throw new Error('Gateway menu row missing data-hotkey attribute');
+      if (seen.has(hk)) throw new Error(`Duplicate Gateway hotkey detected: ${hk}`);
+      seen.add(hk);
+    }
+
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(200);
     await checkLayout(page, 'Gateway (1440x900)');
@@ -175,7 +222,7 @@ async function runAudit() {
     if (!(await page.locator('h2:has-text("Gateway of OpenTally")').isVisible())) {
       throw new Error('Esc from F11 modal corrupted Gateway state');
     }
-    return 'Gateway, FunctionKeyBar & F11 Esc unwind verified at 1280x800 & 1440x900';
+    return `Top bar, ${hotkeys.length} unique hotkeys, FunctionKeyBar & F11 Esc unwind verified`;
   });
 
   // =========================================================================
@@ -195,45 +242,40 @@ async function runAudit() {
   });
 
   // =========================================================================
-  // STEP 4: Core Vouchers (F4, F5, F6, F7) + Inline Bill-Wise Allocation
+  // STEP 4: Core Vouchers (F4, F5, F6, F7) + Signature Voucher Ribbons
   // =========================================================================
-  await execStep(4, 'Core Vouchers (F4/F5/F6/F7) + F6 Receipt Bill-Wise Posting', async () => {
+  await execStep(4, 'Core Vouchers (F4/F5/F6/F7) + Signature Color Ribbons', async () => {
     await page.keyboard.press('F4');
-    await page.waitForTimeout(300);
+    await page.waitForSelector('[data-testid="voucher-entry-ribbon"].ot-ribbon-contra', { timeout: 5000 });
     await page.keyboard.press('F5'); // Must NOT reload page!
-    await page.waitForTimeout(300);
+    await page.waitForSelector('[data-testid="voucher-entry-ribbon"].ot-ribbon-payment', { timeout: 5000 });
     await page.keyboard.press('F7');
-    await page.waitForTimeout(300);
+    await page.waitForSelector('[data-testid="voucher-entry-ribbon"].ot-ribbon-journal', { timeout: 5000 });
     await page.keyboard.press('F6');
-    await page.waitForTimeout(500);
+    await page.waitForSelector('[data-testid="voucher-entry-ribbon"].ot-ribbon-receipt', { timeout: 5000 });
     await checkLayout(page, 'Voucher Entry (F6 Receipt)');
 
-    // Verify we are on Receipt voucher entry and can see lines/ledgers
-    const bodyText = await page.locator('body').innerText();
-    if (!bodyText.includes('Receipt') && !bodyText.includes('Voucher')) {
-      throw new Error('F6 did not navigate to Receipt Voucher Entry');
-    }
     await page.keyboard.press('Escape');
     await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
-    return 'F4/F5/F6/F7 shortcuts switched cleanly without page reload';
+    return 'F4/F5/F6/F7 ribbons & shortcuts switched cleanly without page reload';
   });
 
   // =========================================================================
-  // STEP 5: Commercial Vouchers (F8 Sales & F9 Purchase)
+  // STEP 5: Commercial Vouchers (F8 Sales & F9 Purchase) + Ribbons
   // =========================================================================
-  await execStep(5, 'Commercial Vouchers (F8 Sales & F9 Purchase)', async () => {
+  await execStep(5, 'Commercial Vouchers (F8 Sales & F9 Purchase) + Ribbons', async () => {
     await page.keyboard.press('F8');
-    await page.waitForSelector('h2:has-text("Sales"), h3:has-text("Sales")', { timeout: 8000 });
+    await page.waitForSelector('[data-testid="voucher-ribbon-sales"]', { timeout: 8000 });
     await checkLayout(page, 'Sales Vouchers (F8)');
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
 
     await page.keyboard.press('F9');
-    await page.waitForSelector('h2:has-text("Purchase"), h3:has-text("Purchase")', { timeout: 8000 });
+    await page.waitForSelector('[data-testid="voucher-ribbon-purchase"]', { timeout: 8000 });
     await checkLayout(page, 'Purchase Vouchers (F9)');
     await page.keyboard.press('Escape');
     await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
-    return 'F8 Sales & F9 Purchase rendered cleanly with 0 NaN/overflow';
+    return 'F8 Sales & F9 Purchase ribbons rendered cleanly with 0 NaN/overflow';
   });
 
   // =========================================================================
@@ -470,10 +512,9 @@ async function runAudit() {
   });
 
   // =========================================================================
-  // STEP 15: Alt+G Go-To, Alt+I Tally XML, Alt+B Backup/Restore & Security Control
+  // STEP 15: Alt+G Go-To, Alt+I Tally XML, Alt+B Backup/Restore & Security (0)
   // =========================================================================
-  await execStep(15, 'Alt+G Go-To, Alt+I Tally XML, Alt+B Backup & Security Control', async () => {
-    // Alt+G -> type "Trial" -> ArrowDown + Enter
+  await execStep(15, 'Alt+G Go-To, Alt+I Tally XML, Alt+B Backup & Security Control (0)', async () => {
     await page.keyboard.press('Alt+g');
     await page.waitForSelector('[data-testid="goto-search-input"]', { timeout: 5000 });
     await page.locator('[data-testid="goto-search-input"]').fill('Trial');
@@ -483,26 +524,139 @@ async function runAudit() {
     await page.keyboard.press('Escape');
     await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
 
-    // Alt+I (Tally XML Modal) -> Esc
     await page.keyboard.press('Alt+i');
     await page.waitForSelector('h2:has-text("Tally XML"), h2:has-text("Import / Export")', { timeout: 5000 });
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
 
-    // Alt+B (Backup & Restore Modal) -> Esc
     await page.keyboard.press('Alt+b');
     await page.waitForSelector('h2:has-text("Backup")', { timeout: 5000 });
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
 
-    // Security Control -> Esc
-    await page.keyboard.press('c');
+    await page.keyboard.press('0');
     await page.waitForSelector('h1:has-text("Security Control"), h2:has-text("Security Control")', { timeout: 5000 });
     await checkLayout(page, 'Security Control');
     await page.keyboard.press('Escape');
     await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
 
-    return 'Alt+G, Alt+I, Alt+B & Security Control Esc unwinding verified cleanly';
+    return 'Alt+G, Alt+I, Alt+B & Security Control (0) Esc unwinding verified cleanly';
+  });
+
+  // =========================================================================
+  // STEP 16: Balance Sheet (B), Profit & Loss (P), Cash Flow (C), Ledger (L)
+  // =========================================================================
+  await execStep(16, 'Statements & Ledgers (BS [B], P&L [P], Cash Flow [C], Ledger [L])', async () => {
+    for (const [hk, heading, label] of [
+      ['b', 'Balance Sheet', 'Balance Sheet'],
+      ['p', 'Profit & Loss', 'Profit & Loss A/c'],
+      ['c', 'Cash Flow', 'Cash Flow'],
+      ['l', 'Ledger', 'Ledger Report'],
+    ]) {
+      await page.keyboard.press(hk);
+      await page.waitForSelector(`h2:has-text("${heading}"), h1:has-text("${heading}")`, { timeout: 8000 });
+      await checkLayout(page, label);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+    }
+    return 'Balance Sheet, P&L, Cash Flow & Ledger Report verified cleanly via unique hotkeys';
+  });
+
+  // =========================================================================
+  // STEP 17: Milestone 16 — Multi-Currency & Forex ([9]) & Cheque Printing Tab
+  // =========================================================================
+  await execStep(17, 'Milestone 16: Multi-Currency, Forex & Cheque Printing UI ([9])', async () => {
+    await page.keyboard.press('9');
+    await page.waitForSelector('h2:has-text("Multi-Currency"), h1:has-text("Multi-Currency")', { timeout: 8000 });
+    await checkLayout(page, 'Multi-Currency & Forex');
+    const chequeTab = page.locator('button:has-text("Cheque")').first();
+    if (await chequeTab.isVisible()) {
+      await chequeTab.click();
+      await page.waitForTimeout(200);
+      await checkLayout(page, 'Bank Cheque Printing Tab');
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+    return 'Multi-Currency, Forex & Cheque Printing UI verified cleanly';
+  });
+
+  // =========================================================================
+  // STEP 18: Milestone 17 — LAN Host / Multi-User Gold Modal ([-])
+  // =========================================================================
+  await execStep(18, 'Milestone 17: LAN Host / Multi-User Gold Modal ([-])', async () => {
+    await page.keyboard.press('-');
+    await page.waitForSelector('[data-testid="lan-server-modal"]', { timeout: 5000 });
+    const modalText = await page.locator('[data-testid="lan-server-modal"]').innerText();
+    const portVal = await page.locator('[data-testid="lan-server-modal"] input').nth(1).inputValue();
+    if (portVal !== '7900' || !modalText.includes('LAN Host')) {
+      throw new Error(`LAN Server modal unexpected state: port=${portVal}, text=${modalText.slice(0, 80)}`);
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('[data-testid="lan-server-modal"]', { state: 'detached', timeout: 5000 });
+    if (!(await page.locator('h2:has-text("Gateway of OpenTally")').isVisible())) {
+      throw new Error('Esc from LAN Server modal did not return cleanly to Gateway');
+    }
+    return 'LAN Host Modal (port 7900, Zero-Footprint default, Esc close) verified cleanly';
+  });
+
+  // =========================================================================
+  // STEP 19: Milestone 18 — Custom Reports ([=]) & GST BYO-GSP Settings
+  // =========================================================================
+  await execStep(19, 'Milestone 18: Custom Reports ([=]) & BYO-GSP Connector Settings', async () => {
+    await page.keyboard.press('=');
+    await page.waitForSelector('h2:has-text("Custom Report"), h1:has-text("Custom Report")', { timeout: 8000 });
+    await checkLayout(page, 'Custom Report Extensions');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+
+    await page.keyboard.press('g');
+    await page.waitForSelector('[data-testid="gst-reports-view"]', { timeout: 8000 });
+    await page.locator('button:has-text("GST Settings & Masters")').click();
+    await page.waitForSelector('[data-testid="gsp-settings-card"]', { timeout: 5000 });
+    await checkLayout(page, 'GST Settings & BYO-GSP');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+    return 'Custom Report Extensions & GST BYO-GSP Settings verified cleanly';
+  });
+
+  // =========================================================================
+  // STEP 20: Remaining Masters/Inventory + 1440x900 Viewport Sweep
+  // =========================================================================
+  await execStep(20, 'Remaining Screens (Parties, Inventory Valuation/Reports) & 1440x900 Sweep', async () => {
+    for (const [hk, heading, label] of [
+      ['1', 'Party Masters', 'Party Masters'],
+      ['m', 'Inventory Masters', 'Inventory Masters'],
+      ['n', 'Inventory', 'Inventory Vouchers'],
+      ['r', 'Inventory Reports', 'Inventory Reports'],
+      ['5', 'Inventory Valuation', 'Inventory Valuation'],
+      ['6', 'Inventory Accounting Integration', 'Inventory Accounting'],
+      ['h', 'Cost Centre Breakup Report', 'Cost Centre Breakup'],
+    ]) {
+      await page.keyboard.press(hk);
+      await page.waitForSelector(`h2:has-text("${heading}"), h1:has-text("${heading}")`, { timeout: 8000 });
+      await checkLayout(page, `${label} (1280x800)`);
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+    }
+
+    // 1440x900 sweep on key multi-column views
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(200);
+    await checkLayout(page, 'Gateway (1440x900 sweep)');
+    await page.keyboard.press('9');
+    await page.waitForSelector('h2:has-text("Multi-Currency"), h1:has-text("Multi-Currency")', { timeout: 5000 });
+    await checkLayout(page, 'Multi-Currency (1440x900)');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+
+    await page.keyboard.press('=');
+    await page.waitForSelector('h2:has-text("Custom Report"), h1:has-text("Custom Report")', { timeout: 5000 });
+    await checkLayout(page, 'Custom Reports (1440x900)');
+    await page.keyboard.press('Escape');
+    await page.waitForSelector('h2:has-text("Gateway of OpenTally")', { timeout: 5000 });
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    return 'All 20+ v3.0.0 screens & 1280x800/1440x900 layout checks passed cleanly';
   });
 
   console.log('\n================ AUDIT SUMMARY ================');

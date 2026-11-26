@@ -45,9 +45,26 @@ import { OrderProcessingView } from './components/orders/OrderProcessingView';
 import { SecurityControlView } from './components/security/SecurityControlView';
 import { ManufacturingBomView } from './components/inventory/ManufacturingBomView';
 import { PayrollView } from './components/payroll/PayrollView';
+import { MultiCurrencyView } from './components/currency/MultiCurrencyView';
+import { CustomReportsView } from './components/extensions/CustomReportsView';
 import { CompanyLoginModal } from './components/security/CompanyLoginModal';
-import { fetchHealth, getActiveCompany, getCompanySecurityStatus } from './services/api';
-import { HealthResponse, Company, NavigationStackEntry, CompanyFeaturesDto, AuthSessionInfo } from './types';
+import { LanServerModal } from './components/lan/LanServerModal';
+import {
+  fetchHealth,
+  getActiveCompany,
+  getCompanySecurityStatus,
+  getLanClientConfig,
+  getLanServerStatus,
+  logoutLanClient,
+} from './services/api';
+import {
+  HealthResponse,
+  Company,
+  NavigationStackEntry,
+  CompanyFeaturesDto,
+  AuthSessionInfo,
+  LanServerStatusDto,
+} from './types';
 import './App.css';
 
 function getInitialTitle(view: string): string {
@@ -118,6 +135,12 @@ function getInitialTitle(view: string): string {
       return 'Users & Passwords (Security Control)';
     case 'manufacturing_bom':
       return 'Manufacturing & Bill of Materials';
+    case 'payroll':
+      return 'Payroll & Statutory Compliance';
+    case 'multi_currency':
+      return 'Multi-Currency & Forex';
+    case 'custom_reports':
+      return 'Custom Report Extensions';
     default:
       return 'Gateway of OpenTally';
   }
@@ -135,6 +158,8 @@ export function App() {
   const [isInitialSetup, setIsInitialSetup] = useState(false);
   const [pendingLoginCompany, setPendingLoginCompany] = useState<Company | null>(null);
   const [activeUserSession, setActiveUserSession] = useState<AuthSessionInfo | null>(null);
+  const [isLanServerModalOpen, setIsLanServerModalOpen] = useState(false);
+  const [lanServerStatus, setLanServerStatus] = useState<LanServerStatusDto | null>(null);
 
   const initialView =
     typeof window !== 'undefined' &&
@@ -234,6 +259,15 @@ export function App() {
     initialModal === 'create'
   );
 
+  const refreshLanStatus = useCallback(async () => {
+    try {
+      const status = await getLanServerStatus();
+      setLanServerStatus(status);
+    } catch {
+      setLanServerStatus(null);
+    }
+  }, []);
+
   const loadHealth = async () => {
     setLoading(true);
     setError(null);
@@ -266,7 +300,8 @@ export function App() {
   useEffect(() => {
     loadHealth();
     loadCompanyContext();
-  }, [loadCompanyContext]);
+    refreshLanStatus();
+  }, [loadCompanyContext, refreshLanStatus]);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
@@ -293,11 +328,6 @@ export function App() {
   // Centralized Global Keyboard Interceptor (TallyPrime Function Keys & Esc Hierarchy)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      const isInput =
-        target &&
-        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT');
-
       // 1. Function Keys
       if (e.key === 'F1') {
         e.preventDefault();
@@ -366,6 +396,9 @@ export function App() {
       } else if ((e.key === 'b' || e.key === 'B') && e.altKey) {
         e.preventDefault();
         setIsBackupModalOpen(true);
+      } else if ((e.key === 'k' || e.key === 'K') && e.altKey) {
+        e.preventDefault();
+        setIsSelectModalOpen(true);
       } else if ((e.key === 'i' || e.key === 'I') && e.altKey) {
         e.preventDefault();
         setIsXmlModalOpen(true);
@@ -373,19 +406,13 @@ export function App() {
         e.preventDefault();
         setIsGoToOpen(true);
       } else if (e.key === 'Escape') {
-        // Esc Hierarchy:
-        // -2. If Login modal open -> close it
-        // -1. If Features modal open -> close it
-        // 0. If XML modal open -> close it
-        // 1. If Backup modal open -> close it
-        // 2. If Go To modal open -> close it
-        // 3. If Create modal open -> close it
-        // 4. If Select modal open -> close it
-        // 5. If navStack > 1 -> popView
-        // 6. Gateway safe no-op
         if (pendingLoginCompany) {
           e.preventDefault();
           setPendingLoginCompany(null);
+        } else if (isLanServerModalOpen) {
+          e.preventDefault();
+          setIsLanServerModalOpen(false);
+          refreshLanStatus();
         } else if (isFeaturesModalOpen) {
           e.preventDefault();
           setIsFeaturesModalOpen(false);
@@ -408,50 +435,6 @@ export function App() {
           e.preventDefault();
           popView();
         }
-      } else if (!isInput && currentView === 'gateway') {
-        // Gateway single-letter hotkeys
-        const key = e.key.toUpperCase();
-        if (key === 'G') {
-          e.preventDefault();
-          setIsGoToOpen(true);
-        } else if (key === 'X') {
-          e.preventDefault();
-          setIsBackupModalOpen(true);
-        } else if (key === 'F') {
-          e.preventDefault();
-          openFeaturesModal();
-        } else if (['V', 'K', 'L', 'T', 'P', 'B', 'C', 'I'].includes(key) && !activeCompany) {
-          e.preventDefault();
-          showNotification('Please select or create an active company first (F3).');
-          setIsSelectModalOpen(true);
-        } else if (key === 'V') {
-          e.preventDefault();
-          pushView('voucher_entry', 'Accounting Vouchers');
-        } else if (key === 'K') {
-          e.preventDefault();
-          pushView('day_book', 'Day Book');
-        } else if (key === 'L') {
-          e.preventDefault();
-          pushView('ledger_report', 'Ledger Report');
-        } else if (key === 'T') {
-          e.preventDefault();
-          pushView('trial_balance', 'Trial Balance');
-        } else if (key === 'P') {
-          e.preventDefault();
-          pushView('profit_and_loss', 'Profit & Loss A/c');
-        } else if (key === 'B') {
-          e.preventDefault();
-          pushView('balance_sheet', 'Balance Sheet');
-        } else if (key === 'C') {
-          e.preventDefault();
-          pushView('cash_flow', 'Cash Flow Statement');
-        } else if (key === 'I') {
-          e.preventDefault();
-          setIsXmlModalOpen(true);
-        } else if (key === 'M') {
-          e.preventDefault();
-          pushView('inventory', 'Inventory Masters');
-        }
       }
     };
 
@@ -459,6 +442,7 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     pendingLoginCompany,
+    isLanServerModalOpen,
     isFeaturesModalOpen,
     isXmlModalOpen,
     isBackupModalOpen,
@@ -470,6 +454,8 @@ export function App() {
     pushView,
     currentView,
     openFeaturesModal,
+    refreshLanStatus,
+    activeCompany,
   ]);
 
   const handleCompanyCreated = (company: Company) => {
@@ -498,18 +484,45 @@ export function App() {
     loadCompanyContext();
   };
 
+  const lanClientConfig = getLanClientConfig();
+  const lanBadge = lanClientConfig
+    ? 'LAN CLIENT'
+    : lanServerStatus?.is_running
+    ? `LAN HOST :${lanServerStatus.port}`
+    : null;
+
   return (
     <div className="ot-app">
       <Header
         appName={health?.app_name || 'OpenTally'}
-        version={health?.app_version || '0.1.0'}
+        version={health?.app_version || '3.0.0'}
         environment={health?.environment || 'development'}
+        companyName={activeCompany?.name || null}
+        periodLabel={
+          activeCompany ? `FY from ${activeCompany.financial_year_begins}` : null
+        }
+        username={activeUserSession?.username || null}
+        userRole={activeUserSession?.role || null}
+        lanBadge={lanBadge}
+        onCompanyClick={() => setIsSelectModalOpen(true)}
+        onBackupClick={() => setIsBackupModalOpen(true)}
+        onXmlClick={() => setIsXmlModalOpen(true)}
+        onGoToClick={() => setIsGoToOpen(true)}
+        onFeaturesClick={() => openFeaturesModal()}
       />
 
       <BreadcrumbBar
         stack={navStack}
         onNavigateToLevel={navigateToLevel}
         onOpenGoTo={() => setIsGoToOpen(true)}
+        lanClientConfig={lanClientConfig}
+        onDisconnectLan={async () => {
+          await logoutLanClient();
+          setActiveCompany(null);
+          setActiveUserSession(null);
+          setIsSelectModalOpen(true);
+          showNotification('Disconnected from LAN Host.');
+        }}
       />
 
       {notification && (
@@ -688,6 +701,10 @@ export function App() {
             <ManufacturingBomView activeCompany={activeCompany} onBack={popView} />
           ) : currentView === 'payroll' && activeCompany ? (
             <PayrollView activeCompany={activeCompany} onBack={popView} />
+          ) : currentView === 'multi_currency' && activeCompany ? (
+            <MultiCurrencyView activeCompany={activeCompany} onBack={popView} />
+          ) : currentView === 'custom_reports' && activeCompany ? (
+            <CustomReportsView activeCompany={activeCompany} onBack={popView} />
           ) : (
             <div className="ot-workspace-grid">
               <section className="ot-col-company">
@@ -872,6 +889,18 @@ export function App() {
                       setIsXmlModalOpen(true);
                     } else if (item.id === 'company_features') {
                       openFeaturesModal();
+                    } else if (item.id === 'lan_server') {
+                      setIsLanServerModalOpen(true);
+                    } else if (item.id === 'multi_currency') {
+                      if (!activeCompany) {
+                        showNotification('Please select or create an active company first (F3).');
+                        setIsSelectModalOpen(true);
+                      } else pushView('multi_currency', 'Multi-Currency & Forex');
+                    } else if (item.id === 'custom_reports') {
+                      if (!activeCompany) {
+                        showNotification('Please select or create an active company first (F3).');
+                        setIsSelectModalOpen(true);
+                      } else pushView('custom_reports', 'Custom Report Extensions');
                     } else {
                       showNotification(
                         `Selected [${item.hotkey}] ${item.label} (${item.sprint}): ${item.description}`
@@ -960,6 +989,8 @@ export function App() {
             setIsBackupModalOpen(true);
           } else if (view === 'tally_xml') {
             setIsXmlModalOpen(true);
+          } else if (view === 'lan_server') {
+            setIsLanServerModalOpen(true);
           } else {
             pushView(view, title, params);
           }
@@ -990,6 +1021,15 @@ export function App() {
         isInitialSetup={isInitialSetup}
         onClose={() => setIsFeaturesModalOpen(false)}
         onSaved={handleFeaturesSaved}
+      />
+
+      <LanServerModal
+        isOpen={isLanServerModalOpen}
+        onClose={() => {
+          setIsLanServerModalOpen(false);
+          refreshLanStatus();
+        }}
+        onShowNotification={showNotification}
       />
 
       {pendingLoginCompany && (

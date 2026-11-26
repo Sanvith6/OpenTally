@@ -269,6 +269,10 @@ export function PurchaseVoucherView({ activeCompany, onBack }: Props) {
 
   return (
     <section className="ot-report-screen">
+      <div className="ot-voucher-ribbon ot-ribbon-purchase" data-testid="voucher-ribbon-purchase">
+        <span>Purchase Voucher (F9)</span>
+        <span>Inward Taxable Supply &amp; Supplier Bill Receipt</span>
+      </div>
       <div className="ot-report-header">
         <div>
           <h2>Purchase Vouchers</h2>

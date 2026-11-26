@@ -8,11 +8,14 @@ pub mod commands;
 pub mod commercial;
 pub mod company;
 pub mod config;
+pub mod currency;
 pub mod database;
 pub mod errors;
+pub mod extensions;
 pub mod gst;
 pub mod interoperability;
 pub mod inventory;
+pub mod lan;
 pub mod logging;
 pub mod navigation;
 pub mod orders;
@@ -39,11 +42,17 @@ mod commercial_tests;
 #[cfg(test)]
 mod godown_batch_costing_tests;
 #[cfg(test)]
+mod gsp_extensions_tests;
+#[cfg(test)]
 mod gst_compliance_tests;
 #[cfg(test)]
 mod gst_tests;
 #[cfg(test)]
 mod interoperability_tests;
+#[cfg(test)]
+mod lan_multiuser_tests;
+#[cfg(test)]
+mod multicurrency_cheque_tests;
 #[cfg(test)]
 mod navigation_tests;
 #[cfg(test)]
@@ -102,6 +111,18 @@ pub fn run() {
 
             let config = AppConfig::new().with_db_path(db_path.clone());
             let state = AppState::new(config, Arc::new(db));
+
+            if std::env::var("OPENTALLY_LAN_HOST").as_deref() == Ok("1") {
+                let pool = state.db.pool().clone();
+                let handle = tauri::async_runtime::block_on(async {
+                    crate::lan::start_lan_listener(pool, None, None).await
+                })
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error>)?;
+                if let Ok(mut lock) = state.lan_server.write() {
+                    *lock = Some(handle);
+                }
+            }
+
             app.manage(state);
 
             info!("OpenTally core backend initialized successfully.");
@@ -342,7 +363,36 @@ pub fn run() {
             commands::list_payroll_runs,
             commands::get_payroll_statutory_summary,
             commands::export_payslip_pdf,
-            commands::export_payroll_csv
+            commands::export_payroll_csv,
+            commands::seed_company_currency_defaults,
+            commands::list_currencies,
+            commands::create_currency,
+            commands::set_exchange_rate,
+            commands::list_exchange_rates,
+            commands::lookup_exchange_rate,
+            commands::convert_currency_amount,
+            commands::list_open_foreign_bills,
+            commands::settle_foreign_bill_with_forex,
+            commands::get_unrealized_forex_report,
+            commands::list_cheque_templates,
+            commands::upsert_cheque_template,
+            commands::generate_cheque_pdf_bytes,
+            commands::export_cheque_pdf,
+            commands::start_lan_server,
+            commands::stop_lan_server,
+            commands::get_lan_server_status,
+            commands::revoke_lan_session,
+            commands::get_company_gsp_config,
+            commands::save_company_gsp_config,
+            commands::push_einvoice_to_gsp,
+            commands::push_eway_bill_to_gsp,
+            commands::list_custom_reports,
+            commands::save_custom_report,
+            commands::delete_custom_report,
+            commands::run_custom_report,
+            commands::export_custom_report_csv,
+            commands::export_custom_report_template,
+            commands::import_custom_report_template
         ])
         .run(tauri::generate_context!())
         .expect("Error while running OpenTally desktop application");

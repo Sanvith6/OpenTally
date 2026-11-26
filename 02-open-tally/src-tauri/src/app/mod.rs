@@ -13,6 +13,7 @@ pub struct AppState {
     pub started_at: DateTime<Utc>,
     pub active_company_id: std::sync::RwLock<Option<String>>,
     pub active_user_sessions: std::sync::RwLock<HashMap<String, AuthSessionInfo>>,
+    pub lan_server: std::sync::RwLock<Option<crate::lan::LanServerHandle>>,
 }
 
 impl AppState {
@@ -23,6 +24,7 @@ impl AppState {
             started_at: Utc::now(),
             active_company_id: std::sync::RwLock::new(None),
             active_user_sessions: std::sync::RwLock::new(HashMap::new()),
+            lan_server: std::sync::RwLock::new(None),
         }
     }
 

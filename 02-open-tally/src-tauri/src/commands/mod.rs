@@ -4582,6 +4582,477 @@ pub async fn export_payroll_csv(
         .await
 }
 
+// =========================================================================
+// Milestone 16: Multi-Currency & Bank Cheque Printing Commands
+// =========================================================================
+
+#[tauri::command]
+pub async fn seed_company_currency_defaults(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+) -> Result<crate::currency::CurrencySeedSummary, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ManageMultiCurrency,
+        )
+        .await?;
+    let mut tx = state.db.pool().begin().await?;
+    let summary =
+        crate::currency::CurrencyService::seed_company_currency_defaults_tx(&mut tx, &cid, &actor)
+            .await?;
+    tx.commit().await?;
+    Ok(summary)
+}
+
+#[tauri::command]
+pub async fn list_currencies(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+) -> Result<Vec<crate::currency::Currency>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::currency::CurrencyService::list_currencies(state.db.pool(), &cid).await
+}
+
+#[tauri::command]
+pub async fn create_currency(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    input: crate::currency::CreateCurrencyInput,
+) -> Result<crate::currency::Currency, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ManageMultiCurrency,
+        )
+        .await?;
+    crate::currency::CurrencyService::create_currency(state.db.pool(), &cid, input, &actor).await
+}
+
+#[tauri::command]
+pub async fn set_exchange_rate(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    input: crate::currency::SetExchangeRateInput,
+) -> Result<crate::currency::ExchangeRate, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ManageMultiCurrency,
+        )
+        .await?;
+    crate::currency::CurrencyService::set_exchange_rate(state.db.pool(), &cid, input, &actor).await
+}
+
+#[tauri::command]
+pub async fn list_exchange_rates(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    currency_code: Option<String>,
+) -> Result<Vec<crate::currency::ExchangeRate>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::currency::CurrencyService::list_exchange_rates(
+        state.db.pool(),
+        &cid,
+        currency_code.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn lookup_exchange_rate(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    currency_code: String,
+    as_of_date: String,
+) -> Result<crate::currency::EffectiveRateDto, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::currency::CurrencyService::lookup_exchange_rate(
+        state.db.pool(),
+        &cid,
+        &currency_code,
+        &as_of_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn convert_currency_amount(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    currency_code: String,
+    foreign_amount: String,
+    as_of_date: String,
+) -> Result<String, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    let f_amt = rust_decimal::Decimal::from_str_exact(foreign_amount.trim())
+        .map_err(|_| OpenTallyError::Validation("Invalid foreign amount string".to_string()))?;
+    let base = crate::currency::CurrencyService::convert_currency_amount(
+        state.db.pool(),
+        &cid,
+        &currency_code,
+        f_amt,
+        &as_of_date,
+    )
+    .await?;
+    Ok(base.to_string())
+}
+
+#[tauri::command]
+pub async fn list_open_foreign_bills(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    party_ledger_id: Option<String>,
+) -> Result<Vec<crate::currency::OpenForeignBill>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::currency::CurrencyService::list_open_foreign_bills(
+        state.db.pool(),
+        &cid,
+        party_ledger_id.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn settle_foreign_bill_with_forex(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    input: crate::currency::SettleForeignBillInput,
+) -> Result<crate::currency::RealizedForexResult, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let actor = state
+        .resolve_actor(&cid, crate::security::models::ActionPermission::PostVoucher)
+        .await?;
+    crate::currency::CurrencyService::settle_foreign_bill_with_forex(
+        state.db.pool(),
+        &cid,
+        input,
+        &actor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn get_unrealized_forex_report(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    as_of_date: String,
+) -> Result<crate::currency::UnrealizedForexReport, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewFinancialStatements,
+        )
+        .await?;
+    crate::currency::CurrencyService::evaluate_unrealized_forex_revaluation(
+        state.db.pool(),
+        &cid,
+        &as_of_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_cheque_templates(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+) -> Result<Vec<crate::pdf::ChequeTemplateDto>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::currency::CurrencyService::list_cheque_templates(state.db.pool(), &cid).await
+}
+
+#[tauri::command]
+pub async fn upsert_cheque_template(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    input: crate::currency::UpsertChequeTemplateInput,
+) -> Result<crate::pdf::ChequeTemplateDto, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let actor = state
+        .resolve_actor(
+            &cid,
+            crate::security::models::ActionPermission::ManageMultiCurrency,
+        )
+        .await?;
+    crate::currency::CurrencyService::upsert_cheque_template(state.db.pool(), &cid, input, &actor)
+        .await
+}
+
+#[tauri::command]
+pub async fn generate_cheque_pdf_bytes(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    voucher_id: String,
+    template_id: Option<String>,
+    is_account_payee: Option<bool>,
+) -> Result<Vec<u8>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(&cid, crate::security::models::ActionPermission::PrintCheque)
+        .await?;
+    crate::pdf::generate_cheque_pdf_bytes(
+        state.db.pool(),
+        &cid,
+        &voucher_id,
+        template_id.as_deref(),
+        is_account_payee,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_cheque_pdf(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    voucher_id: String,
+    template_id: Option<String>,
+    is_account_payee: Option<bool>,
+    output_dir: Option<String>,
+) -> Result<String, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    let _actor = state
+        .resolve_actor(&cid, crate::security::models::ActionPermission::PrintCheque)
+        .await?;
+    crate::pdf::export_cheque_pdf(
+        state.db.pool(),
+        &cid,
+        &voucher_id,
+        template_id.as_deref(),
+        is_account_payee,
+        output_dir.as_deref(),
+    )
+    .await
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 17: Multi-User LAN Host / Client Mode Commands
+// ---------------------------------------------------------------------------
+
+#[tauri::command]
+pub async fn start_lan_server(
+    state: tauri::State<'_, AppState>,
+    bind_address: Option<String>,
+    port: Option<u16>,
+) -> Result<crate::lan::models::LanServerStatusDto, OpenTallyError> {
+    info!(
+        ">>> [Tauri IPC] Received 'start_lan_server' command: bind_address={:?}, port={:?}",
+        bind_address, port
+    );
+
+    // If there is an active company with security enabled, require Admin / ManageLanServer
+    let active_cid = state.active_company_id.read().ok().and_then(|g| g.clone());
+    if let Some(ref cid) = active_cid {
+        let _ = state
+            .resolve_actor(
+                cid,
+                crate::security::models::ActionPermission::ManageLanServer,
+            )
+            .await?;
+    }
+
+    {
+        let guard = state
+            .lan_server
+            .read()
+            .map_err(|e| OpenTallyError::Internal(e.to_string()))?;
+        if guard.is_some() {
+            return Err(OpenTallyError::Validation(
+                "LAN Host server is already running".to_string(),
+            ));
+        }
+    }
+
+    let handle =
+        crate::lan::start_lan_listener(state.db.pool().clone(), bind_address, port).await?;
+
+    let status = {
+        let mut guard = state
+            .lan_server
+            .write()
+            .map_err(|e| OpenTallyError::Internal(e.to_string()))?;
+        let status = crate::lan::models::LanServerStatusDto {
+            is_running: true,
+            bind_address: handle.bind_address.clone(),
+            port: handle.port,
+            local_ip_addresses: crate::lan::server::detect_local_ips(),
+            active_sessions: handle.session_store.list_active(),
+        };
+        *guard = Some(handle);
+        status
+    };
+
+    info!(
+        "<<< [Tauri IPC] Successfully started LAN Host server on port {}",
+        status.port
+    );
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn stop_lan_server(
+    state: tauri::State<'_, AppState>,
+) -> Result<crate::lan::models::LanServerStatusDto, OpenTallyError> {
+    info!(">>> [Tauri IPC] Received 'stop_lan_server' command");
+
+    let mut guard = state
+        .lan_server
+        .write()
+        .map_err(|e| OpenTallyError::Internal(e.to_string()))?;
+
+    if let Some(mut handle) = guard.take() {
+        if let Some(tx) = handle.shutdown_tx.take() {
+            let _ = tx.send(());
+        }
+    }
+
+    let status = crate::lan::models::LanServerStatusDto {
+        is_running: false,
+        bind_address: "0.0.0.0".to_string(),
+        port: 7900,
+        local_ip_addresses: crate::lan::server::detect_local_ips(),
+        active_sessions: Vec::new(),
+    };
+
+    info!("<<< [Tauri IPC] LAN Host server stopped cleanly");
+    Ok(status)
+}
+
+#[tauri::command]
+pub async fn get_lan_server_status(
+    state: tauri::State<'_, AppState>,
+) -> Result<crate::lan::models::LanServerStatusDto, OpenTallyError> {
+    let guard = state
+        .lan_server
+        .read()
+        .map_err(|e| OpenTallyError::Internal(e.to_string()))?;
+
+    let local_ips = crate::lan::server::detect_local_ips();
+
+    if let Some(ref handle) = *guard {
+        Ok(crate::lan::models::LanServerStatusDto {
+            is_running: true,
+            bind_address: handle.bind_address.clone(),
+            port: handle.port,
+            local_ip_addresses: local_ips,
+            active_sessions: handle.session_store.list_active(),
+        })
+    } else {
+        Ok(crate::lan::models::LanServerStatusDto {
+            is_running: false,
+            bind_address: "0.0.0.0".to_string(),
+            port: 7900,
+            local_ip_addresses: local_ips,
+            active_sessions: Vec::new(),
+        })
+    }
+}
+
+#[tauri::command]
+pub async fn revoke_lan_session(
+    state: tauri::State<'_, AppState>,
+    session_id: String,
+) -> Result<crate::lan::models::LanServerStatusDto, OpenTallyError> {
+    info!(
+        ">>> [Tauri IPC] Received 'revoke_lan_session' for session_id='{}'",
+        session_id
+    );
+
+    {
+        let guard = state
+            .lan_server
+            .read()
+            .map_err(|e| OpenTallyError::Internal(e.to_string()))?;
+
+        if let Some(ref handle) = *guard {
+            handle.session_store.revoke_by_id(&session_id);
+        }
+    }
+
+    get_lan_server_status(state).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5525,4 +5996,218 @@ mod tests {
         assert_eq!(cor_result.corrected_draft.voucher.status, "draft");
         assert_eq!(cor_result.corrected_draft.lines.len(), 2);
     }
+}
+
+// =========================================================================
+// Milestone 18: BYO-GSP Connector & Declarative Custom Report Extensions
+// =========================================================================
+
+#[tauri::command]
+pub async fn get_company_gsp_config(
+    state: tauri::State<'_, AppState>,
+) -> Result<crate::gst::gsp_connector::CompanyGspConfigDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    let _ = actor;
+    crate::gst::gsp_connector::GspConnectorService::get_config(state.db.pool(), &company_id).await
+}
+
+#[tauri::command]
+pub async fn save_company_gsp_config(
+    state: tauri::State<'_, AppState>,
+    input: crate::gst::gsp_connector::SaveCompanyGspConfigInput,
+) -> Result<crate::gst::gsp_connector::CompanyGspConfigDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ManageUsers,
+        )
+        .await?;
+    crate::gst::gsp_connector::GspConnectorService::save_config(
+        state.db.pool(),
+        &company_id,
+        input,
+        &actor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn push_einvoice_to_gsp(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+) -> Result<crate::gst::gsp_connector::GspEinvoiceResponse, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::PostVoucher,
+        )
+        .await?;
+    crate::gst::gsp_connector::GspConnectorService::push_einvoice_to_gsp(
+        state.db.pool(),
+        &company_id,
+        &voucher_id,
+        &actor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn push_eway_bill_to_gsp(
+    state: tauri::State<'_, AppState>,
+    voucher_id: String,
+) -> Result<crate::gst::gsp_connector::GspEwayBillResponse, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::PostVoucher,
+        )
+        .await?;
+    crate::gst::gsp_connector::GspConnectorService::push_eway_bill_to_gsp(
+        state.db.pool(),
+        &company_id,
+        &voucher_id,
+        &actor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_custom_reports(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<crate::extensions::CustomReportDefinitionDto>, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    let _ = actor;
+    crate::extensions::CustomReportService::list_reports(state.db.pool(), &company_id).await
+}
+
+#[tauri::command]
+pub async fn save_custom_report(
+    state: tauri::State<'_, AppState>,
+    input: crate::extensions::SaveCustomReportInput,
+) -> Result<crate::extensions::CustomReportDefinitionDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::extensions::CustomReportService::save_report(state.db.pool(), &company_id, input, &actor)
+        .await
+}
+
+#[tauri::command]
+pub async fn delete_custom_report(
+    state: tauri::State<'_, AppState>,
+    report_id: String,
+) -> Result<(), OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::extensions::CustomReportService::delete_report(
+        state.db.pool(),
+        &company_id,
+        &report_id,
+        &actor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn run_custom_report(
+    state: tauri::State<'_, AppState>,
+    report_id: String,
+) -> Result<crate::extensions::CustomReportExecutionResult, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    let _ = actor;
+    crate::extensions::CustomReportService::run_report(state.db.pool(), &company_id, &report_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn export_custom_report_csv(
+    state: tauri::State<'_, AppState>,
+    report_id: String,
+) -> Result<String, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    let _ = actor;
+    crate::extensions::CustomReportService::export_report_csv(
+        state.db.pool(),
+        &company_id,
+        &report_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_custom_report_template(
+    state: tauri::State<'_, AppState>,
+    report_id: String,
+) -> Result<String, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    let _ = actor;
+    crate::extensions::CustomReportService::export_template(
+        state.db.pool(),
+        &company_id,
+        &report_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn import_custom_report_template(
+    state: tauri::State<'_, AppState>,
+    template_json: String,
+) -> Result<crate::extensions::CustomReportDefinitionDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    let actor = state
+        .resolve_actor(
+            &company_id,
+            crate::security::models::ActionPermission::ViewStandardReports,
+        )
+        .await?;
+    crate::extensions::CustomReportService::import_template(
+        state.db.pool(),
+        &company_id,
+        &template_json,
+        &actor,
+    )
+    .await
 }

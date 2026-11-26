@@ -114,6 +114,8 @@ async fn setup_payroll_fixture() -> (tempfile::TempDir, DatabaseManager, Arc<App
             auto_seed_tds_defaults: false,
             enable_payroll: Some(true),
             auto_seed_payroll_ledgers: true,
+            enable_multi_currency: Some(false),
+            auto_seed_currency_defaults: false,
         },
     )
     .await

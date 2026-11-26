@@ -62,6 +62,62 @@ impl AuditCertificationService {
         format!("{:x}", hasher.finalize())
     }
 
+    /// Appends a new audit_log entry with cryptographic SHA-256 hash chaining.
+    pub async fn record_chained_event(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        entity_type: &str,
+        entity_id: &str,
+        action: &str,
+        performed_by: &str,
+        new_values: Option<&str>,
+    ) -> Result<String, OpenTallyError> {
+        let mut tx = pool.begin().await.map_err(OpenTallyError::Database)?;
+        let id = uuid::Uuid::new_v4().to_string();
+        let timestamp = chrono::Utc::now().to_rfc3339();
+
+        let latest_hash: Option<String> = sqlx::query_scalar(
+            "SELECT entry_hash FROM audit_log WHERE company_id = ? AND entry_hash IS NOT NULL ORDER BY timestamp DESC, id DESC LIMIT 1",
+        )
+        .bind(company_id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        let prev_hash = latest_hash.unwrap_or_else(|| "GENESIS".to_string());
+        let entry_hash = Self::compute_entry_hash(
+            &prev_hash,
+            &id,
+            company_id,
+            entity_type,
+            entity_id,
+            action,
+            &timestamp,
+            new_values,
+        );
+
+        sqlx::query(
+            "INSERT INTO audit_log (id, company_id, entity_type, entity_id, action, new_values, performed_by, timestamp, prev_hash, entry_hash)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&id)
+        .bind(company_id)
+        .bind(entity_type)
+        .bind(entity_id)
+        .bind(action)
+        .bind(new_values)
+        .bind(performed_by)
+        .bind(&timestamp)
+        .bind(&prev_hash)
+        .bind(&entry_hash)
+        .execute(&mut *tx)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        tx.commit().await.map_err(OpenTallyError::Database)?;
+        Ok(entry_hash)
+    }
+
     /// Verifies the cryptographic hash-chain integrity of all audit_log records for a company.
     pub async fn verify_audit_trail_integrity(
         pool: &Pool<Sqlite>,

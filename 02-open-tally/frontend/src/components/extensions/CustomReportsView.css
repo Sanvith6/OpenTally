@@ -1,0 +1,205 @@
+.ot-crpt-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  background: #0f172a;
+  color: #e2e8f0;
+  overflow-y: auto;
+}
+
+.ot-crpt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #334155;
+  padding-bottom: 12px;
+  margin-bottom: 14px;
+}
+
+.ot-crpt-header h2 {
+  margin: 0;
+  color: #38bdf8;
+  font-size: 1.25rem;
+}
+
+.ot-crpt-sub {
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.ot-crpt-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ot-crpt-alert {
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  font-size: 0.88rem;
+}
+
+.ot-crpt-alert-err {
+  background: rgba(239, 68, 68, 0.18);
+  border: 1px solid #ef4444;
+}
+
+.ot-crpt-alert-ok {
+  background: rgba(16, 185, 129, 0.18);
+  border: 1px solid #10b981;
+}
+
+.ot-crpt-layout {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 16px;
+  flex: 1;
+}
+
+.ot-crpt-sidebar {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ot-crpt-sidebar h3 {
+  margin: 0 0 6px 0;
+  font-size: 0.95rem;
+  color: #38bdf8;
+}
+
+.ot-crpt-item {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.ot-crpt-item.active {
+  border-color: #38bdf8;
+}
+
+.ot-crpt-item-title {
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  margin-bottom: 6px;
+  font-size: 0.88rem;
+}
+
+.ot-crpt-item-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.ot-crpt-item-btns button {
+  background: #334155;
+  color: #e2e8f0;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.ot-crpt-main {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 14px;
+  overflow-x: auto;
+}
+
+.ot-crpt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+}
+
+.ot-crpt-table th,
+.ot-crpt-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #334155;
+  text-align: left;
+}
+
+.ot-crpt-table th {
+  color: #38bdf8;
+  background: #0f172a;
+}
+
+.ot-crpt-empty {
+  color: #94a3b8;
+  font-size: 0.88rem;
+  padding: 16px;
+}
+
+.ot-crpt-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.ot-crpt-modal {
+  background: #1e293b;
+  border: 1px solid #38bdf8;
+  border-radius: 8px;
+  padding: 20px;
+  width: 500px;
+  max-width: 92vw;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ot-crpt-modal label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+}
+
+.ot-crpt-modal input,
+.ot-crpt-modal select,
+.ot-crpt-modal textarea {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+
+.ot-crpt-cols-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.ot-crpt-col-chk {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 6px !important;
+}
+
+.ot-crpt-sort-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.ot-crpt-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}

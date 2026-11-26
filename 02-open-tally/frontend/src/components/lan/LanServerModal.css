@@ -1,0 +1,236 @@
+.ot-lan-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(10, 20, 30, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(2px);
+}
+
+.ot-lan-modal-container {
+  background: var(--bg-primary, #0c1a24);
+  color: var(--text-primary, #e2e8f0);
+  border: 2px solid var(--accent-gold, #f59e0b);
+  border-radius: 8px;
+  width: 90%;
+  max-width: 720px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+}
+
+.ot-lan-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #1e293b);
+  background: var(--bg-secondary, #07131b);
+}
+
+.ot-lan-modal-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--accent-gold, #f59e0b);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ot-lan-modal-close-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted, #94a3b8);
+  font-size: 1.25rem;
+  cursor: pointer;
+}
+
+.ot-lan-modal-close-btn:hover {
+  color: #fff;
+}
+
+.ot-lan-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.ot-lan-status-box {
+  padding: 14px 18px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ot-lan-status-box-active {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid #10b981;
+}
+
+.ot-lan-status-box-inactive {
+  background: rgba(148, 163, 184, 0.1);
+  border: 1px solid #475569;
+}
+
+.ot-lan-badge-active {
+  color: #10b981;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ot-lan-badge-inactive {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.ot-lan-ip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.ot-lan-ip-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: #1e293b;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+.ot-lan-copy-btn {
+  background: #334155;
+  color: #cbd5e1;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.ot-lan-copy-btn:hover {
+  background: #475569;
+  color: #fff;
+}
+
+.ot-lan-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.ot-lan-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ot-lan-form-group label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #94a3b8;
+}
+
+.ot-lan-form-group input {
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: monospace;
+}
+
+.ot-lan-form-group input:focus {
+  outline: none;
+  border-color: var(--accent-gold, #f59e0b);
+}
+
+.ot-lan-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.ot-lan-btn {
+  padding: 9px 18px;
+  font-weight: 600;
+  border-radius: 5px;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s ease;
+}
+
+.ot-lan-btn-start {
+  background: #10b981;
+  color: #064e3b;
+}
+
+.ot-lan-btn-start:hover {
+  background: #059669;
+  color: #fff;
+}
+
+.ot-lan-btn-stop {
+  background: #ef4444;
+  color: #fff;
+}
+
+.ot-lan-btn-stop:hover {
+  background: #dc2626;
+}
+
+.ot-lan-clients-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  margin-top: 10px;
+}
+
+.ot-lan-clients-table th,
+.ot-lan-clients-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #1e293b;
+}
+
+.ot-lan-clients-table th {
+  background: #07131b;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.ot-lan-revoke-btn {
+  background: #7f1d1d;
+  color: #fecaca;
+  border: none;
+  border-radius: 3px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.ot-lan-revoke-btn:hover {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.ot-lan-modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid var(--border-color, #1e293b);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--bg-secondary, #07131b);
+  font-size: 0.85rem;
+  color: #94a3b8;
+}

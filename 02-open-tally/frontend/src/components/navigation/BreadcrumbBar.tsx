@@ -1,17 +1,21 @@
 import React from 'react';
-import { NavigationStackEntry } from '../../types';
+import { NavigationStackEntry, LanClientConfig } from '../../types';
 import './BreadcrumbBar.css';
 
 interface BreadcrumbBarProps {
   stack: NavigationStackEntry[];
   onNavigateToLevel: (index: number) => void;
   onOpenGoTo: () => void;
+  lanClientConfig?: LanClientConfig | null;
+  onDisconnectLan?: () => void;
 }
 
 export const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
   stack,
   onNavigateToLevel,
   onOpenGoTo,
+  lanClientConfig,
+  onDisconnectLan,
 }) => {
   return (
     <nav className="ot-breadcrumb-bar" aria-label="Hierarchical navigation path">
@@ -36,6 +40,24 @@ export const BreadcrumbBar: React.FC<BreadcrumbBarProps> = ({
       </div>
 
       <div className="ot-breadcrumb-actions">
+        {lanClientConfig && (
+          <div className="ot-lan-client-badge" data-testid="lan-client-badge">
+            <span>
+              LAN: {lanClientConfig.host}:{lanClientConfig.port} ({lanClientConfig.username} [
+              {lanClientConfig.role}])
+            </span>
+            {onDisconnectLan && (
+              <button
+                type="button"
+                className="ot-lan-disconnect-btn"
+                onClick={onDisconnectLan}
+                data-testid="btn-disconnect-lan"
+              >
+                Disconnect LAN
+              </button>
+            )}
+          </div>
+        )}
         <button
           type="button"
           className="ot-goto-pill-btn"

@@ -1824,3 +1824,297 @@ export type {
   PayrollStatutorySummary,
 } from '../services/api';
 
+// ---------------------------------------------------------------------------
+// Milestone 17: Multi-User LAN Host / Client Mode Types
+// ---------------------------------------------------------------------------
+
+export interface LanSessionDto {
+  session_id: string;
+  company_id: string;
+  user_id: string;
+  username: string;
+  role: string;
+  client_ip?: string;
+  created_at: string;
+  expires_at: string;
+  last_active_at: string;
+}
+
+export interface LanServerStatusDto {
+  is_running: boolean;
+  bind_address: string;
+  port: number;
+  local_ip_addresses: string[];
+  active_sessions: LanSessionDto[];
+}
+
+export interface LanClientConfig {
+  host: string;
+  port: number;
+  company_id: string;
+  username: string;
+  token: string;
+  role: string;
+}
+
+export interface LanLoginResponse {
+  session_id: string;
+  token: string;
+  company_id: string;
+  user_id: string;
+  username: string;
+  role: string;
+  expires_at: string;
+}
+
+// ---------------------------------------------------------------------------
+// Milestone 16: Multi-Currency & Bank Cheque Printing Types
+// ---------------------------------------------------------------------------
+
+export interface Currency {
+  id: string;
+  company_id: string;
+  code: string;
+  symbol: string;
+  formal_name: string;
+  decimal_places: number;
+  is_base: boolean;
+  created_at: string;
+}
+
+export interface CreateCurrencyInput {
+  code: string;
+  symbol: string;
+  formal_name: string;
+  decimal_places?: number;
+  is_base?: boolean;
+}
+
+export interface ExchangeRate {
+  id: string;
+  company_id: string;
+  currency_code: string;
+  effective_date: string;
+  standard_rate: string;
+  selling_rate: string;
+  buying_rate: string;
+  created_at: string;
+}
+
+export interface SetExchangeRateInput {
+  currency_code: string;
+  effective_date: string;
+  standard_rate: string;
+  selling_rate?: string;
+  buying_rate?: string;
+}
+
+export interface EffectiveRateDto {
+  currency_code: string;
+  effective_date: string;
+  standard_rate: string;
+  selling_rate: string;
+  buying_rate: string;
+  is_base: boolean;
+}
+
+export interface OpenForeignBill {
+  bill_name: string;
+  party_ledger_id: string;
+  party_name: string;
+  voucher_id: string;
+  voucher_number: string;
+  bill_date: string;
+  due_date?: string | null;
+  currency_code: string;
+  invoice_rate: string;
+  original_foreign: string;
+  settled_foreign: string;
+  outstanding_foreign: string;
+  original_inr: string;
+  settled_inr: string;
+  outstanding_inr: string;
+  dr_cr: string;
+}
+
+export interface SettleForeignBillInput {
+  bill_name: string;
+  party_ledger_id: string;
+  foreign_settled_amount: string;
+  settlement_date: string;
+  settlement_exchange_rate?: string;
+  payment_mode: string;
+  bank_or_cash_ledger_id: string;
+  narration?: string;
+  cheque_instrument_number?: string;
+}
+
+export interface RealizedForexResult {
+  settlement_voucher_id: string;
+  forex_journal_voucher_id?: string | null;
+  foreign_settled: string;
+  settlement_rate: string;
+  invoice_rate: string;
+  forex_difference: string;
+  is_gain: boolean;
+  settled_inr: string;
+  book_inr: string;
+}
+
+export interface UnrealizedForexBillRow {
+  bill_name: string;
+  party_ledger_id: string;
+  party_name: string;
+  currency_code: string;
+  dr_cr: string;
+  open_foreign_amount: string;
+  invoice_rate: string;
+  book_value_inr: string;
+  revaluation_rate: string;
+  revalued_value_inr: string;
+  unrealized_gain_or_loss: string;
+  is_gain: boolean;
+}
+
+export interface UnrealizedForexReport {
+  company_id: string;
+  as_of_date: string;
+  bills: UnrealizedForexBillRow[];
+  total_book_value_inr: string;
+  total_revalued_value_inr: string;
+  total_unrealized_gain: string;
+  total_unrealized_loss: string;
+  net_unrealized_gain_loss: string;
+}
+
+export interface ChequeTemplateDto {
+  id: string;
+  company_id: string;
+  bank_name: string;
+  width_mm: number;
+  height_mm: number;
+  date_x_mm: number;
+  date_y_mm: number;
+  payee_x_mm: number;
+  payee_y_mm: number;
+  words_x_mm: number;
+  words_y_mm: number;
+  amount_x_mm: number;
+  amount_y_mm: number;
+  is_account_payee_default: boolean;
+}
+
+export interface UpsertChequeTemplateInput {
+  template_id?: string;
+  bank_name: string;
+  width_mm: number;
+  height_mm: number;
+  date_x_mm: number;
+  date_y_mm: number;
+  payee_x_mm: number;
+  payee_y_mm: number;
+  words_x_mm: number;
+  words_y_mm: number;
+  amount_x_mm: number;
+  amount_y_mm: number;
+  is_account_payee_default?: boolean;
+}
+
+export interface CurrencySeedSummary {
+  base_currency_seeded: boolean;
+  currencies_seeded_count: number;
+  forex_ledger_id: string;
+  cheque_templates_seeded_count: number;
+}
+
+
+
+
+// ==========================================
+// Milestone 18: BYO-GSP & Custom Report Extensions
+// ==========================================
+
+export interface CompanyGspConfigDto {
+  company_id: string;
+  provider_mode: 'Sandbox' | 'HttpGsp';
+  provider_name: string;
+  base_url?: string | null;
+  client_id?: string | null;
+  has_api_secret: boolean;
+  is_enabled: boolean;
+  updated_at: string;
+}
+
+export interface SaveCompanyGspConfigInput {
+  provider_mode: 'Sandbox' | 'HttpGsp';
+  provider_name: string;
+  base_url?: string;
+  client_id?: string;
+  api_secret_ref?: string;
+  is_enabled: boolean;
+}
+
+export interface GspEinvoiceResponse {
+  irn: string;
+  ack_no: string;
+  ack_date: string;
+  signed_qr_code?: string | null;
+  provider_mode: string;
+}
+
+export interface GspEwayBillResponse {
+  ewb_no: string;
+  ewb_date: string;
+  ewb_valid_upto: string;
+  provider_mode: string;
+}
+
+export type CustomReportDataSource =
+  | 'Vouchers'
+  | 'Ledgers'
+  | 'StockItems'
+  | 'OutstandingBills'
+  | 'GstInvoices';
+
+export interface CustomReportFilter {
+  field: string;
+  op: 'eq' | 'contains' | 'gte' | 'lte' | 'between';
+  value: string;
+  value_end?: string;
+}
+
+export interface CustomReportDefinitionDto {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string;
+  data_source: CustomReportDataSource;
+  columns: string[];
+  filters: CustomReportFilter[];
+  sort_by?: string | null;
+  sort_dir: 'ASC' | 'DESC';
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SaveCustomReportInput {
+  id?: string;
+  name: string;
+  description?: string;
+  data_source: CustomReportDataSource;
+  columns: string[];
+  filters?: CustomReportFilter[];
+  sort_by?: string;
+  sort_dir?: 'ASC' | 'DESC';
+}
+
+export interface CustomReportExecutionResult {
+  report_id: string;
+  report_name: string;
+  data_source: string;
+  columns: string[];
+  rows: Record<string, string>[];
+  numeric_totals: Record<string, string>;
+  row_count: number;
+}

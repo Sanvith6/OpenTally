@@ -4600,6 +4600,218 @@ pub async fn run_milestone15_payroll_migration(pool: &Pool<Sqlite>) -> Result<()
     Ok(())
 }
 
+/// Milestone 16: Multi-Currency Accounting, Realized/Unrealized Forex Gain & Loss & Bank Cheque Printing PDFs.
+///
+/// Introduces:
+/// - `currencies`: ISO 4217 currency master with unique code per company and single base currency guarantee.
+/// - `exchange_rates`: Canonical decimal standard, selling, and buying rates by effective date.
+/// - `voucher_currency_details`: Foreign currency amounts, exchange rates, and base amounts tied to vouchers/lines.
+/// - `cheque_templates`: Millimeter-based CTS-2010 cheque printing templates for Indian banks.
+///
+/// Stamps schema version `v2.1.0-multicurrency-cheque` in `_opentally_metadata`.
+pub async fn run_milestone16_multicurrency_cheque_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let mut tx = pool.begin().await?;
+
+    // Precondition check
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(&mut *tx)
+            .await?;
+
+    if current_version == "v2.1.0-multicurrency-cheque" {
+        tx.rollback().await?;
+        return Ok(());
+    }
+
+    if current_version != "v1.8.0-payroll" {
+        return Err(OpenTallyError::Migration(format!(
+            "Milestone 16 migration requires schema version 'v1.8.0-payroll', but found '{}'",
+            current_version
+        )));
+    }
+
+    sqlx::raw_sql("PRAGMA foreign_keys = OFF;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::raw_sql(
+        r#"
+        -- 1. Currencies Master
+        CREATE TABLE IF NOT EXISTS currencies (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            code TEXT NOT NULL,
+            symbol TEXT NOT NULL,
+            formal_name TEXT NOT NULL,
+            decimal_places INTEGER NOT NULL DEFAULT 2 CHECK (decimal_places BETWEEN 0 AND 4),
+            is_base INTEGER NOT NULL DEFAULT 0 CHECK (is_base IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE (company_id, id),
+            UNIQUE (company_id, code),
+            CHECK (length(code) = 3 AND code = upper(code) AND code GLOB '[A-Z][A-Z][A-Z]'),
+            CHECK (length(trim(symbol)) > 0 AND length(symbol) <= 12),
+            CHECK (length(trim(formal_name)) > 0 AND length(formal_name) <= 100),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_currencies_single_base_per_company
+            ON currencies(company_id) WHERE is_base = 1;
+
+        -- 2. Daily Exchange Rates
+        CREATE TABLE IF NOT EXISTS exchange_rates (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            currency_code TEXT NOT NULL,
+            effective_date TEXT NOT NULL CHECK (
+                length(effective_date) = 10
+                AND effective_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+            ),
+            standard_rate TEXT NOT NULL CHECK (
+                length(standard_rate) BETWEEN 1 AND 25
+                AND standard_rate NOT LIKE '%-%'
+                AND standard_rate NOT LIKE '%+%'
+                AND standard_rate NOT LIKE '.%'
+                AND standard_rate NOT LIKE '%.'
+                AND standard_rate NOT GLOB '*[^0-9.]*'
+                AND standard_rate NOT GLOB '*.*.*'
+                AND CAST(standard_rate AS REAL) > 0
+                AND (instr(standard_rate, '.') = 0 OR length(substr(standard_rate, instr(standard_rate, '.') + 1)) BETWEEN 1 AND 6)
+            ),
+            selling_rate TEXT NOT NULL CHECK (
+                length(selling_rate) BETWEEN 1 AND 25
+                AND selling_rate NOT LIKE '%-%'
+                AND selling_rate NOT LIKE '%+%'
+                AND selling_rate NOT LIKE '.%'
+                AND selling_rate NOT LIKE '%.'
+                AND selling_rate NOT GLOB '*[^0-9.]*'
+                AND selling_rate NOT GLOB '*.*.*'
+                AND CAST(selling_rate AS REAL) > 0
+                AND (instr(selling_rate, '.') = 0 OR length(substr(selling_rate, instr(selling_rate, '.') + 1)) BETWEEN 1 AND 6)
+            ),
+            buying_rate TEXT NOT NULL CHECK (
+                length(buying_rate) BETWEEN 1 AND 25
+                AND buying_rate NOT LIKE '%-%'
+                AND buying_rate NOT LIKE '%+%'
+                AND buying_rate NOT LIKE '.%'
+                AND buying_rate NOT LIKE '%.'
+                AND buying_rate NOT GLOB '*[^0-9.]*'
+                AND buying_rate NOT GLOB '*.*.*'
+                AND CAST(buying_rate AS REAL) > 0
+                AND (instr(buying_rate, '.') = 0 OR length(substr(buying_rate, instr(buying_rate, '.') + 1)) BETWEEN 1 AND 6)
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE (company_id, id),
+            UNIQUE (company_id, currency_code, effective_date),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, currency_code) REFERENCES currencies(company_id, code) ON DELETE RESTRICT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_exchange_rates_lookup
+            ON exchange_rates(company_id, currency_code, effective_date DESC);
+
+        -- 3. Voucher Currency Details
+        CREATE TABLE IF NOT EXISTS voucher_currency_details (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            voucher_id TEXT NOT NULL,
+            voucher_line_id TEXT,
+            currency_code TEXT NOT NULL,
+            foreign_amount TEXT NOT NULL CHECK (
+                length(foreign_amount) BETWEEN 1 AND 25
+                AND foreign_amount NOT LIKE '%-%'
+                AND foreign_amount NOT LIKE '%+%'
+                AND foreign_amount NOT LIKE '.%'
+                AND foreign_amount NOT LIKE '%.'
+                AND foreign_amount NOT GLOB '*[^0-9.]*'
+                AND foreign_amount NOT GLOB '*.*.*'
+                AND CAST(foreign_amount AS REAL) > 0
+                AND (instr(foreign_amount, '.') = 0 OR length(substr(foreign_amount, instr(foreign_amount, '.') + 1)) BETWEEN 1 AND 4)
+            ),
+            exchange_rate TEXT NOT NULL CHECK (
+                length(exchange_rate) BETWEEN 1 AND 25
+                AND exchange_rate NOT LIKE '%-%'
+                AND exchange_rate NOT LIKE '%+%'
+                AND exchange_rate NOT LIKE '.%'
+                AND exchange_rate NOT LIKE '%.'
+                AND exchange_rate NOT GLOB '*[^0-9.]*'
+                AND exchange_rate NOT GLOB '*.*.*'
+                AND CAST(exchange_rate AS REAL) > 0
+                AND (instr(exchange_rate, '.') = 0 OR length(substr(exchange_rate, instr(exchange_rate, '.') + 1)) BETWEEN 1 AND 6)
+            ),
+            base_amount TEXT NOT NULL CHECK (
+                length(base_amount) BETWEEN 1 AND 25
+                AND base_amount NOT LIKE '%-%'
+                AND base_amount NOT LIKE '%+%'
+                AND base_amount NOT LIKE '.%'
+                AND base_amount NOT LIKE '%.'
+                AND base_amount NOT GLOB '*[^0-9.]*'
+                AND base_amount NOT GLOB '*.*.*'
+                AND CAST(base_amount AS REAL) > 0
+                AND (instr(base_amount, '.') = 0 OR length(substr(base_amount, instr(base_amount, '.') + 1)) BETWEEN 1 AND 4)
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE (company_id, id),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, voucher_line_id) REFERENCES voucher_lines(company_id, id) ON DELETE CASCADE,
+            FOREIGN KEY (company_id, currency_code) REFERENCES currencies(company_id, code) ON DELETE RESTRICT
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_vcd_unique_line
+            ON voucher_currency_details(company_id, voucher_line_id)
+            WHERE voucher_line_id IS NOT NULL;
+
+        CREATE INDEX IF NOT EXISTS idx_vcd_company_voucher
+            ON voucher_currency_details(company_id, voucher_id);
+
+        -- 4. CTS-2010 Cheque Printing Templates
+        CREATE TABLE IF NOT EXISTS cheque_templates (
+            id TEXT NOT NULL,
+            company_id TEXT NOT NULL,
+            bank_name TEXT NOT NULL CHECK (length(trim(bank_name)) > 0 AND length(bank_name) <= 120),
+            width_mm REAL NOT NULL CHECK (width_mm > 50.0 AND width_mm <= 400.0),
+            height_mm REAL NOT NULL CHECK (height_mm > 30.0 AND height_mm <= 200.0),
+            date_x_mm REAL NOT NULL CHECK (date_x_mm >= 0.0 AND date_x_mm <= width_mm),
+            date_y_mm REAL NOT NULL CHECK (date_y_mm >= 0.0 AND date_y_mm <= height_mm),
+            payee_x_mm REAL NOT NULL CHECK (payee_x_mm >= 0.0 AND payee_x_mm <= width_mm),
+            payee_y_mm REAL NOT NULL CHECK (payee_y_mm >= 0.0 AND payee_y_mm <= height_mm),
+            words_x_mm REAL NOT NULL CHECK (words_x_mm >= 0.0 AND words_x_mm <= width_mm),
+            words_y_mm REAL NOT NULL CHECK (words_y_mm >= 0.0 AND words_y_mm <= height_mm),
+            amount_x_mm REAL NOT NULL CHECK (amount_x_mm >= 0.0 AND amount_x_mm <= width_mm),
+            amount_y_mm REAL NOT NULL CHECK (amount_y_mm >= 0.0 AND amount_y_mm <= height_mm),
+            is_account_payee_default INTEGER NOT NULL DEFAULT 1 CHECK (is_account_payee_default IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (id),
+            UNIQUE (company_id, id),
+            UNIQUE (company_id, bank_name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::raw_sql("PRAGMA foreign_keys = ON;")
+        .execute(&mut *tx)
+        .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v2.1.0-multicurrency-cheque', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
 fn schema_version_rank(ver: &str) -> usize {
     match ver.trim_start_matches('v') {
         "0.1.0-sprint0" => 0,
@@ -4626,6 +4838,7 @@ fn schema_version_rank(ver: &str) -> usize {
         "1.6.0-orders" => 21,
         "1.7.0-security-bom" => 22,
         "1.8.0-payroll" => 23,
+        "2.1.0-multicurrency-cheque" => 24,
         _ => 0,
     }
 }
@@ -4707,6 +4920,86 @@ pub async fn run_all_migrations(pool: &Pool<Sqlite>) -> Result<(), OpenTallyErro
     if rank < 23 {
         run_milestone15_payroll_migration(pool).await?;
     }
+    if rank < 24 {
+        run_milestone16_multicurrency_cheque_migration(pool).await?;
+    }
+    if rank < 25 {
+        run_milestone18_gsp_extensions_migration(pool).await?;
+    }
+    Ok(())
+}
+
+/// Milestone 18: BYO-GSP e-Invoice/e-Way Bill Connector & Declarative Custom Report Extensions.
+/// Stamps schema version `v3.0.0-enterprise` in `_opentally_metadata`.
+pub async fn run_milestone18_gsp_extensions_migration(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+) -> Result<(), crate::errors::OpenTallyError> {
+    use crate::errors::OpenTallyError;
+
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+    if current_version == "v3.0.0-enterprise" {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await.map_err(OpenTallyError::Database)?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS company_gsp_configs (
+            company_id TEXT PRIMARY KEY NOT NULL,
+            provider_mode TEXT NOT NULL DEFAULT 'Sandbox' CHECK (provider_mode IN ('Sandbox', 'HttpGsp')),
+            provider_name TEXT NOT NULL DEFAULT 'OpenTally Sandbox',
+            base_url TEXT,
+            client_id TEXT,
+            api_secret_ref TEXT,
+            is_enabled INTEGER NOT NULL DEFAULT 1 CHECK (is_enabled IN (0, 1)),
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS custom_report_definitions (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            description TEXT NOT NULL DEFAULT '',
+            data_source TEXT NOT NULL CHECK (data_source IN ('Vouchers', 'Ledgers', 'StockItems', 'OutstandingBills', 'GstInvoices')),
+            columns_json TEXT NOT NULL,
+            filters_json TEXT NOT NULL DEFAULT '[]',
+            sort_by TEXT,
+            sort_dir TEXT NOT NULL DEFAULT 'ASC' CHECK (sort_dir IN ('ASC', 'DESC')),
+            created_by TEXT NOT NULL DEFAULT 'system',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (company_id, name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v3.0.0-enterprise', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    tx.commit().await.map_err(OpenTallyError::Database)?;
     Ok(())
 }
 

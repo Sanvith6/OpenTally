@@ -1,0 +1,330 @@
+/* OpenTally v3.0.0 — Unified Clean-Room Accounting Terminal Design System */
+:root {
+  --ot-top-bar: #1e4e79;
+  --ot-top-bar-border: #143757;
+  --ot-canvas-mint: #f2f7f4;
+  --ot-card-light: #ffffff;
+  --ot-teal-header: #1b5e7a;
+  --ot-amber-active: #ffcf48;
+  --ot-amber-soft: #fff3cd;
+  --ot-rail-ice: #e6f0f7;
+  --ot-rail-border: #b8cfe0;
+  --ot-gridline: #d6e2dc;
+  --ot-ink-dark: #111827;
+  --ot-ink-navy: #0f3d6e;
+  --ot-ink-muted: #475569;
+
+  /* Signature Voucher Header Ribbons */
+  --ot-ribbon-contra: #2f4f7f;
+  --ot-ribbon-payment: #1b6b7a;
+  --ot-ribbon-receipt: #1f6f4a;
+  --ot-ribbon-journal: #44468a;
+  --ot-ribbon-sales: #1e4e79;
+  --ot-ribbon-purchase: #7a4a1b;
+  --ot-ribbon-notes: #663366;
+  --ot-ribbon-stock: #255c69;
+  --ot-ribbon-payroll: #2a5c45;
+  --ot-ribbon-orders: #3b5998;
+}
+
+/* Compact 34px Deep Blue Top Utility Bar */
+.ot-header {
+  background-color: var(--ot-top-bar) !important;
+  border-bottom: 1px solid var(--ot-top-bar-border) !important;
+  color: #ffffff !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  font-size: 0.78rem !important;
+}
+
+.ot-header .ot-logo {
+  font-size: 0.92rem !important;
+  color: #ffffff !important;
+  letter-spacing: 0.4px;
+}
+
+.ot-header .ot-logo-bracket {
+  color: #93c5fd !important;
+}
+
+.ot-header .ot-tagline {
+  color: #cbd5e1 !important;
+  border-left-color: rgba(255, 255, 255, 0.25) !important;
+  font-size: 0.72rem !important;
+}
+
+.ot-header-menu-triggers {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ot-top-trigger-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  border-radius: 3px;
+  padding: 2px 7px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ot-top-trigger-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: var(--ot-amber-active);
+}
+
+.ot-top-trigger-pill {
+  background: var(--ot-amber-active);
+  color: var(--ot-ink-dark);
+  border-color: #eab308;
+  font-weight: 700;
+}
+
+.ot-header-context-badges {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ot-top-ctx-pill {
+  background: rgba(15, 23, 42, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #f8fafc;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ot-top-ctx-lan {
+  background: var(--ot-amber-active);
+  color: var(--ot-ink-dark);
+  border-color: #d97706;
+}
+
+.ot-hotkey-underline {
+  text-decoration: underline;
+  font-weight: 800;
+}
+
+/* Classic Two-Pane Gateway Surface */
+.ot-workspace-grid {
+  background-color: var(--ot-canvas-mint) !important;
+  color: var(--ot-ink-dark);
+  padding: 12px 14px !important;
+  gap: 14px !important;
+}
+
+.ot-col-company .ot-card,
+.ot-col-company .ot-company-panel {
+  background-color: var(--ot-card-light) !important;
+  color: var(--ot-ink-dark) !important;
+  border: 1px solid var(--ot-gridline) !important;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+.ot-col-company h3,
+.ot-col-company .ot-panel-header h3 {
+  color: var(--ot-ink-navy) !important;
+}
+
+.ot-col-company .ot-subsystem-details,
+.ot-col-company .ot-label,
+.ot-col-company .ot-meta-label {
+  color: var(--ot-ink-muted) !important;
+}
+
+.ot-col-company code {
+  color: var(--ot-ink-navy) !important;
+}
+
+/* Right Pane Framed Gateway Menu */
+.ot-gateway-container {
+  background-color: var(--ot-card-light) !important;
+  color: var(--ot-ink-dark) !important;
+  border: 2px solid var(--ot-teal-header) !important;
+  border-radius: 4px !important;
+  overflow: hidden;
+}
+
+.ot-gateway-header {
+  background-color: var(--ot-teal-header) !important;
+  color: #ffffff !important;
+  padding: 8px 14px !important;
+  border-bottom: 1px solid var(--ot-top-bar-border) !important;
+}
+
+.ot-gateway-header h2 {
+  color: #ffffff !important;
+  font-size: 1rem !important;
+}
+
+.ot-keyboard-guide {
+  color: #dbeafe !important;
+  font-size: 0.72rem !important;
+}
+
+.ot-section-title {
+  background-color: #e6f0f7 !important;
+  color: var(--ot-ink-navy) !important;
+  font-weight: 800 !important;
+  font-size: 0.72rem !important;
+  letter-spacing: 0.08em;
+  padding: 4px 12px !important;
+  border-top: 1px solid var(--ot-gridline);
+  border-bottom: 1px solid var(--ot-gridline);
+}
+
+.ot-menu-row {
+  color: var(--ot-ink-dark) !important;
+  padding: 5px 14px !important;
+  border-bottom: 1px solid #eef4f1 !important;
+  cursor: pointer;
+}
+
+.ot-menu-row:hover {
+  background-color: var(--ot-amber-soft) !important;
+}
+
+.ot-menu-row.ot-selected {
+  background-color: var(--ot-amber-active) !important;
+  color: var(--ot-ink-dark) !important;
+  font-weight: 700 !important;
+}
+
+.ot-menu-row .ot-hotkey {
+  color: var(--ot-ink-navy) !important;
+  font-weight: 800 !important;
+  text-decoration: underline;
+}
+
+.ot-menu-row .ot-item-badge {
+  background-color: #e2e8f0 !important;
+  color: #334155 !important;
+  font-size: 0.68rem !important;
+  padding: 1px 6px !important;
+  border-radius: 3px;
+}
+
+.ot-gateway-footer {
+  background-color: #f8fafc !important;
+  color: var(--ot-ink-dark) !important;
+  border-top: 1px solid var(--ot-gridline) !important;
+  padding: 6px 14px !important;
+  font-size: 0.78rem !important;
+}
+
+/* Cool Ice-Blue Fixed Right Function Key Rail */
+.ot-function-bar {
+  width: 152px !important;
+  background-color: var(--ot-rail-ice) !important;
+  border-left: 1px solid var(--ot-rail-border) !important;
+  box-shadow: none !important;
+}
+
+.ot-function-bar-header {
+  background-color: #d6e6f2 !important;
+  border-bottom: 1px solid var(--ot-rail-border) !important;
+  padding: 4px 6px !important;
+}
+
+.ot-function-bar-title {
+  color: var(--ot-ink-navy) !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+}
+
+.ot-function-bar-buttons {
+  padding: 4px !important;
+  gap: 3px !important;
+}
+
+.ot-function-btn {
+  flex-direction: row !important;
+  justify-content: space-between !important;
+  background-color: #ffffff !important;
+  border: 1px solid var(--ot-rail-border) !important;
+  color: var(--ot-ink-dark) !important;
+  min-height: 26px !important;
+  padding: 3px 6px !important;
+  text-align: left !important;
+}
+
+.ot-function-btn:hover:not(:disabled) {
+  background-color: var(--ot-amber-active) !important;
+  border-color: #b45309 !important;
+  transform: none !important;
+}
+
+.ot-function-btn .ot-fn-key {
+  color: var(--ot-ink-navy) !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+}
+
+.ot-function-btn .ot-fn-label {
+  color: var(--ot-ink-dark) !important;
+  font-size: 0.68rem !important;
+  font-weight: 600 !important;
+  margin-top: 0 !important;
+}
+
+.ot-function-btn-highlight {
+  background-color: var(--ot-amber-soft) !important;
+  border-color: #d97706 !important;
+}
+
+/* Signature Voucher Header Ribbons */
+.ot-voucher-ribbon {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 14px;
+  color: #ffffff;
+  font-weight: 700;
+  border-radius: 4px;
+  margin-bottom: 8px;
+}
+
+.ot-ribbon-contra { background-color: var(--ot-ribbon-contra); }
+.ot-ribbon-payment { background-color: var(--ot-ribbon-payment); }
+.ot-ribbon-receipt { background-color: var(--ot-ribbon-receipt); }
+.ot-ribbon-journal { background-color: var(--ot-ribbon-journal); }
+.ot-ribbon-sales { background-color: var(--ot-ribbon-sales); }
+.ot-ribbon-purchase { background-color: var(--ot-ribbon-purchase); }
+.ot-ribbon-notes { background-color: var(--ot-ribbon-notes); }
+.ot-ribbon-stock { background-color: var(--ot-ribbon-stock); }
+.ot-ribbon-payroll { background-color: var(--ot-ribbon-payroll); }
+.ot-ribbon-orders { background-color: var(--ot-ribbon-orders); }
+
+/* Tabular Numbers & Crisp Accounting Grid Alignment */
+table th[data-numeric="true"],
+table td[data-numeric="true"],
+.ot-num,
+.ot-mc-num,
+.num-col {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.ot-grand-total-row td {
+  font-weight: 800;
+  border-top: 1px solid var(--ot-ink-dark);
+  border-bottom: 3px double var(--ot-ink-dark);
+}
+
+/* Prevent horizontal overflow on all views */
+.ot-main-layout,
+.ot-main-content {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: hidden;
+}

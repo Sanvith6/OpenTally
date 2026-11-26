@@ -81,6 +81,28 @@ pub struct VoucherStockMovementItem {
     pub amount: Option<String>,
 }
 
+/// Detailed bank allocation in the voucher inspector.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherBankAllocationItem {
+    pub id: String,
+    pub transaction_type: String,
+    pub instrument_number: Option<String>,
+    pub instrument_date: Option<String>,
+    pub favouring_name: Option<String>,
+    pub amount: String,
+    pub bank_date: Option<String>,
+}
+
+/// Detailed multi-currency breakdown in the voucher inspector.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VoucherCurrencyDetailItem {
+    pub id: String,
+    pub currency_code: String,
+    pub foreign_amount: String,
+    pub exchange_rate: String,
+    pub base_amount: String,
+}
+
 /// Full comprehensive voucher details returned to the frontend inspector.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VoucherFullDetail {
@@ -90,6 +112,10 @@ pub struct VoucherFullDetail {
     pub bill_allocations: Vec<VoucherBillAllocationItem>,
     pub stock_movements: Vec<VoucherStockMovementItem>,
     pub lineage: Option<VoucherLineageResponse>,
+    #[serde(default)]
+    pub bank_allocations: Vec<VoucherBankAllocationItem>,
+    #[serde(default)]
+    pub currency_details: Vec<VoucherCurrencyDetailItem>,
 }
 
 pub struct NavigationSearchService;
@@ -491,9 +517,82 @@ impl NavigationSearchService {
                 // 6. Fetch Lineage Graph
                 let lineage = SqliteVoucherSearchRepository::get_voucher_lineage_impl(&mut *tx, &comp_id, &vch_id).await.ok();
 
+                // 7. Fetch Bank Allocations
+                let mut bank_allocations = Vec::new();
+                let has_bank_alloc: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='bank_allocations')"
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap_or(false);
+
+                if has_bank_alloc {
+                    #[allow(clippy::type_complexity)]
+                    let b_rows: Vec<(String, String, Option<String>, Option<String>, Option<String>, String, Option<String>)> = sqlx::query_as(
+                        r#"
+                        SELECT id, transaction_type, instrument_number, instrument_date, favouring_name, amount, bank_date
+                        FROM bank_allocations
+                        WHERE company_id = ? AND voucher_id = ? AND is_cancelled = 0
+                        ORDER BY rowid ASC
+                        "#,
+                    )
+                    .bind(&comp_id)
+                    .bind(&vch_id)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .unwrap_or_default();
+
+                    for (b_id, t_type, inst_no, inst_d, fav, amt, b_date) in b_rows {
+                        bank_allocations.push(VoucherBankAllocationItem {
+                            id: b_id,
+                            transaction_type: t_type,
+                            instrument_number: inst_no,
+                            instrument_date: inst_d,
+                            favouring_name: fav,
+                            amount: amt,
+                            bank_date: b_date,
+                        });
+                    }
+                }
+
+                // 8. Fetch Multi-Currency Details
+                let mut currency_details = Vec::new();
+                let has_curr_details: bool = sqlx::query_scalar(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' AND name='voucher_currency_details')"
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap_or(false);
+
+                if has_curr_details {
+                    let c_rows: Vec<(String, String, String, String, String)> = sqlx::query_as(
+                        r#"
+                        SELECT id, currency_code, foreign_amount, exchange_rate, base_amount
+                        FROM voucher_currency_details
+                        WHERE company_id = ? AND voucher_id = ?
+                        ORDER BY rowid ASC
+                        "#,
+                    )
+                    .bind(&comp_id)
+                    .bind(&vch_id)
+                    .fetch_all(&mut *tx)
+                    .await
+                    .unwrap_or_default();
+
+                    for (c_id, code, foreign, rate, base) in c_rows {
+                        currency_details.push(VoucherCurrencyDetailItem {
+                            id: c_id,
+                            currency_code: code,
+                            foreign_amount: foreign,
+                            exchange_rate: rate,
+                            base_amount: base,
+                        });
+                    }
+                }
+
                 info!(
-                    "Retrieved voucher full detail: id={}, number={}, lines={}, gst={}, bills={}, stock={}",
-                    voucher.id, voucher.voucher_number, lines.len(), gst_details.len(), bill_allocations.len(), stock_movements.len()
+                    "Retrieved voucher full detail: id={}, number={}, lines={}, gst={}, bills={}, stock={}, bank={}, currency={}",
+                    voucher.id, voucher.voucher_number, lines.len(), gst_details.len(), bill_allocations.len(), stock_movements.len(), bank_allocations.len(), currency_details.len()
                 );
 
                 Ok(VoucherFullDetail {
@@ -503,6 +602,8 @@ impl NavigationSearchService {
                     bill_allocations,
                     stock_movements,
                     lineage,
+                    bank_allocations,
+                    currency_details,
                 })
             })
         })

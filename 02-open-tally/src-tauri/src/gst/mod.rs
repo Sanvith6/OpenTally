@@ -1,4 +1,5 @@
 pub mod einvoice;
+pub mod gsp_connector;
 pub mod reconciliation;
 
 pub use einvoice::{

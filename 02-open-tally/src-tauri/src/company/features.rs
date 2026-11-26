@@ -37,6 +37,10 @@ pub struct CompanyFeaturesDto {
     pub enable_payroll: bool,
     #[serde(default)]
     pub has_payroll_ledgers_mapped: bool,
+    #[serde(default)]
+    pub enable_multi_currency: bool,
+    #[serde(default)]
+    pub has_multi_currency_seeded: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -64,6 +68,10 @@ pub struct SaveCompanyFeaturesInput {
     pub enable_payroll: Option<bool>,
     #[serde(default = "default_true")]
     pub auto_seed_payroll_ledgers: bool,
+    #[serde(default)]
+    pub enable_multi_currency: Option<bool>,
+    #[serde(default = "default_true")]
+    pub auto_seed_currency_defaults: bool,
 }
 
 pub struct CompanyFeaturesService;
@@ -103,7 +111,7 @@ impl CompanyFeaturesService {
         let mut gst_enabled = false;
         let mut enable_payroll = false;
 
-        for (k, v) in settings {
+        for (k, v) in &settings {
             match k.as_str() {
                 "maintain_inventory" => maintain_inventory = v == "true" || v == "1",
                 "enable_billwise" => billwise_tracking = v == "true" || v == "1",
@@ -194,6 +202,32 @@ impl CompanyFeaturesService {
             false
         };
 
+        let enable_multi_currency = settings
+            .iter()
+            .find(|(k, _)| k == "feature_enable_multi_currency")
+            .map(|(_, v)| v == "true" || v == "1")
+            .unwrap_or(false);
+
+        let currencies_table_exists: bool = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'table' AND name = 'currencies'",
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap_or(false);
+
+        let has_multi_currency_seeded: bool = if currencies_table_exists {
+            sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM currencies WHERE company_id = ? AND is_base = 1",
+            )
+            .bind(company_id)
+            .fetch_one(pool)
+            .await
+            .unwrap_or(0)
+                > 0
+        } else {
+            false
+        };
+
         Ok(CompanyFeaturesDto {
             company_id: company_id.to_string(),
             maintain_inventory,
@@ -211,6 +245,8 @@ impl CompanyFeaturesService {
             has_tds_sections_seeded,
             enable_payroll,
             has_payroll_ledgers_mapped,
+            enable_multi_currency,
+            has_multi_currency_seeded,
         })
     }
 
@@ -246,6 +282,7 @@ impl CompanyFeaturesService {
 
         let is_tds_enabled = input.tds_enabled.unwrap_or(false);
         let is_payroll_enabled = input.enable_payroll.unwrap_or(false);
+        let is_multi_currency_enabled = input.enable_multi_currency.unwrap_or(false);
         let clean_tan = input
             .tan
             .as_ref()
@@ -278,6 +315,7 @@ impl CompanyFeaturesService {
                 ("integrate_accounts_inventory", if input.enable_perpetual_cogs { "true" } else { "false" }),
                 ("enable_gst", if input.gst_enabled { "true" } else { "false" }),
                 ("enable_payroll", if is_payroll_enabled { "true" } else { "false" }),
+                ("feature_enable_multi_currency", if is_multi_currency_enabled { "true" } else { "false" }),
             ];
 
             for (k, v) in settings_to_upsert {
@@ -377,6 +415,15 @@ impl CompanyFeaturesService {
                 Self::ensure_payroll_ledgers_and_mappings(&mut conn, company_id, &fy_begins).await?;
             }
 
+            if is_multi_currency_enabled && input.auto_seed_currency_defaults {
+                crate::currency::CurrencyService::seed_company_currency_defaults_tx(
+                    &mut conn,
+                    company_id,
+                    "system",
+                )
+                .await?;
+            }
+
             // 6. Emit MCA Immutable Audit Log
             let audit_id = Uuid::new_v4().to_string();
             let payload = serde_json::json!({
@@ -391,6 +438,7 @@ impl CompanyFeaturesService {
                 "tan": clean_tan,
                 "deductor_type": deductor_type_val,
                 "enable_payroll": is_payroll_enabled,
+                "enable_multi_currency": is_multi_currency_enabled,
             });
 
             sqlx::query(

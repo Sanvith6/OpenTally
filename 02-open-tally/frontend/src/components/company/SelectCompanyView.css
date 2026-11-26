@@ -263,3 +263,42 @@
   border-radius: 3px;
   font-family: monospace;
 }
+
+.ot-hub-lan-panel {
+  background: #0f172a;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.ot-hub-lan-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  color: #fbbf24;
+}
+
+.ot-hub-lan-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+}
+
+.ot-hub-lan-grid label {
+  display: block;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+
+.ot-hub-lan-grid input,
+.ot-hub-lan-grid select {
+  width: 100%;
+  background: #1e293b;
+  border: 1px solid #334155;
+  color: #f8fafc;
+  padding: 6px 8px;
+  border-radius: 4px;
+}

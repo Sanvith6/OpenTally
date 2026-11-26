@@ -1,6 +1,9 @@
+pub mod cheque;
 pub mod payslip;
 pub mod words;
 pub mod writer;
+
+pub use cheque::{export_cheque_pdf, generate_cheque_pdf_bytes, ChequeTemplateDto};
 
 use crate::errors::OpenTallyError;
 use crate::vouchers::service::execute_read_only_query;

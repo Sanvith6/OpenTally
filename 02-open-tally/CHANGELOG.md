@@ -5,6 +5,21 @@ OpenTally follows [Semantic Versioning](https://semver.org/) and strict clean-ro
 
 ---
 
+## [3.0.0] — 2026-11-26
+
+OpenTally v3.0.0 Enterprise Release adding Multi-Currency & Forex accounting, CTS-2010 Bank Cheque PDF printing, Multi-User LAN Host/Client Mode (`TallyPrime Gold`), BYO-GSP e-Invoice/e-Way Bill connector, and Declarative Custom Report Extensions.
+
+### Added (Milestones 16–18)
+- **Milestone 16 — Multi-Currency Accounting, Forex Gain/Loss & CTS-2010 Cheque Printing (`v2.1.0-multicurrency-cheque`):**
+  - Currency masters (`INR` base + `USD`, `EUR`, `GBP`, `AED`), daily exchange rates, foreign bill settlement with automatic Realized Forex Gain/Loss journals, Unrealized Forex Revaluation report, and pure-Rust CTS-2010 cheque PDF generator.
+- **Milestone 17 — Multi-User LAN Host/Client Mode (`TallyPrime Gold`):**
+  - Opt-in embedded `axum` HTTP/JSON-RPC server on port `7900` (ADR-002 compliant, zero ports open by default), `PRAGMA busy_timeout = 10000;` + write serialization, Argon2id RBAC Bearer sessions with live eviction, and `[L] Connect to LAN Server` client UI.
+- **Milestone 18 — BYO-GSP Connector & Declarative Custom Report Extensions (`v3.0.0-enterprise`):**
+  - Pluggable `GspProvider` (`SandboxGspProvider` offline simulator + `HttpGspProvider` BYO-Credentials HTTPS endpoint) persisting IRN / Ack No / e-Way Bill No into `voucher_einvoice_details` for `Ctrl+P` Tax Invoice PDFs.
+  - SQL-injection-proof declarative custom report builder (`Vouchers`, `Ledgers`, `StockItems`, `OutstandingBills`, `GstInvoices`) with `ReadOnlyConnectionGuard`, exact `rust_decimal` totals, CWE-1236 CSV export, and `.opentally-report.json` template import/export.
+
+---
+
 ## [2.0.0] — 2026-11-25
 
 Full enterprise release delivering TallyPrime-grade Indian banking, statutory taxation (TDS/TCS, GSTR-2B, NIC e-Invoice & e-Way Bill), multi-location inventory & manufacturing BOM, management accounting, automated FY closing with MCA 2023 cryptographic audit certification, order processing, RBAC security, Indian payroll, and live WebView2 Playwright E2E hardening.

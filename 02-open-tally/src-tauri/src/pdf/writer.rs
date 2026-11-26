@@ -4,6 +4,8 @@ use std::fmt::Write as FmtWrite;
 /// Generates self-contained A4 documents without external dependencies or headless browsers.
 pub struct PdfWriter {
     stream: String,
+    page_width: f64,
+    page_height: f64,
 }
 
 impl PdfWriter {
@@ -13,6 +15,17 @@ impl PdfWriter {
     pub fn new() -> Self {
         Self {
             stream: String::with_capacity(8192),
+            page_width: Self::PAGE_WIDTH,
+            page_height: Self::PAGE_HEIGHT,
+        }
+    }
+
+    /// Create a PdfWriter with custom page dimensions in PostScript points.
+    pub fn with_dimensions(width: f64, height: f64) -> Self {
+        Self {
+            stream: String::with_capacity(8192),
+            page_width: width,
+            page_height: height,
         }
     }
 
@@ -86,6 +99,45 @@ impl PdfWriter {
         self.text(text, x.max(0.0), y, font_id, size);
     }
 
+    /// Draws rotated text centered/positioned at (x, y) with angle_deg counter-clockwise.
+    pub fn text_rotated(
+        &mut self,
+        text: &str,
+        x: f64,
+        y: f64,
+        angle_deg: f64,
+        font_id: &str,
+        size: f64,
+    ) {
+        let escaped = Self::escape_pdf_string(text);
+        let rad = angle_deg.to_radians();
+        let cos_val = rad.cos();
+        let sin_val = rad.sin();
+        let _ = writeln!(
+            self.stream,
+            "BT {} {:.2} Tf {:.5} {:.5} {:.5} {:.5} {:.2} {:.2} Tm ({}) Tj ET",
+            font_id, size, cos_val, sin_val, -sin_val, cos_val, x, y, escaped
+        );
+    }
+
+    /// Draws characters spaced evenly starting at x with step_x between each character.
+    pub fn text_spaced_chars(
+        &mut self,
+        chars: &[char],
+        x: f64,
+        y: f64,
+        step_x: f64,
+        font_id: &str,
+        size: f64,
+    ) {
+        for (idx, &c) in chars.iter().enumerate() {
+            let cx = x + (idx as f64) * step_x;
+            let mut s = String::with_capacity(1);
+            s.push(c);
+            self.text(&s, cx, y, font_id, size);
+        }
+    }
+
     /// Simple heuristic width estimator for standard Helvetica.
     fn estimate_text_width(text: &str, size: f64, is_bold: bool) -> f64 {
         let scale = size / 1000.0;
@@ -136,8 +188,8 @@ impl PdfWriter {
         doc.extend_from_slice(
             format!(
                 "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>\nendobj\n",
-                Self::PAGE_WIDTH,
-                Self::PAGE_HEIGHT
+                self.page_width,
+                self.page_height
             )
             .as_bytes(),
         );
