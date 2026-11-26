@@ -31,14 +31,14 @@
 
 ---
 
-## 📸 Visual Showcase
+## 📸 Visual Showcase (v3.0.0 Enterprise Accounting Terminal)
 
 <div align="center">
 
-### Chart of Accounts & Real-Time Double-Entry Equilibrium
-*Hierarchical account group tree, multi-level balance rollups, reserved system ledgers, and live Debit/Credit balance equilibrium verification.*
+### Gateway of OpenTally — Authentic Two-Pane Accounting Terminal
+*Two-pane accounting terminal layout with `#1e4e79` deep-blue utility strip, `#1b5e7a` teal frame, golden-amber selection highlight, 38 collision-free hotkeys, and `#e6f0f7` ice-blue function key rail.*
 
-![Chart of Accounts and Equilibrium](assets/screenshots/chart-of-accounts.png)
+![Gateway of OpenTally Terminal](assets/screenshots/01_gateway_terminal.png)
 
 </div>
 
@@ -46,10 +46,21 @@
 
 <div align="center">
 
-| Company Selection & Management Dashboard | Ledger Master Creation & Precision Math |
+| Commercial Invoicing with Signature Color Ribbon | Real-Time Equilibrium & Trial Balance Drilldown |
 | :---: | :---: |
-| ![Company Dashboard](assets/screenshots/dashboard.png) | ![Ledger Modal](assets/screenshots/ledger-modal.png) |
-| *Multi-company isolation, statutory financial year boundaries, leap-year validation, and soft-archival.* | *Exact decimal precision, account group selection, opening balance validation, and Dr/Cr direction.* |
+| ![Sales Voucher with Ribbon](assets/screenshots/02_sales_voucher_ribbon.png) | ![Trial Balance Report](assets/screenshots/03_trial_balance.png) |
+| *Signature color ribbons (Sales, Purchase, Payment, Receipt, Contra, Journal) with running totals & GST splits.* | *Real-time debit/credit equilibrium, recursive group rollup, tabular numeric formatting, and double-underline totals.* |
+
+</div>
+
+<br/>
+
+<div align="center">
+
+| Multi-Currency, Forex Engine & CTS-2010 Cheque Printing | Declarative Custom Report Builder & BYO-GSP Connector |
+| :---: | :---: |
+| ![Multi-Currency and Cheque Printing](assets/screenshots/04_multicurrency_cheque.png) | ![Custom Reports Builder](assets/screenshots/05_custom_reports_builder.png) |
+| *Daily exchange rates, foreign bill settlement, unrealized forex revaluation, and pure-Rust Indian CTS-2010 cheque PDFs.* | *Declarative report builder with `.opentally-report.json` templates, offline sandbox simulator, and live HTTPS IRP endpoints.* |
 
 </div>
 
