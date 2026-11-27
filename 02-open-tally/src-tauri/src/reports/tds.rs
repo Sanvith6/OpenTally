@@ -433,4 +433,87 @@ impl TdsReportService {
 
         Ok(lines.join("\r\n"))
     }
+
+    /// Generates Form 27Q (NRI / Foreign Remittance TDS — Sec 195) quarterly summary.
+    pub async fn get_form_27q_summary(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        financial_year: &str,
+        quarter: &str,
+    ) -> Result<Form26qSummary, OpenTallyError> {
+        let mut summary =
+            Self::get_form_26q_summary(pool, company_id, financial_year, quarter).await?;
+        summary
+            .deductions
+            .retain(|d| d.section_code.starts_with("195") || d.deductee_type == "Company_Foreign");
+        let mut total_paid = Decimal::ZERO;
+        let mut total_ded = Decimal::ZERO;
+        let mut total_dep = Decimal::ZERO;
+        for d in &summary.deductions {
+            let paid = Decimal::from_str(&d.amount_paid).unwrap_or(Decimal::ZERO);
+            let ded = Decimal::from_str(&d.tds_deducted).unwrap_or(Decimal::ZERO);
+            total_paid += paid;
+            total_ded += ded;
+            if d.status == "Deposited" {
+                total_dep += ded;
+            }
+        }
+        summary.total_amount_paid = to_canonical_decimal(total_paid);
+        summary.total_tds_deducted = to_canonical_decimal(total_ded);
+        summary.total_tds_deposited = to_canonical_decimal(total_dep);
+        Ok(summary)
+    }
+
+    /// Exports Form 27Q (NRI TDS) quarterly return as JSON.
+    pub async fn export_form_27q_json(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        financial_year: &str,
+        quarter: &str,
+    ) -> Result<String, OpenTallyError> {
+        let summary = Self::get_form_27q_summary(pool, company_id, financial_year, quarter).await?;
+        serde_json::to_string_pretty(&summary).map_err(|e| OpenTallyError::Internal(e.to_string()))
+    }
+
+    /// Generates Form 27EQ (TCS — Sec 206C) quarterly summary.
+    pub async fn get_form_27eq_summary(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        financial_year: &str,
+        quarter: &str,
+    ) -> Result<Form26qSummary, OpenTallyError> {
+        let mut summary =
+            Self::get_form_26q_summary(pool, company_id, financial_year, quarter).await?;
+        summary
+            .deductions
+            .retain(|d| d.section_code.starts_with("206C"));
+        let mut total_paid = Decimal::ZERO;
+        let mut total_ded = Decimal::ZERO;
+        let mut total_dep = Decimal::ZERO;
+        for d in &summary.deductions {
+            let paid = Decimal::from_str(&d.amount_paid).unwrap_or(Decimal::ZERO);
+            let ded = Decimal::from_str(&d.tds_deducted).unwrap_or(Decimal::ZERO);
+            total_paid += paid;
+            total_ded += ded;
+            if d.status == "Deposited" {
+                total_dep += ded;
+            }
+        }
+        summary.total_amount_paid = to_canonical_decimal(total_paid);
+        summary.total_tds_deducted = to_canonical_decimal(total_ded);
+        summary.total_tds_deposited = to_canonical_decimal(total_dep);
+        Ok(summary)
+    }
+
+    /// Exports Form 27EQ (TCS) quarterly return as JSON.
+    pub async fn export_form_27eq_json(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        financial_year: &str,
+        quarter: &str,
+    ) -> Result<String, OpenTallyError> {
+        let summary =
+            Self::get_form_27eq_summary(pool, company_id, financial_year, quarter).await?;
+        serde_json::to_string_pretty(&summary).map_err(|e| OpenTallyError::Internal(e.to_string()))
+    }
 }

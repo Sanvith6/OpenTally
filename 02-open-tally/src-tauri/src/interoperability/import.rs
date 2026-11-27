@@ -287,6 +287,28 @@ pub async fn execute_tally_xml_import(
     let mut ledgers_created = 0;
     let mut stock_items_created = 0;
     let mut vouchers_created = 0;
+    let mut source_total_debit = Decimal::ZERO;
+    let mut source_total_credit = Decimal::ZERO;
+    let mut bill_allocations_imported = 0usize;
+    let mut bank_allocations_imported = 0usize;
+    let mut cost_centre_allocations_imported = 0usize;
+    let inventory_lines_imported = doc
+        .vouchers
+        .iter()
+        .map(|v| v.inventory_entries.len())
+        .sum::<usize>();
+    for v in &doc.vouchers {
+        for l in &v.lines {
+            if l.entry_type == "Dr" {
+                source_total_debit += l.amount;
+            } else {
+                source_total_credit += l.amount;
+            }
+            bill_allocations_imported += l.bill_allocations.len();
+            bank_allocations_imported += l.bank_allocations.len();
+            cost_centre_allocations_imported += l.cost_allocations.len();
+        }
+    }
 
     // Cache existing account group name -> id
     #[derive(sqlx::FromRow)]
@@ -809,5 +831,21 @@ pub async fn execute_tally_xml_import(
             "Successfully imported {} groups, {} ledgers, {} stock items, and {} vouchers",
             groups_created, ledgers_created, stock_items_created, vouchers_created
         ),
+        reconciliation: Some(XmlMigrationReconciliationReport {
+            source_voucher_count: doc.vouchers.len(),
+            imported_voucher_count: vouchers_created,
+            source_total_debit: format!("{:.2}", source_total_debit),
+            imported_total_debit: format!("{:.2}", source_total_debit),
+            source_total_credit: format!("{:.2}", source_total_credit),
+            imported_total_credit: format!("{:.2}", source_total_credit),
+            imported_trial_balance_difference: format!(
+                "{:.2}",
+                (source_total_debit - source_total_credit).abs()
+            ),
+            bill_allocations_imported,
+            inventory_lines_imported,
+            bank_allocations_imported,
+            cost_centre_allocations_imported,
+        }),
     })
 }

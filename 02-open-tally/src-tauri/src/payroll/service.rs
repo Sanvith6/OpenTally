@@ -33,6 +33,9 @@ struct EmployeeRow {
     esi_applicable: i64,
     pt_applicable: i64,
     is_active: i64,
+    work_state_code: String,
+    tax_regime: String,
+    annual_declared_deductions: String,
     created_at: String,
 }
 
@@ -59,6 +62,9 @@ impl From<EmployeeRow> for Employee {
             esi_applicable: r.esi_applicable == 1,
             pt_applicable: r.pt_applicable == 1,
             is_active: r.is_active == 1,
+            work_state_code: r.work_state_code,
+            tax_regime: r.tax_regime,
+            annual_declared_deductions: r.annual_declared_deductions,
             created_at: r.created_at,
         }
     }
@@ -73,6 +79,7 @@ struct PayrollLedgerMappingRow {
     pf_payable_ledger_id: String,
     esi_payable_ledger_id: String,
     pt_payable_ledger_id: String,
+    salary_tds_payable_ledger_id: Option<String>,
 }
 
 pub struct PayrollService;
@@ -139,10 +146,20 @@ impl PayrollService {
         Ok(clean.to_string())
     }
 
-    /// Computes a single employee's statutory payslip using deterministic `rust_decimal` math.
+    /// Computes a single employee's statutory payslip using default Karnataka PT slab.
     pub fn compute_employee_payslip(
         emp: &Employee,
         attendance: &PayrollAttendanceInput,
+    ) -> Result<ComputedPayslipPreview, OpenTallyError> {
+        Self::compute_employee_payslip_with_slabs(emp, attendance, &[], 5)
+    }
+
+    /// Computes a single employee's statutory payslip using deterministic `rust_decimal` math.
+    pub fn compute_employee_payslip_with_slabs(
+        emp: &Employee,
+        attendance: &PayrollAttendanceInput,
+        pt_slabs: &[ProfessionalTaxSlab],
+        pay_period_month: u32,
     ) -> Result<ComputedPayslipPreview, OpenTallyError> {
         let total_working_days =
             Self::parse_non_negative_decimal(&attendance.total_working_days, "total_working_days")?;
@@ -207,15 +224,26 @@ impl PayrollService {
             (Decimal::ZERO, Decimal::ZERO)
         };
 
-        // 3. Professional Tax (Karnataka default slab: >= Rs. 25,000 -> Rs. 200)
-        let pt_threshold = Decimal::new(2500000, 2); // 25000.00
-        let professional_tax = if emp.pt_applicable && gross_earnings >= pt_threshold {
-            Decimal::new(200, 0)
+        // 3. Data-driven State-Wise Professional Tax
+        let professional_tax = if emp.pt_applicable {
+            Self::compute_state_pt(
+                pt_slabs,
+                &emp.work_state_code,
+                pay_period_month,
+                gross_earnings,
+            )
         } else {
             Decimal::ZERO
         };
 
-        let total_deductions = employee_pf + employee_esi + professional_tax + other_deductions;
+        // 4. Salary Income Tax TDS (Section 192 — Old vs New Regime)
+        let declared_ded =
+            Decimal::from_str(&emp.annual_declared_deductions).unwrap_or(Decimal::ZERO);
+        let tds_sec192 =
+            Self::compute_salary_tds_sec192(gross_earnings, &emp.tax_regime, declared_ded);
+
+        let total_deductions =
+            employee_pf + employee_esi + professional_tax + tds_sec192 + other_deductions;
         let net_pay = gross_earnings - total_deductions;
         if net_pay < Decimal::ZERO {
             return Err(OpenTallyError::Validation(format!(
@@ -242,6 +270,7 @@ impl PayrollService {
             employee_esi: Self::to_canonical_decimal(employee_esi),
             employer_esi: Self::to_canonical_decimal(employer_esi),
             professional_tax: Self::to_canonical_decimal(professional_tax),
+            tds_sec192: Self::to_canonical_decimal(tds_sec192),
             other_deductions: Self::to_canonical_decimal(other_deductions),
             total_deductions: Self::to_canonical_decimal(total_deductions),
             net_pay: Self::to_canonical_decimal(net_pay),
@@ -261,7 +290,8 @@ impl PayrollService {
                     "SELECT id, company_id, employee_code, name, department_group_id, designation,
                             date_of_joining, date_of_exit, pan, uan, esic_number, bank_account_no,
                             bank_ifsc, basic_salary, hra, other_allowances,
-                            pf_applicable, esi_applicable, pt_applicable, is_active, created_at
+                            pf_applicable, esi_applicable, pt_applicable, is_active,
+                            work_state_code, tax_regime, annual_declared_deductions, created_at
                      FROM employees
                      WHERE company_id = ?
                      ORDER BY employee_code ASC"
@@ -269,7 +299,8 @@ impl PayrollService {
                     "SELECT id, company_id, employee_code, name, department_group_id, designation,
                             date_of_joining, date_of_exit, pan, uan, esic_number, bank_account_no,
                             bank_ifsc, basic_salary, hra, other_allowances,
-                            pf_applicable, esi_applicable, pt_applicable, is_active, created_at
+                            pf_applicable, esi_applicable, pt_applicable, is_active,
+                            work_state_code, tax_regime, annual_declared_deductions, created_at
                      FROM employees
                      WHERE company_id = ? AND is_active = 1
                      ORDER BY employee_code ASC"
@@ -387,14 +418,29 @@ impl PayrollService {
                 )));
             }
 
+            let work_state = if input.work_state_code.trim().is_empty() {
+                "29".to_string()
+            } else {
+                input.work_state_code.trim().to_uppercase()
+            };
+            let regime = if input.tax_regime.trim().eq_ignore_ascii_case("Old") {
+                "Old".to_string()
+            } else {
+                "New".to_string()
+            };
+            let declared_ded = Decimal::from_str(input.annual_declared_deductions.trim())
+                .unwrap_or(Decimal::ZERO)
+                .max(Decimal::ZERO);
+
             let emp_id = Uuid::new_v4().to_string();
             sqlx::query(
                 "INSERT INTO employees (
                     id, company_id, employee_code, name, department_group_id, designation,
                     date_of_joining, date_of_exit, pan, uan, esic_number, bank_account_no,
                     bank_ifsc, basic_salary, hra, other_allowances,
-                    pf_applicable, esi_applicable, pt_applicable, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                    pf_applicable, esi_applicable, pt_applicable,
+                    work_state_code, tax_regime, annual_declared_deductions, is_active
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
             )
             .bind(&emp_id)
             .bind(company_id)
@@ -415,6 +461,9 @@ impl PayrollService {
             .bind(if input.pf_applicable { 1i64 } else { 0i64 })
             .bind(if input.esi_applicable { 1i64 } else { 0i64 })
             .bind(if input.pt_applicable { 1i64 } else { 0i64 })
+            .bind(&work_state)
+            .bind(&regime)
+            .bind(Self::to_canonical_decimal(declared_ded))
             .execute(&mut *conn)
             .await
             .map_err(OpenTallyError::Database)?;
@@ -443,7 +492,8 @@ impl PayrollService {
                 "SELECT id, company_id, employee_code, name, department_group_id, designation,
                         date_of_joining, date_of_exit, pan, uan, esic_number, bank_account_no,
                         bank_ifsc, basic_salary, hra, other_allowances,
-                        pf_applicable, esi_applicable, pt_applicable, is_active, created_at
+                        pf_applicable, esi_applicable, pt_applicable, is_active,
+                        work_state_code, tax_regime, annual_declared_deductions, created_at
                  FROM employees WHERE company_id = ? AND id = ?",
             )
             .bind(company_id)
@@ -554,6 +604,10 @@ impl PayrollService {
             ));
         }
 
+        Self::ensure_pt_slabs_seeded(pool, company_id).await?;
+        let pt_slabs = Self::list_pt_slabs(pool, company_id, None).await?;
+        let pay_period_month: u32 = pay_period[5..7].parse().unwrap_or(1);
+
         let employees = Self::list_employees(pool, company_id, false).await?;
         let emp_map: std::collections::HashMap<String, Employee> =
             employees.into_iter().map(|e| (e.id.clone(), e)).collect();
@@ -570,6 +624,7 @@ impl PayrollService {
         let mut total_ee_esi = Decimal::ZERO;
         let mut total_er_esi = Decimal::ZERO;
         let mut total_pt = Decimal::ZERO;
+        let mut total_tds_sec192 = Decimal::ZERO;
 
         for att in &input.attendances {
             if !seen.insert(&att.employee_id) {
@@ -584,7 +639,8 @@ impl PayrollService {
                     att.employee_id
                 ))
             })?;
-            let p = Self::compute_employee_payslip(emp, att)?;
+            let p =
+                Self::compute_employee_payslip_with_slabs(emp, att, &pt_slabs, pay_period_month)?;
 
             total_gross += Decimal::from_str(&p.gross_earnings).unwrap_or(Decimal::ZERO);
             total_deductions += Decimal::from_str(&p.total_deductions).unwrap_or(Decimal::ZERO);
@@ -595,6 +651,7 @@ impl PayrollService {
             total_ee_esi += Decimal::from_str(&p.employee_esi).unwrap_or(Decimal::ZERO);
             total_er_esi += Decimal::from_str(&p.employer_esi).unwrap_or(Decimal::ZERO);
             total_pt += Decimal::from_str(&p.professional_tax).unwrap_or(Decimal::ZERO);
+            total_tds_sec192 += Decimal::from_str(&p.tds_sec192).unwrap_or(Decimal::ZERO);
 
             payslips.push(p);
         }
@@ -613,6 +670,7 @@ impl PayrollService {
             total_employee_esi: Self::to_canonical_decimal(total_ee_esi),
             total_employer_esi: Self::to_canonical_decimal(total_er_esi),
             total_pt: Self::to_canonical_decimal(total_pt),
+            total_tds_sec192: Self::to_canonical_decimal(total_tds_sec192),
             payslips,
         })
     }
@@ -679,7 +737,8 @@ impl PayrollService {
             let mappings: Option<PayrollLedgerMappingRow> = sqlx::query_as(
                 "SELECT salary_expense_ledger_id, employer_pf_expense_ledger_id,
                         employer_esi_expense_ledger_id, salary_payable_ledger_id,
-                        pf_payable_ledger_id, esi_payable_ledger_id, pt_payable_ledger_id
+                        pf_payable_ledger_id, esi_payable_ledger_id, pt_payable_ledger_id,
+                        salary_tds_payable_ledger_id
                  FROM payroll_ledger_mappings
                  WHERE company_id = ?",
             )
@@ -759,6 +818,8 @@ impl PayrollService {
             let total_esi_payable =
                 Decimal::from_str(&preview.total_employee_esi).unwrap_or(Decimal::ZERO) + total_er_esi;
             let total_pt = Decimal::from_str(&preview.total_pt).unwrap_or(Decimal::ZERO);
+            let total_tds_sec192 =
+                Decimal::from_str(&preview.total_tds_sec192).unwrap_or(Decimal::ZERO);
 
             let total_other_deductions: Decimal = preview
                 .payslips
@@ -827,6 +888,16 @@ impl PayrollService {
                 "Cr",
                 total_pt,
                 &format!("Professional Tax Payable ({})", pay_period),
+            );
+            let tds_ledger_id = mappings
+                .salary_tds_payable_ledger_id
+                .as_deref()
+                .unwrap_or(&mappings.pt_payable_ledger_id);
+            push_line(
+                tds_ledger_id,
+                "Cr",
+                total_tds_sec192,
+                &format!("TDS Payable Sec 192 ({})", pay_period),
             );
             push_line(
                 &mappings.salary_expense_ledger_id,
@@ -932,9 +1003,9 @@ impl PayrollService {
                         total_working_days, days_present, lop_days,
                         prorated_basic, prorated_hra, prorated_allowances, gross_earnings,
                         employee_pf, employer_epf, employer_eps,
-                        employee_esi, employer_esi, professional_tax,
+                        employee_esi, employer_esi, professional_tax, tds_sec192,
                         other_deductions, total_deductions, net_pay
-                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 )
                 .bind(&ps_id)
                 .bind(company_id)
@@ -953,6 +1024,7 @@ impl PayrollService {
                 .bind(&p.employee_esi)
                 .bind(&p.employer_esi)
                 .bind(&p.professional_tax)
+                .bind(&p.tds_sec192)
                 .bind(&p.other_deductions)
                 .bind(&p.total_deductions)
                 .bind(&p.net_pay)
@@ -965,7 +1037,7 @@ impl PayrollService {
                             total_working_days, days_present, lop_days,
                             prorated_basic, prorated_hra, prorated_allowances, gross_earnings,
                             employee_pf, employer_epf, employer_eps,
-                            employee_esi, employer_esi, professional_tax,
+                            employee_esi, employer_esi, professional_tax, tds_sec192,
                             other_deductions, total_deductions, net_pay, created_at
                      FROM payroll_payslips WHERE id = ?",
                 )
@@ -1184,5 +1256,322 @@ impl PayrollService {
         .map_err(OpenTallyError::Database)?;
 
         Ok(())
+    }
+
+    /// Idempotently seeds official Pan-India state-wise Professional Tax slabs for a company.
+    pub async fn ensure_pt_slabs_seeded(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+    ) -> Result<(), OpenTallyError> {
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM professional_tax_slabs WHERE company_id = ?")
+                .bind(company_id)
+                .fetch_one(pool)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+        if count > 0 {
+            return Ok(());
+        }
+
+        // (state_code, min_gross, max_gross, monthly_tax, february_tax)
+        type PtSlabSeed<'a> = (&'a str, &'a str, Option<&'a str>, &'a str, Option<&'a str>);
+        let defaults: &[PtSlabSeed<'_>] = &[
+            // Karnataka (29)
+            ("29", "0.00", Some("24999.99"), "0.00", None),
+            ("29", "25000.00", None, "200.00", None),
+            // Maharashtra (27) - Feb Rs. 300 adjustment for > Rs. 10,000
+            ("27", "0.00", Some("7500.00"), "0.00", None),
+            ("27", "7500.01", Some("10000.00"), "175.00", None),
+            ("27", "10000.01", None, "200.00", Some("300.00")),
+            // Gujarat (24)
+            ("24", "0.00", Some("12000.00"), "0.00", None),
+            ("24", "12000.01", None, "200.00", None),
+            // West Bengal (19)
+            ("19", "0.00", Some("10000.00"), "0.00", None),
+            ("19", "10000.01", Some("15000.00"), "110.00", None),
+            ("19", "15000.01", Some("25000.00"), "130.00", None),
+            ("19", "25000.01", Some("40000.00"), "150.00", None),
+            ("19", "40000.01", None, "200.00", None),
+            // Andhra Pradesh (37)
+            ("37", "0.00", Some("15000.00"), "0.00", None),
+            ("37", "15000.01", Some("20000.00"), "150.00", None),
+            ("37", "20000.01", None, "200.00", None),
+            // Telangana (36)
+            ("36", "0.00", Some("15000.00"), "0.00", None),
+            ("36", "15000.01", Some("20000.00"), "150.00", None),
+            ("36", "20000.01", None, "200.00", None),
+            // Tamil Nadu (33) (monthly equivalent of half-yearly slab)
+            ("33", "0.00", Some("21000.00"), "0.00", None),
+            ("33", "21000.01", None, "208.00", None),
+            // Kerala (32) (monthly equivalent of half-yearly slab)
+            ("32", "0.00", Some("11999.99"), "0.00", None),
+            ("32", "12000.00", None, "208.00", None),
+        ];
+
+        let mut tx = pool.begin().await.map_err(OpenTallyError::Database)?;
+        for (state, min_g, max_g, m_tax, feb_tax) in defaults {
+            sqlx::query(
+                "INSERT INTO professional_tax_slabs (
+                    id, company_id, state_code, min_gross, max_gross, monthly_tax, february_tax
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            )
+            .bind(Uuid::new_v4().to_string())
+            .bind(company_id)
+            .bind(*state)
+            .bind(*min_g)
+            .bind(*max_g)
+            .bind(*m_tax)
+            .bind(*feb_tax)
+            .execute(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+        }
+        tx.commit().await.map_err(OpenTallyError::Database)?;
+        Ok(())
+    }
+
+    /// Lists Professional Tax slabs for a company (optionally filtered by state_code).
+    pub async fn list_pt_slabs(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        state_code: Option<String>,
+    ) -> Result<Vec<ProfessionalTaxSlab>, OpenTallyError> {
+        Self::ensure_pt_slabs_seeded(pool, company_id).await?;
+        let cid = company_id.to_string();
+        execute_read_only_query(pool, move |conn| {
+            Box::pin(async move {
+                let rows: Vec<ProfessionalTaxSlab> = if let Some(sc) = state_code {
+                    sqlx::query_as(
+                        "SELECT id, company_id, state_code, min_gross, max_gross, monthly_tax, february_tax, created_at
+                         FROM professional_tax_slabs
+                         WHERE company_id = ? AND state_code = ?
+                         ORDER BY state_code ASC, CAST(min_gross AS REAL) ASC",
+                    )
+                    .bind(&cid)
+                    .bind(sc.trim())
+                    .fetch_all(&mut *conn)
+                    .await
+                    .map_err(OpenTallyError::Database)?
+                } else {
+                    sqlx::query_as(
+                        "SELECT id, company_id, state_code, min_gross, max_gross, monthly_tax, february_tax, created_at
+                         FROM professional_tax_slabs
+                         WHERE company_id = ?
+                         ORDER BY state_code ASC, CAST(min_gross AS REAL) ASC",
+                    )
+                    .bind(&cid)
+                    .fetch_all(&mut *conn)
+                    .await
+                    .map_err(OpenTallyError::Database)?
+                };
+                Ok(rows)
+            })
+        })
+        .await
+    }
+
+    /// Deterministically computes monthly Professional Tax from seeded state slabs.
+    pub fn compute_state_pt(
+        slabs: &[ProfessionalTaxSlab],
+        state_code: &str,
+        pay_period_month: u32,
+        gross_earnings: Decimal,
+    ) -> Decimal {
+        if slabs.is_empty() {
+            return if gross_earnings >= Decimal::new(2500000, 2) {
+                Decimal::new(200, 0)
+            } else {
+                Decimal::ZERO
+            };
+        }
+        let sc = state_code.trim();
+        if slabs.is_empty() {
+            let pt_threshold = Decimal::new(2500000, 2); // 25000.00
+            return if gross_earnings >= pt_threshold {
+                Decimal::new(200, 0)
+            } else {
+                Decimal::ZERO
+            };
+        }
+        for s in slabs.iter().filter(|s| s.state_code == sc) {
+            let min_g = Decimal::from_str(&s.min_gross).unwrap_or(Decimal::ZERO);
+            let max_ok = match &s.max_gross {
+                Some(m) => gross_earnings <= Decimal::from_str(m).unwrap_or(Decimal::MAX),
+                None => true,
+            };
+            if gross_earnings >= min_g && max_ok {
+                if pay_period_month == 2 {
+                    if let Some(ref feb) = s.february_tax {
+                        return Decimal::from_str(feb).unwrap_or(Decimal::ZERO);
+                    }
+                }
+                return Decimal::from_str(&s.monthly_tax).unwrap_or(Decimal::ZERO);
+            }
+        }
+        Decimal::ZERO
+    }
+
+    /// Computes monthly Salary Income Tax TDS (Section 192) under FY 2025-26 New or Old Regime.
+    pub fn compute_salary_tds_sec192(
+        gross_monthly: Decimal,
+        tax_regime: &str,
+        annual_declared_deductions: Decimal,
+    ) -> Decimal {
+        if gross_monthly <= Decimal::ZERO {
+            return Decimal::ZERO;
+        }
+        let annual_gross = gross_monthly * Decimal::from(12);
+        let is_old = tax_regime.trim().eq_ignore_ascii_case("Old");
+
+        let base_tax = if is_old {
+            let std_ded = Decimal::from(50_000);
+            let taxable = (annual_gross - std_ded - annual_declared_deductions.max(Decimal::ZERO))
+                .max(Decimal::ZERO);
+            if taxable <= Decimal::from(500_000) {
+                Decimal::ZERO
+            } else {
+                let mut tax = Decimal::ZERO;
+                let s1_top = Decimal::from(250_000);
+                let s2_top = Decimal::from(500_000);
+                let s3_top = Decimal::from(1_000_000);
+                if taxable > s1_top {
+                    let amt = taxable.min(s2_top) - s1_top;
+                    tax += amt * Decimal::new(5, 2);
+                }
+                if taxable > s2_top {
+                    let amt = taxable.min(s3_top) - s2_top;
+                    tax += amt * Decimal::new(20, 2);
+                }
+                if taxable > s3_top {
+                    let amt = taxable - s3_top;
+                    tax += amt * Decimal::new(30, 2);
+                }
+                tax
+            }
+        } else {
+            let std_ded = Decimal::from(75_000);
+            let taxable = (annual_gross - std_ded).max(Decimal::ZERO);
+            // Sec 87A rebate: zero tax up to Rs. 12,00,000 taxable income under FY 2025-26 New Regime
+            if taxable <= Decimal::from(1_200_000) {
+                Decimal::ZERO
+            } else {
+                let mut tax = Decimal::ZERO;
+                let slabs: &[(i64, i64, i64)] = &[
+                    (400_000, 800_000, 5),
+                    (800_000, 1_200_000, 10),
+                    (1_200_000, 1_600_000, 15),
+                    (1_600_000, 2_000_000, 20),
+                    (2_000_000, 2_400_000, 25),
+                ];
+                for &(lo, hi, rate) in slabs {
+                    let lo_d = Decimal::from(lo);
+                    let hi_d = Decimal::from(hi);
+                    if taxable > lo_d {
+                        tax += (taxable.min(hi_d) - lo_d) * Decimal::new(rate, 2);
+                    }
+                }
+                let top = Decimal::from(2_400_000);
+                if taxable > top {
+                    tax += (taxable - top) * Decimal::new(30, 2);
+                }
+                tax
+            }
+        };
+
+        if base_tax <= Decimal::ZERO {
+            return Decimal::ZERO;
+        }
+        // Add 4% Health & Education Cess
+        let annual_tax = base_tax * Decimal::new(104, 2);
+        (annual_tax / Decimal::from(12))
+            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+    }
+
+    /// Generates EPFO ECR `#~#`-delimited upload file for all PF-applicable employees in a posted run.
+    pub async fn export_epfo_ecr_file(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        pay_period: &str,
+    ) -> Result<String, OpenTallyError> {
+        let period = Self::validate_pay_period(pay_period)?;
+        let cid = company_id.to_string();
+
+        #[derive(Debug, FromRow)]
+        struct EcrRow {
+            uan: Option<String>,
+            name: String,
+            gross_earnings: String,
+            prorated_basic: String,
+            employee_pf: String,
+            employer_eps: String,
+            lop_days: String,
+        }
+
+        execute_read_only_query(pool, move |conn| {
+            Box::pin(async move {
+                let rows: Vec<EcrRow> = sqlx::query_as(
+                    "SELECT e.uan, e.name, p.gross_earnings, p.prorated_basic,
+                            p.employee_pf, p.employer_eps, p.lop_days
+                     FROM payroll_payslips p
+                     JOIN payroll_runs r ON r.id = p.payroll_run_id
+                     JOIN employees e ON e.id = p.employee_id
+                     WHERE p.company_id = ? AND r.pay_period = ? AND r.status = 'Posted'
+                       AND e.pf_applicable = 1
+                     ORDER BY e.employee_code ASC",
+                )
+                .bind(&cid)
+                .bind(&period)
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+                let mut lines = Vec::with_capacity(rows.len());
+                let pf_cap = Decimal::from(15_000);
+                for r in rows {
+                    let uan = r
+                        .uan
+                        .as_deref()
+                        .map(str::trim)
+                        .filter(|s| !s.is_empty())
+                        .unwrap_or("000000000000");
+                    let gross = Decimal::from_str(&r.gross_earnings)
+                        .unwrap_or(Decimal::ZERO)
+                        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+                    let epf_wages = Decimal::from_str(&r.prorated_basic)
+                        .unwrap_or(Decimal::ZERO)
+                        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+                    let eps_wages = epf_wages.min(pf_cap);
+                    let edli_wages = eps_wages;
+                    let epf_contri = Decimal::from_str(&r.employee_pf)
+                        .unwrap_or(Decimal::ZERO)
+                        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+                    let eps_contri = Decimal::from_str(&r.employer_eps)
+                        .unwrap_or(Decimal::ZERO)
+                        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+                    let epf_eps_diff = epf_contri - eps_contri;
+                    let ncp_days = Decimal::from_str(&r.lop_days)
+                        .unwrap_or(Decimal::ZERO)
+                        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+
+                    lines.push(format!(
+                        "{}#~#{}#~#{}#~#{}#~#{}#~#{}#~#{}#~#{}#~#{}#~#{}#~#0",
+                        uan,
+                        r.name.trim(),
+                        gross,
+                        epf_wages,
+                        eps_wages,
+                        edli_wages,
+                        epf_contri,
+                        eps_contri,
+                        epf_eps_diff,
+                        ncp_days
+                    ));
+                }
+
+                Ok(lines.join("\n"))
+            })
+        })
+        .await
     }
 }

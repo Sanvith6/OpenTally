@@ -48,7 +48,11 @@ mod gst_compliance_tests;
 #[cfg(test)]
 mod gst_tests;
 #[cfg(test)]
+mod gstn_strictness_tests;
+#[cfg(test)]
 mod interoperability_tests;
+#[cfg(test)]
+mod inventory_depth_tests;
 #[cfg(test)]
 mod lan_multiuser_tests;
 #[cfg(test)]
@@ -62,15 +66,23 @@ mod onboarding_tests;
 #[cfg(test)]
 mod orders_tests;
 #[cfg(test)]
+mod pan_india_statutory_tests;
+#[cfg(test)]
 mod payroll_tests;
 #[cfg(test)]
 mod pdf_tests;
 #[cfg(test)]
+mod scale_and_fuzz_tests;
+#[cfg(test)]
 mod security_bom_tests;
+#[cfg(test)]
+mod statement_pdf_tests;
 #[cfg(test)]
 mod tds_tests;
 #[cfg(test)]
 mod v1_release_e2e_tests;
+#[cfg(test)]
+mod xml_deep_fidelity_tests;
 
 use crate::app::AppState;
 use crate::config::AppConfig;
@@ -280,6 +292,8 @@ pub fn run() {
             commands::preview_tally_xml_import,
             commands::execute_tally_xml_import,
             commands::export_gstr1_json,
+            commands::validate_gstr1_export,
+            commands::get_cmp08_quarterly_summary,
             commands::export_gstr3b_json,
             commands::get_company_features,
             commands::save_company_features,
@@ -300,6 +314,17 @@ pub fn run() {
             commands::get_form_26q_summary,
             commands::export_form_26q_json,
             commands::export_form_26q_csv,
+            commands::get_form_27q_summary,
+            commands::export_form_27q_json,
+            commands::get_form_27eq_summary,
+            commands::export_form_27eq_json,
+            commands::list_pt_slabs,
+            commands::export_epfo_ecr_file,
+            commands::export_trial_balance_pdf,
+            commands::export_profit_and_loss_pdf,
+            commands::export_balance_sheet_pdf,
+            commands::export_ledger_statement_pdf,
+            commands::export_outstanding_aging_pdf,
             commands::import_and_reconcile_gstr2b,
             commands::get_gstr2b_reconciliation_report,
             commands::export_gstr2b_reconciliation_csv,
@@ -389,6 +414,12 @@ pub fn run() {
             commands::list_custom_reports,
             commands::save_custom_report,
             commands::delete_custom_report,
+            commands::create_compound_unit,
+            commands::list_price_levels,
+            commands::create_price_level,
+            commands::upsert_price_list_entry,
+            commands::list_price_list_entries,
+            commands::resolve_item_price,
             commands::run_custom_report,
             commands::export_custom_report_csv,
             commands::export_custom_report_template,

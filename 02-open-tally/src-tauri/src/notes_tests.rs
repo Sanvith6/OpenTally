@@ -299,6 +299,8 @@ async fn test_credit_note_sales_return_lifecycle_and_over_return_guards() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![
             TaxPostingLine {
@@ -321,6 +323,12 @@ async fn test_credit_note_sales_return_lifecycle_and_over_return_guards() {
         original_voucher_id: Some(orig_sales_vid.clone()),
         return_reason: Some("Defective screens".to_string()),
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let cn_result = CommercialPostingService::post_commercial_voucher(pool, "cmp_notes", cn_input)
@@ -410,6 +418,8 @@ async fn test_credit_note_sales_return_lifecycle_and_over_return_guards() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![],
         bill_allocations: vec![],
@@ -419,6 +429,12 @@ async fn test_credit_note_sales_return_lifecycle_and_over_return_guards() {
         original_voucher_id: Some(orig_sales_vid.clone()),
         return_reason: Some("Over return test".to_string()),
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let over_res =
@@ -465,6 +481,8 @@ async fn test_credit_note_sales_return_lifecycle_and_over_return_guards() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![],
         bill_allocations: vec![],
@@ -474,6 +492,12 @@ async fn test_credit_note_sales_return_lifecycle_and_over_return_guards() {
         original_voucher_id: Some(orig_sales_vid.clone()),
         return_reason: Some("Over return value test".to_string()),
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let over_val_res =
@@ -568,6 +592,8 @@ async fn test_debit_note_purchase_return_and_insufficient_stock_guard() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![
             TaxPostingLine {
@@ -590,6 +616,12 @@ async fn test_debit_note_purchase_return_and_insufficient_stock_guard() {
         original_voucher_id: Some(orig_pur_vid.clone()),
         return_reason: Some("Vendor damaged batch".to_string()),
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let dn_result = CommercialPostingService::post_commercial_voucher(pool, "cmp_notes", dn_input)
@@ -662,6 +694,8 @@ async fn test_gstr1_and_gstr3b_statutory_reporting_with_notes() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![
             TaxPostingLine {
@@ -684,6 +718,12 @@ async fn test_gstr1_and_gstr3b_statutory_reporting_with_notes() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let sales_res =
@@ -719,6 +759,8 @@ async fn test_gstr1_and_gstr3b_statutory_reporting_with_notes() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![
             TaxPostingLine {
@@ -741,6 +783,12 @@ async fn test_gstr1_and_gstr3b_statutory_reporting_with_notes() {
         original_voucher_id: Some(sales_res.voucher.voucher.id.clone()),
         return_reason: Some("Discount concession".to_string()),
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     CommercialPostingService::post_commercial_voucher(pool, "cmp_notes", cn_input)

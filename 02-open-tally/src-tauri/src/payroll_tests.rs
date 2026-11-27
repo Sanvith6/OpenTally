@@ -69,6 +69,9 @@ async fn setup_payroll_fixture() -> (tempfile::TempDir, DatabaseManager, Arc<App
     run_milestone13_order_processing_migration(p).await.unwrap();
     run_milestone14_security_and_bom_migration(p).await.unwrap();
     run_milestone15_payroll_migration(p).await.unwrap();
+    run_milestone22_pan_india_payroll_tds_migration(p)
+        .await
+        .unwrap();
 
     // Seed two companies
     sqlx::query(
@@ -155,6 +158,9 @@ async fn test_employee_crud_pan_uan_validation_and_lop_proration() {
             pf_applicable: true,
             esi_applicable: false,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "system",
     )
@@ -183,6 +189,9 @@ async fn test_employee_crud_pan_uan_validation_and_lop_proration() {
             pf_applicable: true,
             esi_applicable: false,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "system",
     )
@@ -211,6 +220,9 @@ async fn test_employee_crud_pan_uan_validation_and_lop_proration() {
             pf_applicable: true,
             esi_applicable: true,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "system",
     )
@@ -273,6 +285,9 @@ async fn test_statutory_pf_ceiling_esi_boundary_and_pt_slab() {
             pf_applicable: true,
             esi_applicable: true,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "system",
     )
@@ -301,6 +316,9 @@ async fn test_statutory_pf_ceiling_esi_boundary_and_pt_slab() {
             pf_applicable: true,
             esi_applicable: true,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "system",
     )
@@ -371,6 +389,9 @@ async fn test_payroll_gl_posting_trial_balance_cancellation_and_pdf_export() {
             pf_applicable: true,
             esi_applicable: true,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "AdminPayroll",
     )
@@ -601,6 +622,9 @@ async fn test_payroll_rbac_period_lock_and_tenant_isolation() {
             pf_applicable: true,
             esi_applicable: false,
             pt_applicable: true,
+            work_state_code: "29".to_string(),
+            tax_regime: "New".to_string(),
+            annual_declared_deductions: "0".to_string(),
         },
         "Owner",
     )

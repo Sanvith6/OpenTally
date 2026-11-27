@@ -137,6 +137,9 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ activeCompany, onBack 
   const [pfApplicable, setPfApplicable] = useState(true);
   const [esiApplicable, setEsiApplicable] = useState(true);
   const [ptApplicable, setPtApplicable] = useState(true);
+  const [workStateCode, setWorkStateCode] = useState('29');
+  const [taxRegime, setTaxRegime] = useState<'New' | 'Old'>('New');
+  const [annualDeclaredDeductions, setAnnualDeclaredDeductions] = useState('0');
 
   // Process Monthly Payroll state
   const [payPeriod, setPayPeriod] = useState('2026-04');
@@ -272,7 +275,10 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ activeCompany, onBack 
         pf_applicable: pfApplicable,
         esi_applicable: esiApplicable,
         pt_applicable: ptApplicable,
-      };
+        work_state_code: workStateCode,
+        tax_regime: taxRegime,
+        annual_declared_deductions: annualDeclaredDeductions,
+      } as CreateEmployeeInput;
       await createEmployee(input, activeCompany.id);
       setShowAddForm(false);
       setEmpCode('');
@@ -488,6 +494,43 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ activeCompany, onBack 
                   type="text"
                   value={otherAllowances}
                   onChange={(e) => setOtherAllowances(e.target.value)}
+                />
+              </label>
+              <label>
+                Work State (PT)
+                <select
+                  value={workStateCode}
+                  onChange={(e) => setWorkStateCode(e.target.value)}
+                  data-testid="select-work-state"
+                >
+                  <option value="29">Karnataka (29)</option>
+                  <option value="27">Maharashtra (27)</option>
+                  <option value="24">Gujarat (24)</option>
+                  <option value="19">West Bengal (19)</option>
+                  <option value="37">Andhra Pradesh (37)</option>
+                  <option value="36">Telangana (36)</option>
+                  <option value="33">Tamil Nadu (33)</option>
+                  <option value="32">Kerala (32)</option>
+                </select>
+              </label>
+              <label>
+                Tax Regime (Sec 192)
+                <select
+                  value={taxRegime}
+                  onChange={(e) => setTaxRegime(e.target.value as 'New' | 'Old')}
+                  data-testid="select-tax-regime"
+                >
+                  <option value="New">New Regime (FY 25-26)</option>
+                  <option value="Old">Old Regime</option>
+                </select>
+              </label>
+              <label>
+                Declared Deductions (80C/80D/HRA)
+                <input
+                  type="text"
+                  value={annualDeclaredDeductions}
+                  onChange={(e) => setAnnualDeclaredDeductions(e.target.value)}
+                  data-testid="input-declared-deductions"
                 />
               </label>
               <div className="ot-checkbox-group">

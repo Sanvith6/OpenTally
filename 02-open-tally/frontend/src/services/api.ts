@@ -2378,6 +2378,171 @@ export async function exportForm26qJson(
   });
 }
 
+export async function getForm27qSummary(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<any> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || '',
+      financial_year: financialYear,
+      quarter,
+      deductor_tan: null,
+      total_amount_paid: '0',
+      total_tds_deducted: '0',
+      total_tds_deposited: '0',
+      deductions: [],
+    };
+  }
+  return await invoke('get_form_27q_summary', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportForm27qJson(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    const summary = await getForm27qSummary(financialYear, quarter, companyId);
+    return JSON.stringify(summary, null, 2);
+  }
+  return await invoke<string>('export_form_27q_json', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+export async function getForm27eqSummary(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<any> {
+  if (!isTauriEnv()) {
+    return {
+      company_id: companyId || '',
+      financial_year: financialYear,
+      quarter,
+      deductor_tan: null,
+      total_amount_paid: '0',
+      total_tds_deducted: '0',
+      total_tds_deposited: '0',
+      deductions: [],
+    };
+  }
+  return await invoke('get_form_27eq_summary', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportForm27eqJson(
+  financialYear: string,
+  quarter: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) {
+    const summary = await getForm27eqSummary(financialYear, quarter, companyId);
+    return JSON.stringify(summary, null, 2);
+  }
+  return await invoke<string>('export_form_27eq_json', {
+    financialYear,
+    quarter,
+    companyId: companyId || null,
+  });
+}
+
+export async function listPtSlabs(
+  stateCode?: string,
+  companyId?: string
+): Promise<any[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke('list_pt_slabs', {
+    stateCode: stateCode || null,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportEpfoEcrFile(
+  payPeriod: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) return '';
+  return await invoke<string>('export_epfo_ecr_file', {
+    payPeriod,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportTrialBalancePdf(
+  asOfDate: string,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<number[]>('export_trial_balance_pdf', {
+    asOfDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportProfitAndLossPdf(
+  fromDate: string,
+  toDate: string,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<number[]>('export_profit_and_loss_pdf', {
+    fromDate,
+    toDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportBalanceSheetPdf(
+  asOfDate: string,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<number[]>('export_balance_sheet_pdf', {
+    asOfDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportLedgerStatementPdf(
+  ledgerId: string,
+  fromDate: string,
+  toDate: string,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<number[]>('export_ledger_statement_pdf', {
+    ledgerId,
+    fromDate,
+    toDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportOutstandingAgingPdf(
+  reportType: string,
+  asOfDate: string,
+  companyId?: string
+): Promise<number[]> {
+  if (!isTauriEnv()) return [];
+  return await invoke<number[]>('export_outstanding_aging_pdf', {
+    reportType,
+    asOfDate,
+    companyId: companyId || null,
+  });
+}
+
 export async function exportForm26qCsv(
   financialYear: string,
   quarter: string,
@@ -4893,4 +5058,90 @@ export async function importCustomReportTemplate(
     throw new Error('Importing custom report templates requires the native OpenTally application');
   }
   return invoke<CustomReportDefinitionDto>('import_custom_report_template', { templateJson });
+}
+
+
+// Milestone 19: GSTN Strictness & CMP-08
+export async function validateGstr1Export(
+  fromDate: string,
+  toDate: string
+): Promise<import('../types').GstnValidationReport> {
+  return invoke('validate_gstr1_export', { fromDate, toDate });
+}
+
+export async function getCmp08QuarterlySummary(
+  financialYear: number,
+  quarter: number
+): Promise<import('../types').Cmp08QuarterlySummary> {
+  return invoke('get_cmp08_quarterly_summary', { financialYear, quarter });
+}
+
+
+// Milestone 20: Compound Units & Tiered Price Levels
+export async function createCompoundUnit(
+  name: string,
+  symbol: string,
+  firstUnitId: string,
+  secondUnitId: string,
+  conversionFactor: string
+): Promise<import('../types').CompoundUnitDto> {
+  return invoke('create_compound_unit', {
+    name,
+    symbol,
+    firstUnitId,
+    secondUnitId,
+    conversionFactor,
+  });
+}
+
+export async function listPriceLevels(): Promise<import('../types').PriceLevelDto[]> {
+  return invoke('list_price_levels');
+}
+
+export async function createPriceLevel(
+  name: string
+): Promise<import('../types').PriceLevelDto> {
+  return invoke('create_price_level', { name });
+}
+
+export async function upsertPriceListEntry(
+  priceLevelId: string,
+  stockItemId: string,
+  effectiveFrom: string,
+  minQty: string,
+  maxQty: string | null,
+  unitRate: string,
+  discountPct: string
+): Promise<import('../types').PriceListEntryDto> {
+  return invoke('upsert_price_list_entry', {
+    priceLevelId,
+    stockItemId,
+    effectiveFrom,
+    minQty,
+    maxQty,
+    unitRate,
+    discountPct,
+  });
+}
+
+export async function listPriceListEntries(
+  priceLevelId?: string
+): Promise<import('../types').PriceListEntryDto[]> {
+  return invoke('list_price_list_entries', { priceLevelId: priceLevelId || null });
+}
+
+export async function resolveItemPrice(
+  stockItemId: string,
+  partyLedgerId: string | null,
+  priceLevelId: string | null,
+  quantity: string,
+  asOfDate: string
+): Promise<import('../types').ResolvedItemPriceDto> {
+  return invoke('resolve_item_price', {
+    stockItemId,
+    partyLedgerId,
+    priceLevelId,
+    quantity,
+    asOfDate,
+  });
 }

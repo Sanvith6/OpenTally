@@ -113,6 +113,49 @@ pub struct Gstr1CdnurRow {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Gstr1ExportRow {
+    pub voucher_id: String,
+    pub voucher_number: String,
+    pub voucher_date: String,
+    pub exp_typ: String, // "WOPAY" | "WPAY"
+    pub supply_category: String,
+    pub port_code: Option<String>,
+    pub shipping_bill_no: Option<String>,
+    pub shipping_bill_date: Option<String>,
+    pub taxable_value: String,
+    pub igst_amount: String,
+    pub cess_amount: String,
+    pub invoice_value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Gstr1DocIssueRow {
+    pub doc_num: usize,
+    pub doc_type: String,
+    pub series_name: String,
+    pub from_num: String,
+    pub to_num: String,
+    pub totnum: i64,
+    pub cancel: i64,
+    pub net_issue: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cmp08QuarterlySummary {
+    pub company_id: String,
+    pub financial_year: i32,
+    pub quarter: u8,
+    pub from_date: String,
+    pub to_date: String,
+    pub composition_rate: String,
+    pub outward_turnover: String,
+    pub composition_tax_payable: String,
+    pub rcm_taxable_value: String,
+    pub rcm_tax_payable: String,
+    pub total_cmp08_liability: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Gstr1SummaryReport {
     pub company_id: String,
     pub from_date: String,
@@ -130,6 +173,8 @@ pub struct Gstr1SummaryReport {
     pub hsn_summary: Vec<Gstr1HsnSummaryRow>,
     pub cdnr_table_9b: Vec<Gstr1CdnrRow>,
     pub cdnur_table_9b: Vec<Gstr1CdnurRow>,
+    pub exports_table_6a: Vec<Gstr1ExportRow>,
+    pub doc_issue_table_13: Vec<Gstr1DocIssueRow>,
 }
 
 // -----------------------------------------------------------------------------
@@ -616,6 +661,121 @@ impl GstReportService {
                     }
                 }
 
+                // Table 6A Exports (ExportWithLUT, ExportWithTax, SEZWithLUT, SEZWithTax)
+                #[derive(sqlx::FromRow)]
+                struct ExportDbRow {
+                    voucher_id: String,
+                    voucher_number: String,
+                    voucher_date: String,
+                    supply_category: String,
+                    port_code: Option<String>,
+                    shipping_bill_no: Option<String>,
+                    shipping_bill_date: Option<String>,
+                    taxable_value: String,
+                    igst_amount: String,
+                    cess_amount: String,
+                }
+                let exp_db_rows = sqlx::query_as::<_, ExportDbRow>(
+                    "SELECT v.id AS voucher_id, v.voucher_number, v.date AS voucher_date,
+                            COALESCE(vgd.supply_category, 'Regular') AS supply_category,
+                            vgd.port_code, vgd.shipping_bill_no, vgd.shipping_bill_date,
+                            vgd.taxable_value, vgd.igst_amount, vgd.cess_amount
+                     FROM voucher_gst_details vgd
+                     JOIN vouchers v ON v.company_id = vgd.company_id AND v.id = vgd.voucher_id
+                     WHERE vgd.company_id = ? AND vgd.is_cancelled = 0 AND v.status = 'posted'
+                       AND v.voucher_type_id = 'vt_sales'
+                       AND v.date >= ? AND v.date <= ?
+                       AND COALESCE(vgd.supply_category, 'Regular') IN ('ExportWithLUT', 'ExportWithTax', 'SEZWithLUT', 'SEZWithTax')
+                     ORDER BY v.date ASC, v.voucher_number ASC",
+                )
+                .bind(&company_id_str)
+                .bind(&from_date_str)
+                .bind(&to_date_str)
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+                let mut exports_table_6a: Vec<Gstr1ExportRow> = Vec::new();
+                for er in exp_db_rows {
+                    let tx = Decimal::from_str_exact(&er.taxable_value).unwrap_or(Decimal::ZERO);
+                    let ig = Decimal::from_str_exact(&er.igst_amount).unwrap_or(Decimal::ZERO);
+                    let cs = Decimal::from_str_exact(&er.cess_amount).unwrap_or(Decimal::ZERO);
+                    let exp_typ = if er.supply_category.ends_with("WithTax") {
+                        "WPAY".to_string()
+                    } else {
+                        "WOPAY".to_string()
+                    };
+                    exports_table_6a.push(Gstr1ExportRow {
+                        voucher_id: er.voucher_id,
+                        voucher_number: er.voucher_number,
+                        voucher_date: er.voucher_date,
+                        exp_typ,
+                        supply_category: er.supply_category,
+                        port_code: er.port_code,
+                        shipping_bill_no: er.shipping_bill_no,
+                        shipping_bill_date: er.shipping_bill_date,
+                        taxable_value: fmt_2dp(tx),
+                        igst_amount: fmt_2dp(ig),
+                        cess_amount: fmt_2dp(cs),
+                        invoice_value: fmt_2dp(tx + ig + cs),
+                    });
+                }
+
+                // Table 13 Documents Issued Summary
+                #[derive(sqlx::FromRow)]
+                struct DocIssueDbRow {
+                    voucher_type_id: String,
+                    series_name: String,
+                    from_num: String,
+                    to_num: String,
+                    totnum: i64,
+                    cancel: i64,
+                }
+                let doc_db_rows = sqlx::query_as::<_, DocIssueDbRow>(
+                    "SELECT v.voucher_type_id,
+                            COALESCE(s.series_name, v.voucher_type_id) AS series_name,
+                            MIN(v.voucher_number) AS from_num,
+                            MAX(v.voucher_number) AS to_num,
+                            COUNT(*) AS totnum,
+                            SUM(CASE WHEN v.status = 'cancelled' THEN 1 ELSE 0 END) AS cancel
+                     FROM vouchers v
+                     LEFT JOIN voucher_number_series s ON s.company_id = v.company_id AND s.id = v.series_id
+                     WHERE v.company_id = ? AND v.date >= ? AND v.date <= ?
+                       AND v.voucher_type_id IN ('vt_sales', 'vt_credit_note', 'vt_debit_note')
+                     GROUP BY v.voucher_type_id, v.series_id
+                     ORDER BY v.voucher_type_id ASC",
+                )
+                .bind(&company_id_str)
+                .bind(&from_date_str)
+                .bind(&to_date_str)
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+                let doc_issue_table_13: Vec<Gstr1DocIssueRow> = doc_db_rows
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, dr)| {
+                        let doc_type = match dr.voucher_type_id.as_str() {
+                            "vt_sales" => "Invoices for outward supply",
+                            "vt_credit_note" => "Credit Note",
+                            "vt_debit_note" => "Debit Note",
+                            other => other,
+                        }
+                        .to_string();
+                        Gstr1DocIssueRow {
+                            doc_num: idx + 1,
+                            doc_type,
+                            series_name: dr.series_name,
+                            from_num: dr.from_num,
+                            to_num: dr.to_num,
+                            totnum: dr.totnum,
+                            cancel: dr.cancel,
+                            net_issue: dr.totnum - dr.cancel,
+                        }
+                    })
+                    .collect();
+
                 Ok(Gstr1SummaryReport {
                     company_id: company_id_str,
                     from_date: from_date_str,
@@ -633,6 +793,8 @@ impl GstReportService {
                     hsn_summary,
                     cdnr_table_9b,
                     cdnur_table_9b,
+                    exports_table_6a,
+                    doc_issue_table_13,
                 })
             })
         })
@@ -679,12 +841,16 @@ impl GstReportService {
                     igst_amount: String,
                     cess_amount: String,
                     is_reverse_charge: i64,
+                    supply_category: String,
+                    itc_eligibility: String,
                 }
 
                 let rows = sqlx::query_as::<_, GstRow>(
                     "SELECT v.voucher_type_id, vgd.taxability, vgd.taxable_value,
                             vgd.cgst_amount, vgd.sgst_amount, vgd.igst_amount, vgd.cess_amount,
-                            vgd.is_reverse_charge
+                            vgd.is_reverse_charge,
+                            COALESCE(vgd.supply_category, 'Regular') AS supply_category,
+                            COALESCE(vgd.itc_eligibility, 'Eligible') AS itc_eligibility
                      FROM voucher_gst_details vgd
                      JOIN vouchers v ON v.company_id = vgd.company_id AND v.id = vgd.voucher_id
                      WHERE vgd.company_id = ?
@@ -706,6 +872,10 @@ impl GstReportService {
                 let mut out_igst = Decimal::ZERO;
                 let mut out_cess = Decimal::ZERO;
 
+                let mut zero_rated_base = Decimal::ZERO;
+                let mut zero_rated_igst = Decimal::ZERO;
+                let mut zero_rated_cess = Decimal::ZERO;
+
                 let mut out_exempt_base = Decimal::ZERO;
 
                 // 2. Table 4 Inward supplies (ITC)
@@ -714,10 +884,21 @@ impl GstReportService {
                 let mut itc_igst = Decimal::ZERO;
                 let mut itc_cess = Decimal::ZERO;
 
+                let mut rcm_base = Decimal::ZERO;
                 let mut rcm_cgst = Decimal::ZERO;
                 let mut rcm_sgst = Decimal::ZERO;
                 let mut rcm_igst = Decimal::ZERO;
                 let mut rcm_cess = Decimal::ZERO;
+
+                let mut rev_cgst = Decimal::ZERO;
+                let mut rev_sgst = Decimal::ZERO;
+                let mut rev_igst = Decimal::ZERO;
+                let mut rev_cess = Decimal::ZERO;
+
+                let mut inel_cgst = Decimal::ZERO;
+                let mut inel_sgst = Decimal::ZERO;
+                let mut inel_igst = Decimal::ZERO;
+                let mut inel_cess = Decimal::ZERO;
 
                 for r in rows {
                     let taxable = Decimal::from_str_exact(&r.taxable_value).unwrap_or(Decimal::ZERO);
@@ -726,8 +907,19 @@ impl GstReportService {
                     let igst = Decimal::from_str_exact(&r.igst_amount).unwrap_or(Decimal::ZERO);
                     let cess = Decimal::from_str_exact(&r.cess_amount).unwrap_or(Decimal::ZERO);
 
+                    let is_zero_rated = matches!(
+                        r.supply_category.as_str(),
+                        "ExportWithLUT" | "ExportWithTax" | "SEZWithLUT" | "SEZWithTax"
+                    );
+
                     if r.voucher_type_id == "vt_sales" {
-                        if r.taxability == "Taxable" {
+                        if is_zero_rated {
+                            zero_rated_base += taxable;
+                            zero_rated_igst += igst;
+                            zero_rated_cess += cess;
+                            out_igst += igst;
+                            out_cess += cess;
+                        } else if r.taxability == "Taxable" {
                             out_taxable_base += taxable;
                             out_cgst += cgst;
                             out_sgst += sgst;
@@ -748,10 +940,21 @@ impl GstReportService {
                         }
                     } else if r.voucher_type_id == "vt_pur" {
                         if r.is_reverse_charge == 1 {
+                            rcm_base += taxable;
                             rcm_cgst += cgst;
                             rcm_sgst += sgst;
                             rcm_igst += igst;
                             rcm_cess += cess;
+                        } else if r.itc_eligibility == "Rule42_43Reversed" {
+                            rev_cgst += cgst;
+                            rev_sgst += sgst;
+                            rev_igst += igst;
+                            rev_cess += cess;
+                        } else if r.itc_eligibility == "IneligibleSec17_5" {
+                            inel_cgst += cgst;
+                            inel_sgst += sgst;
+                            inel_igst += igst;
+                            inel_cess += cess;
                         } else {
                             itc_cgst += cgst;
                             itc_sgst += sgst;
@@ -770,18 +973,18 @@ impl GstReportService {
                     Gstr3bSection31Row {
                         nature_of_supplies: "(a) Outward taxable supplies (other than zero rated, nil rated and exempted)".to_string(),
                         total_taxable_value: fmt_2dp(out_taxable_base),
-                        integrated_tax: fmt_2dp(out_igst),
+                        integrated_tax: fmt_2dp(out_igst - zero_rated_igst),
                         central_tax: fmt_2dp(out_cgst),
                         state_ut_tax: fmt_2dp(out_sgst),
-                        cess: fmt_2dp(out_cess),
+                        cess: fmt_2dp(out_cess - zero_rated_cess),
                     },
                     Gstr3bSection31Row {
                         nature_of_supplies: "(b) Outward taxable supplies (zero rated)".to_string(),
-                        total_taxable_value: "0.00".to_string(),
-                        integrated_tax: "0.00".to_string(),
+                        total_taxable_value: fmt_2dp(zero_rated_base),
+                        integrated_tax: fmt_2dp(zero_rated_igst),
                         central_tax: "0.00".to_string(),
                         state_ut_tax: "0.00".to_string(),
-                        cess: "0.00".to_string(),
+                        cess: fmt_2dp(zero_rated_cess),
                     },
                     Gstr3bSection31Row {
                         nature_of_supplies: "(c) Other outward supplies (Nil rated, exempted, Non-GST)".to_string(),
@@ -793,7 +996,7 @@ impl GstReportService {
                     },
                     Gstr3bSection31Row {
                         nature_of_supplies: "(d) Inward supplies (liable to reverse charge)".to_string(),
-                        total_taxable_value: "0.00".to_string(),
+                        total_taxable_value: fmt_2dp(rcm_base),
                         integrated_tax: fmt_2dp(rcm_igst),
                         central_tax: fmt_2dp(rcm_cgst),
                         state_ut_tax: fmt_2dp(rcm_sgst),
@@ -815,6 +1018,20 @@ impl GstReportService {
                         central_tax: fmt_2dp(itc_cgst),
                         state_ut_tax: fmt_2dp(itc_sgst),
                         cess: fmt_2dp(itc_cess),
+                    },
+                    Gstr3bSection4ItcRow {
+                        itc_details: "(B) ITC Reversed (Rule 42 & 43)".to_string(),
+                        integrated_tax: fmt_2dp(rev_igst),
+                        central_tax: fmt_2dp(rev_cgst),
+                        state_ut_tax: fmt_2dp(rev_sgst),
+                        cess: fmt_2dp(rev_cess),
+                    },
+                    Gstr3bSection4ItcRow {
+                        itc_details: "(D) Ineligible ITC (Section 17(5))".to_string(),
+                        integrated_tax: fmt_2dp(inel_igst),
+                        central_tax: fmt_2dp(inel_cgst),
+                        state_ut_tax: fmt_2dp(inel_sgst),
+                        cess: fmt_2dp(inel_cess),
                     },
                 ];
 
@@ -887,8 +1104,8 @@ impl GstReportService {
         .await
     }
 
-    /// Exports structured GSTR-1 JSON suitable for statutory filing review.
-    /// Excludes cancelled vouchers and formats all monetary amounts with canonical 2-decimal precision.
+    /// Exports structured GSTR-1 JSON conforming to GSTN Offline Tool v3.x schema.
+    /// Formats dates as `DD-MM-YYYY`, includes Table 6A (`exp`) and Table 13 (`doc_issue`).
     pub async fn export_gstr1_json(
         pool: &Pool<Sqlite>,
         company_id: &str,
@@ -906,22 +1123,235 @@ impl GstReportService {
                 .flatten();
 
         let fp = date_to_fp(to_date);
+        let to_gstn_dt = crate::gst::gstn_validator::iso_to_gstn_date;
 
-        let payload = Gstr1JsonPayload {
-            gstin: gstin.unwrap_or_else(|| "27AABCU9603R1ZM".to_string()),
-            fp,
-            b2b: summary.b2b_invoices,
-            b2cl: summary.b2c_large_invoices,
-            b2cs: summary.b2c_small_summary,
-            cdnr: summary.cdnr_table_9b,
-            cdnur: summary.cdnur_table_9b,
-            hsn: summary.hsn_summary,
-            total_taxable_value: summary.total_taxable_value,
-            total_tax: summary.total_tax,
-            total_invoice_value: summary.total_invoice_value,
-        };
+        // Group B2B invoices by counterparty GSTIN (ctin)
+        let mut b2b_map: std::collections::BTreeMap<String, Vec<serde_json::Value>> =
+            std::collections::BTreeMap::new();
+        for inv in &summary.b2b_invoices {
+            b2b_map
+                .entry(inv.party_gstin.clone())
+                .or_default()
+                .push(serde_json::json!({
+                    "inum": inv.voucher_number,
+                    "idt": to_gstn_dt(&inv.voucher_date),
+                    "val": inv.invoice_value,
+                    "pos": inv.place_of_supply_state_code,
+                    "rchrg": "N",
+                    "inv_typ": "R",
+                    "itms": [{
+                        "num": 1,
+                        "itm_det": {
+                            "txval": inv.taxable_value,
+                            "camt": inv.cgst_amount,
+                            "samt": inv.sgst_amount,
+                            "iamt": inv.igst_amount,
+                            "csamt": inv.cess_amount,
+                        }
+                    }]
+                }));
+        }
+        let b2b_json: Vec<serde_json::Value> = b2b_map
+            .into_iter()
+            .map(|(ctin, invs)| serde_json::json!({ "ctin": ctin, "inv": invs }))
+            .collect();
+
+        // Group Table 6A Exports by exp_typ ("WOPAY" / "WPAY")
+        let mut exp_map: std::collections::BTreeMap<String, Vec<serde_json::Value>> =
+            std::collections::BTreeMap::new();
+        for ex in &summary.exports_table_6a {
+            exp_map
+                .entry(ex.exp_typ.clone())
+                .or_default()
+                .push(serde_json::json!({
+                    "inum": ex.voucher_number,
+                    "idt": to_gstn_dt(&ex.voucher_date),
+                    "val": ex.invoice_value,
+                    "sbpcode": ex.port_code,
+                    "sbnum": ex.shipping_bill_no,
+                    "sbdt": ex.shipping_bill_date.as_deref().map(to_gstn_dt),
+                    "itms": [{
+                        "txval": ex.taxable_value,
+                        "iamt": ex.igst_amount,
+                        "csamt": ex.cess_amount,
+                    }]
+                }));
+        }
+        let exp_json: Vec<serde_json::Value> = exp_map
+            .into_iter()
+            .map(|(exp_typ, invs)| serde_json::json!({ "exp_typ": exp_typ, "inv": invs }))
+            .collect();
+
+        let doc_det: Vec<serde_json::Value> = summary
+            .doc_issue_table_13
+            .iter()
+            .map(|d| {
+                serde_json::json!({
+                    "doc_num": d.doc_num,
+                    "doc_typ": d.doc_type,
+                    "docs": [{
+                        "num": 1,
+                        "from": d.from_num,
+                        "to": d.to_num,
+                        "totnum": d.totnum,
+                        "cancel": d.cancel,
+                        "net_issue": d.net_issue,
+                    }]
+                })
+            })
+            .collect();
+
+        let payload = serde_json::json!({
+            "gstin": gstin.unwrap_or_else(|| "27AABCU9603R1ZM".to_string()),
+            "fp": fp,
+            "version": "GST3.0.4",
+            "b2b": b2b_json,
+            "b2cl": summary.b2c_large_invoices,
+            "b2cs": summary.b2c_small_summary,
+            "exp": exp_json,
+            "cdnr": summary.cdnr_table_9b,
+            "cdnur": summary.cdnur_table_9b,
+            "hsn": { "data": summary.hsn_summary },
+            "doc_issue": { "doc_det": doc_det },
+            "total_taxable_value": summary.total_taxable_value,
+            "total_tax": summary.total_tax,
+            "total_invoice_value": summary.total_invoice_value,
+        });
 
         serde_json::to_string_pretty(&payload).map_err(OpenTallyError::Serialization)
+    }
+
+    /// Validates the generated GSTR-1 JSON against GSTN Offline Tool v3.x schema rules.
+    pub async fn validate_gstr1_export(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        from_date: &str,
+        to_date: &str,
+    ) -> Result<crate::gst::gstn_validator::GstnValidationReport, OpenTallyError> {
+        let json_str = Self::export_gstr1_json(pool, company_id, from_date, to_date).await?;
+        let val: serde_json::Value =
+            serde_json::from_str(&json_str).map_err(OpenTallyError::Serialization)?;
+        Ok(crate::gst::gstn_validator::validate_gstr1_gstn_schema(&val))
+    }
+
+    /// Computes quarterly CMP-08 summary for Composition Scheme dealers using ReadOnlyConnectionGuard.
+    pub async fn get_cmp08_quarterly_summary(
+        pool: &Pool<Sqlite>,
+        company_id: &str,
+        financial_year: i32,
+        quarter: u8,
+    ) -> Result<Cmp08QuarterlySummary, OpenTallyError> {
+        let (from_date, to_date) = match quarter {
+            1 => (
+                format!("{}-04-01", financial_year),
+                format!("{}-06-30", financial_year),
+            ),
+            2 => (
+                format!("{}-07-01", financial_year),
+                format!("{}-09-30", financial_year),
+            ),
+            3 => (
+                format!("{}-10-01", financial_year),
+                format!("{}-12-31", financial_year),
+            ),
+            4 => (
+                format!("{}-01-01", financial_year + 1),
+                format!("{}-03-31", financial_year + 1),
+            ),
+            _ => {
+                return Err(OpenTallyError::Validation(format!(
+                    "Invalid CMP-08 quarter '{}': must be 1, 2, 3, or 4",
+                    quarter
+                )))
+            }
+        };
+
+        let company_id_str = company_id.to_string();
+        let from_str = from_date.clone();
+        let to_str = to_date.clone();
+
+        execute_read_only_query(pool, move |conn| {
+            Box::pin(async move {
+                let comp_rate_str: Option<String> = sqlx::query_scalar(
+                    "SELECT composition_rate FROM company_gst_profiles WHERE company_id = ?",
+                )
+                .bind(&company_id_str)
+                .fetch_optional(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?
+                .flatten();
+
+                let comp_rate = comp_rate_str
+                    .as_deref()
+                    .and_then(|s| Decimal::from_str_exact(s).ok())
+                    .unwrap_or_else(|| Decimal::new(100, 2)); // 1.00%
+
+                #[derive(sqlx::FromRow)]
+                struct CmpRow {
+                    voucher_type_id: String,
+                    taxable_value: String,
+                    cgst_amount: String,
+                    sgst_amount: String,
+                    igst_amount: String,
+                    cess_amount: String,
+                    is_reverse_charge: i64,
+                }
+
+                let rows = sqlx::query_as::<_, CmpRow>(
+                    "SELECT v.voucher_type_id, vgd.taxable_value, vgd.cgst_amount, vgd.sgst_amount,
+                            vgd.igst_amount, vgd.cess_amount, vgd.is_reverse_charge
+                     FROM voucher_gst_details vgd
+                     JOIN vouchers v ON v.company_id = vgd.company_id AND v.id = vgd.voucher_id
+                     WHERE vgd.company_id = ? AND vgd.is_cancelled = 0 AND v.status = 'posted'
+                       AND v.date >= ? AND v.date <= ?",
+                )
+                .bind(&company_id_str)
+                .bind(&from_str)
+                .bind(&to_str)
+                .fetch_all(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+                let mut outward_turnover = Decimal::ZERO;
+                let mut rcm_taxable_value = Decimal::ZERO;
+                let mut rcm_tax_payable = Decimal::ZERO;
+
+                for r in rows {
+                    let tx = Decimal::from_str_exact(&r.taxable_value).unwrap_or(Decimal::ZERO);
+                    if r.voucher_type_id == "vt_sales" {
+                        outward_turnover += tx;
+                    } else if r.voucher_type_id == "vt_credit_note" {
+                        outward_turnover -= tx;
+                    } else if r.voucher_type_id == "vt_pur" && r.is_reverse_charge == 1 {
+                        let cg = Decimal::from_str_exact(&r.cgst_amount).unwrap_or(Decimal::ZERO);
+                        let sg = Decimal::from_str_exact(&r.sgst_amount).unwrap_or(Decimal::ZERO);
+                        let ig = Decimal::from_str_exact(&r.igst_amount).unwrap_or(Decimal::ZERO);
+                        let cs = Decimal::from_str_exact(&r.cess_amount).unwrap_or(Decimal::ZERO);
+                        rcm_taxable_value += tx;
+                        rcm_tax_payable += cg + sg + ig + cs;
+                    }
+                }
+
+                let composition_tax_payable =
+                    (outward_turnover * comp_rate / Decimal::new(100, 0)).round_dp(2);
+                let total_cmp08_liability = composition_tax_payable + rcm_tax_payable;
+
+                Ok(Cmp08QuarterlySummary {
+                    company_id: company_id_str,
+                    financial_year,
+                    quarter,
+                    from_date: from_str,
+                    to_date: to_str,
+                    composition_rate: fmt_2dp(comp_rate),
+                    outward_turnover: fmt_2dp(outward_turnover),
+                    composition_tax_payable: fmt_2dp(composition_tax_payable),
+                    rcm_taxable_value: fmt_2dp(rcm_taxable_value),
+                    rcm_tax_payable: fmt_2dp(rcm_tax_payable),
+                    total_cmp08_liability: fmt_2dp(total_cmp08_liability),
+                })
+            })
+        })
+        .await
     }
 
     /// Exports structured GSTR-3B JSON suitable for statutory filing review.

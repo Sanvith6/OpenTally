@@ -64,33 +64,34 @@ impl TrialBalanceService {
         )
         .await?;
 
+        let mut accumulators: std::collections::HashMap<String, BalanceAccumulator> =
+            std::collections::HashMap::with_capacity(ledgers.len());
+        for opening in &openings {
+            accumulators
+                .entry(opening.ledger_id.clone())
+                .or_default()
+                .apply_opening(opening)?;
+        }
+        for movement in &movements {
+            let acc = accumulators.entry(movement.ledger_id.clone()).or_default();
+            let amount = parse_report_amount(&movement.amount)?;
+            match movement.entry_type.as_str() {
+                "Dr" => acc.period_debit += amount,
+                "Cr" => acc.period_credit += amount,
+                other => {
+                    return Err(OpenTallyError::Validation(format!(
+                        "Invalid trial balance entry type '{}'",
+                        other
+                    )))
+                }
+            }
+        }
+
         let mut rows = Vec::with_capacity(ledgers.len());
         let mut total_debit = Decimal::ZERO;
         let mut total_credit = Decimal::ZERO;
         for ledger in ledgers {
-            let mut accumulator = BalanceAccumulator::default();
-            for opening in openings
-                .iter()
-                .filter(|item| item.ledger_id == ledger.ledger_id)
-            {
-                accumulator.apply_opening(opening)?;
-            }
-            for movement in movements
-                .iter()
-                .filter(|item| item.ledger_id == ledger.ledger_id)
-            {
-                let amount = parse_report_amount(&movement.amount)?;
-                match movement.entry_type.as_str() {
-                    "Dr" => accumulator.period_debit += amount,
-                    "Cr" => accumulator.period_credit += amount,
-                    other => {
-                        return Err(OpenTallyError::Validation(format!(
-                            "Invalid trial balance entry type '{}'",
-                            other
-                        )))
-                    }
-                };
-            }
+            let accumulator = accumulators.remove(&ledger.ledger_id).unwrap_or_default();
             let net = accumulator.opening_debit + accumulator.period_debit
                 - accumulator.opening_credit
                 - accumulator.period_credit;

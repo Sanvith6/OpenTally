@@ -65,7 +65,9 @@ impl DatabaseManager {
         .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
         .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
         .foreign_keys(true)
-        .busy_timeout(std::time::Duration::from_millis(10000));
+        .busy_timeout(std::time::Duration::from_millis(10000))
+        .pragma("cache_size", "-32000")
+        .pragma("temp_store", "MEMORY");
 
         // For in-memory testing, restrict pool to 1 connection to prevent isolated memory DBs
         let max_connections = if is_in_memory { 1 } else { 10 };

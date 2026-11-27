@@ -1,5 +1,6 @@
 pub mod cheque;
 pub mod payslip;
+pub mod statements;
 pub mod words;
 pub mod writer;
 

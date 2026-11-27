@@ -2204,6 +2204,23 @@ pub async fn run_sprint2_stage4_hardening_migration(
 /// may add transaction tables without changing these master contracts.
 pub async fn run_sprint4_inventory_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -2348,6 +2365,23 @@ pub async fn run_sprint4_stage11_stock_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -2432,6 +2466,23 @@ pub async fn run_sprint4_stage12_valuation_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id=1")
             .fetch_one(&mut *tx)
@@ -2499,6 +2550,23 @@ pub async fn run_sprint5_stage14_integration_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id=1")
             .fetch_one(&mut *tx)
@@ -2566,6 +2634,23 @@ pub async fn run_sprint5_stage15_valuation_attribution_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id=1")
             .fetch_one(&mut *tx)
@@ -2639,6 +2724,23 @@ pub async fn run_sprint6_stage17_party_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -2704,6 +2806,23 @@ pub async fn run_sprint6_stage18_sales_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -2789,6 +2908,23 @@ pub async fn run_milestone1_commercial_posting_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -2923,6 +3059,23 @@ pub async fn run_milestone1_commercial_posting_migration(
 /// Creates table bill_allocations and indexes for party bill tracking.
 pub async fn run_milestone2_billwise_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -2997,6 +3150,23 @@ pub async fn run_milestone2_billwise_migration(pool: &Pool<Sqlite>) -> Result<()
 /// item_gst_mappings, gst_ledger_mappings, voucher_gst_details and associated indexes.
 pub async fn run_milestone3_gst_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3111,6 +3281,11 @@ pub async fn run_milestone3_gst_migration(pool: &Pool<Sqlite>) -> Result<(), Ope
             cess_amount TEXT NOT NULL CHECK (length(cess_amount) > 0 AND cess_amount NOT GLOB '*[^0-9.]*' AND cess_amount GLOB '*.*' AND length(substr(cess_amount, instr(cess_amount, '.') + 1)) <= 4),
             is_reverse_charge INTEGER NOT NULL DEFAULT 0 CHECK (is_reverse_charge IN (0, 1)),
             is_cancelled INTEGER NOT NULL DEFAULT 0 CHECK (is_cancelled IN (0, 1)),
+            supply_category TEXT NOT NULL DEFAULT 'Regular' CHECK (supply_category IN ('Regular', 'ExportWithLUT', 'ExportWithTax', 'SEZWithLUT', 'SEZWithTax', 'DeemedExport', 'Composition')),
+            itc_eligibility TEXT NOT NULL DEFAULT 'Eligible' CHECK (itc_eligibility IN ('Eligible', 'IneligibleSec17_5', 'Rule42_43Reversed')),
+            port_code TEXT,
+            shipping_bill_no TEXT,
+            shipping_bill_date TEXT,
             created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
             FOREIGN KEY (company_id, voucher_id) REFERENCES vouchers(company_id, id) ON DELETE CASCADE,
@@ -3148,6 +3323,23 @@ pub async fn run_milestone3_gst_migration(pool: &Pool<Sqlite>) -> Result<(), Ope
 /// Creates table commercial_note_linkages and bumps schema_version to 'v0.7.0-notes'.
 pub async fn run_milestone5_notes_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3236,6 +3428,23 @@ pub async fn run_milestone5_notes_migration(pool: &Pool<Sqlite>) -> Result<(), O
 /// Creates table bank_allocations and bumps schema_version to 'v1.1.0-banking'.
 pub async fn run_milestone8_banking_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3313,6 +3522,23 @@ pub async fn run_milestone8_banking_migration(pool: &Pool<Sqlite>) -> Result<(),
 /// and voucher_tds_details, and stamps schema_version to 'v1.2.0-tds'.
 pub async fn run_milestone9_tds_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3506,6 +3732,23 @@ pub async fn run_milestone10_gst_compliance_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3679,6 +3922,23 @@ pub async fn run_milestone11_multi_location_and_costing_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3850,6 +4110,23 @@ pub async fn run_milestone12_closing_budgets_audit_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -3982,6 +4259,23 @@ pub async fn run_milestone13_order_processing_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -4234,6 +4528,23 @@ pub async fn run_milestone14_security_and_bom_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -4351,6 +4662,23 @@ pub async fn run_milestone14_security_and_bom_migration(
 /// and stamps schema_version to 'v1.8.0-payroll'.
 pub async fn run_milestone15_payroll_migration(pool: &Pool<Sqlite>) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
     let current: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
             .fetch_one(&mut *tx)
@@ -4614,6 +4942,23 @@ pub async fn run_milestone16_multicurrency_cheque_migration(
 ) -> Result<(), OpenTallyError> {
     let mut tx = pool.begin().await?;
 
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
+
     // Precondition check
     let current_version: String =
         sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
@@ -4839,6 +5184,11 @@ fn schema_version_rank(ver: &str) -> usize {
         "1.7.0-security-bom" => 22,
         "1.8.0-payroll" => 23,
         "2.1.0-multicurrency-cheque" => 24,
+        "3.0.0-enterprise" => 25,
+        "3.1.0-gstn-strict" => 26,
+        "3.2.0-inventory-depth" => 27,
+        "3.4.0-pan-india-statutory" => 28,
+        "3.5.0-scale-indexes" => 29,
         _ => 0,
     }
 }
@@ -4926,6 +5276,18 @@ pub async fn run_all_migrations(pool: &Pool<Sqlite>) -> Result<(), OpenTallyErro
     if rank < 25 {
         run_milestone18_gsp_extensions_migration(pool).await?;
     }
+    if rank < 26 {
+        run_milestone19_gstn_strictness_migration(pool).await?;
+    }
+    if rank < 27 {
+        run_milestone20_inventory_billing_depth_migration(pool).await?;
+    }
+    if rank < 28 {
+        run_milestone22_pan_india_payroll_tds_migration(pool).await?;
+    }
+    if rank < 29 {
+        run_milestone23_scale_indexes_migration(pool).await?;
+    }
     Ok(())
 }
 
@@ -5000,6 +5362,430 @@ pub async fn run_milestone18_gsp_extensions_migration(
     .map_err(OpenTallyError::Database)?;
 
     tx.commit().await.map_err(OpenTallyError::Database)?;
+    Ok(())
+}
+
+/// Milestone 19: Official GSTN Portal Schema Strictness & Complex Indian GST Edge Cases.
+/// Stamps schema version `v3.1.0-gstn-strict` in `_opentally_metadata`.
+pub async fn run_milestone19_gstn_strictness_migration(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+) -> Result<(), crate::errors::OpenTallyError> {
+    use crate::errors::OpenTallyError;
+
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+    if current_version == "v3.1.0-gstn-strict" {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await.map_err(OpenTallyError::Database)?;
+
+    // Helper to check existing columns on a table
+    let gst_cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+        sqlx::query_as("PRAGMA table_info(voucher_gst_details)")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+    let has_gst_col = |name: &str| gst_cols.iter().any(|c| c.1 == name);
+
+    if !has_gst_col("supply_category") {
+        sqlx::query(
+            "ALTER TABLE voucher_gst_details ADD COLUMN supply_category TEXT NOT NULL DEFAULT 'Regular' CHECK (supply_category IN ('Regular', 'ExportWithLUT', 'ExportWithTax', 'SEZWithLUT', 'SEZWithTax', 'DeemedExport', 'Composition'))",
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(OpenTallyError::Database)?;
+    }
+    if !has_gst_col("itc_eligibility") {
+        sqlx::query(
+            "ALTER TABLE voucher_gst_details ADD COLUMN itc_eligibility TEXT NOT NULL DEFAULT 'Eligible' CHECK (itc_eligibility IN ('Eligible', 'IneligibleSec17_5', 'Rule42_43Reversed'))",
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(OpenTallyError::Database)?;
+    }
+    if !has_gst_col("port_code") {
+        sqlx::query("ALTER TABLE voucher_gst_details ADD COLUMN port_code TEXT")
+            .execute(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+    }
+    if !has_gst_col("shipping_bill_no") {
+        sqlx::query("ALTER TABLE voucher_gst_details ADD COLUMN shipping_bill_no TEXT")
+            .execute(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+    }
+    if !has_gst_col("shipping_bill_date") {
+        sqlx::query("ALTER TABLE voucher_gst_details ADD COLUMN shipping_bill_date TEXT")
+            .execute(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+    }
+
+    let profile_cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+        sqlx::query_as("PRAGMA table_info(company_gst_profiles)")
+            .fetch_all(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+    let has_prof_col = |name: &str| profile_cols.iter().any(|c| c.1 == name);
+
+    if !has_prof_col("composition_rate") {
+        sqlx::query(
+            "ALTER TABLE company_gst_profiles ADD COLUMN composition_rate TEXT DEFAULT '1.00'",
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(OpenTallyError::Database)?;
+    }
+    if !has_prof_col("lut_arn") {
+        sqlx::query("ALTER TABLE company_gst_profiles ADD COLUMN lut_arn TEXT")
+            .execute(&mut *tx)
+            .await
+            .map_err(OpenTallyError::Database)?;
+    }
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v3.1.0-gstn-strict', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    tx.commit().await.map_err(OpenTallyError::Database)?;
+    Ok(())
+}
+
+/// Milestone 20: Distributor Inventory & Billing Depth (Compound/Alternate UoMs, Actual vs Billed Qty, Price Levels, Multi-Method Valuation).
+/// Stamps schema version `v3.2.0-inventory-depth` in `_opentally_metadata`.
+pub async fn run_milestone20_inventory_billing_depth_migration(
+    pool: &sqlx::Pool<sqlx::Sqlite>,
+) -> Result<(), crate::errors::OpenTallyError> {
+    use crate::errors::OpenTallyError;
+
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+    if current_version == "v3.2.0-inventory-depth" {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await.map_err(OpenTallyError::Database)?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        table: &str,
+        col: &str,
+        ddl: &str,
+    ) -> Result<(), OpenTallyError> {
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&format!("PRAGMA table_info({})", table))
+                .fetch_all(&mut **tx)
+                .await
+                .map_err(OpenTallyError::Database)?;
+        if !cols.iter().any(|c| c.1 == col) {
+            sqlx::query(&format!("ALTER TABLE {} ADD COLUMN {}", table, ddl))
+                .execute(&mut **tx)
+                .await
+                .map_err(OpenTallyError::Database)?;
+        }
+        Ok(())
+    }
+
+    add_col_if_missing(
+        &mut tx,
+        "units",
+        "unit_type",
+        "unit_type TEXT NOT NULL DEFAULT 'Simple' CHECK (unit_type IN ('Simple', 'Compound'))",
+    )
+    .await?;
+    add_col_if_missing(&mut tx, "units", "first_unit_id", "first_unit_id TEXT").await?;
+    add_col_if_missing(&mut tx, "units", "second_unit_id", "second_unit_id TEXT").await?;
+    add_col_if_missing(
+        &mut tx,
+        "units",
+        "conversion_factor",
+        "conversion_factor TEXT",
+    )
+    .await?;
+
+    add_col_if_missing(
+        &mut tx,
+        "stock_items",
+        "alternate_unit_id",
+        "alternate_unit_id TEXT",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "stock_items",
+        "alternate_conversion_num",
+        "alternate_conversion_num TEXT",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "stock_items",
+        "alternate_conversion_den",
+        "alternate_conversion_den TEXT",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "stock_items",
+        "valuation_method",
+        "valuation_method TEXT NOT NULL DEFAULT 'FIFO' CHECK (valuation_method IN ('FIFO', 'LIFO', 'WeightedAverage'))",
+    )
+    .await?;
+
+    for tbl in [
+        "sales_document_lines",
+        "purchase_document_lines",
+        "stock_voucher_lines",
+    ] {
+        add_col_if_missing(&mut tx, tbl, "billed_quantity", "billed_quantity TEXT").await?;
+        add_col_if_missing(&mut tx, tbl, "entered_unit_id", "entered_unit_id TEXT").await?;
+    }
+
+    add_col_if_missing(&mut tx, "ledgers", "price_level_id", "price_level_id TEXT").await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS price_levels (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (company_id, name),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS price_list_entries (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            price_level_id TEXT NOT NULL,
+            stock_item_id TEXT NOT NULL,
+            effective_from TEXT NOT NULL,
+            min_qty TEXT NOT NULL DEFAULT '0.0000',
+            max_qty TEXT,
+            unit_rate TEXT NOT NULL,
+            discount_pct TEXT NOT NULL DEFAULT '0.00',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (price_level_id) REFERENCES price_levels(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v3.2.0-inventory-depth', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+    tx.commit().await.map_err(OpenTallyError::Database)?;
+    Ok(())
+}
+
+/// Milestone 22: Pan-India Statutory Payroll & TDS Depth.
+/// Stamps schema version `v3.4.0-pan-india-statutory` in `_opentally_metadata`.
+/// Milestone 23: High-Volume SQLite Scale Hardening (100k Vouchers).
+/// Adds covering/composite indexes for hot report paths and runs `ANALYZE;`.
+/// Stamps schema version `v3.5.0-scale-indexes` in `_opentally_metadata`.
+pub async fn run_milestone23_scale_indexes_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await?;
+
+    if current_version == "v3.5.0-scale-indexes" {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        CREATE INDEX IF NOT EXISTS idx_vouchers_scale_hot
+            ON vouchers(company_id, status, date, id);
+        CREATE INDEX IF NOT EXISTS idx_voucher_lines_scale_hot
+            ON voucher_lines(company_id, ledger_id, voucher_id, entry_type, amount);
+        CREATE INDEX IF NOT EXISTS idx_voucher_lines_voucher_covering
+            ON voucher_lines(company_id, voucher_id, entry_type, amount);
+        CREATE INDEX IF NOT EXISTS idx_voucher_gst_details_scale_hot
+            ON voucher_gst_details(company_id, voucher_id);
+        CREATE INDEX IF NOT EXISTS idx_inventory_cost_layers_scale_hot
+            ON inventory_cost_layers(company_id, stock_item_id, godown_id, remaining_quantity);
+        CREATE INDEX IF NOT EXISTS idx_ledgers_scale_name
+            ON ledgers(company_id, name, id);
+        ANALYZE;
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v3.5.0-scale-indexes', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
+pub async fn run_milestone22_pan_india_payroll_tds_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await?;
+
+    if current_version == "v3.4.0-pan-india-statutory" {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await?;
+
+    #[allow(dead_code)]
+    async fn add_col_if_missing(
+        tx: &mut sqlx::Transaction<'_, Sqlite>,
+        table: &str,
+        col: &str,
+        def: &str,
+    ) -> Result<(), OpenTallyError> {
+        let pragma = format!("PRAGMA table_info({})", table);
+        let cols: Vec<(i64, String, String, i64, Option<String>, i64)> =
+            sqlx::query_as(&pragma).fetch_all(&mut **tx).await?;
+        if !cols.iter().any(|c| c.1 == col) {
+            let alter = format!("ALTER TABLE {} ADD COLUMN {}", table, def);
+            sqlx::query(&alter).execute(&mut **tx).await?;
+        }
+        Ok(())
+    }
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS professional_tax_slabs (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            state_code TEXT NOT NULL,
+            min_gross TEXT NOT NULL DEFAULT '0.00' CHECK (
+                min_gross NOT GLOB '*[^0-9.]*'
+                AND min_gross NOT LIKE '%.%.%'
+                AND min_gross != ''
+                AND min_gross != '.'
+            ),
+            max_gross TEXT CHECK (
+                max_gross IS NULL OR (
+                    max_gross NOT GLOB '*[^0-9.]*'
+                    AND max_gross NOT LIKE '%.%.%'
+                    AND max_gross != ''
+                    AND max_gross != '.'
+                )
+            ),
+            monthly_tax TEXT NOT NULL DEFAULT '0.00' CHECK (
+                monthly_tax NOT GLOB '*[^0-9.]*'
+                AND monthly_tax NOT LIKE '%.%.%'
+                AND monthly_tax != ''
+                AND monthly_tax != '.'
+            ),
+            february_tax TEXT CHECK (
+                february_tax IS NULL OR (
+                    february_tax NOT GLOB '*[^0-9.]*'
+                    AND february_tax NOT LIKE '%.%.%'
+                    AND february_tax != ''
+                    AND february_tax != '.'
+                )
+            ),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_pt_slabs_company_state
+            ON professional_tax_slabs(company_id, state_code);
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    add_col_if_missing(
+        &mut tx,
+        "employees",
+        "work_state_code",
+        "work_state_code TEXT NOT NULL DEFAULT '29'",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "employees",
+        "tax_regime",
+        "tax_regime TEXT NOT NULL DEFAULT 'New' CHECK (tax_regime IN ('New', 'Old'))",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "employees",
+        "annual_declared_deductions",
+        "annual_declared_deductions TEXT NOT NULL DEFAULT '0.00'",
+    )
+    .await?;
+
+    add_col_if_missing(
+        &mut tx,
+        "payroll_payslips",
+        "tds_sec192",
+        "tds_sec192 TEXT NOT NULL DEFAULT '0.00'",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "payroll_ledger_mappings",
+        "salary_tds_payable_ledger_id",
+        "salary_tds_payable_ledger_id TEXT",
+    )
+    .await?;
+    add_col_if_missing(
+        &mut tx,
+        "tds_nature_of_payments",
+        "is_tcs",
+        "is_tcs INTEGER NOT NULL DEFAULT 0 CHECK (is_tcs IN (0, 1))",
+    )
+    .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v3.4.0-pan-india-statutory', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
     Ok(())
 }
 

@@ -22,6 +22,12 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
         InStockItem,
         InVoucher,
         InVoucherLine,
+        InBillAllocation,
+        InBankAllocation,
+        InCategoryAllocation,
+        InCostCentreAllocation,
+        InInventoryEntry,
+        InBatchAllocation,
     }
 
     let mut state = State::Root;
@@ -38,6 +44,46 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
         parent: String::new(),
         opening_balance: Decimal::ZERO,
         is_deemed_positive: true,
+        party_gstin: None,
+        state_name: None,
+        pan: None,
+    };
+    let mut cur_bill = TallyXmlBillAllocation {
+        bill_name: String::new(),
+        bill_type: "NewRef".to_string(),
+        credit_period_days: None,
+        amount: Decimal::ZERO,
+    };
+    let mut cur_bank = TallyXmlBankAllocation {
+        transaction_type: "Other".to_string(),
+        instrument_number: None,
+        instrument_date: None,
+        bank_date: None,
+        favouring_name: None,
+        amount: Decimal::ZERO,
+    };
+    let mut cur_cat_name = String::new();
+    let mut cur_cost = TallyXmlCostAllocation {
+        category_name: String::new(),
+        cost_centre_name: String::new(),
+        amount: Decimal::ZERO,
+    };
+    let mut cur_inv = TallyXmlInventoryEntry {
+        stock_item_name: String::new(),
+        actual_qty: Decimal::ZERO,
+        billed_qty: Decimal::ZERO,
+        unit_symbol: None,
+        rate: Decimal::ZERO,
+        discount: Decimal::ZERO,
+        amount: Decimal::ZERO,
+        batches: Vec::new(),
+    };
+    let mut cur_batch = TallyXmlBatchAllocation {
+        godown_name: None,
+        batch_name: None,
+        mfg_date: None,
+        expiry_period: None,
+        amount: Decimal::ZERO,
     };
     let mut cur_unit = TallyXmlUnit {
         symbol: String::new(),
@@ -65,13 +111,19 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
         voucher_number: String::new(),
         date: String::new(),
         narration: None,
+        party_gstin: None,
+        place_of_supply: None,
         lines: Vec::new(),
+        inventory_entries: Vec::new(),
     };
     let mut cur_line = TallyXmlVoucherLine {
         ledger_name: String::new(),
         entry_type: "Dr".to_string(),
         amount: Decimal::ZERO,
         narration: None,
+        bill_allocations: Vec::new(),
+        bank_allocations: Vec::new(),
+        cost_allocations: Vec::new(),
     };
     let mut line_deemed_positive: Option<bool> = None;
     let mut raw_line_amount: Decimal = Decimal::ZERO;
@@ -102,6 +154,9 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
                             parent: String::new(),
                             opening_balance: Decimal::ZERO,
                             is_deemed_positive: true,
+                            party_gstin: None,
+                            state_name: None,
+                            pan: None,
                         };
                     }
                     "UNIT" => {
@@ -147,7 +202,10 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
                             voucher_number: String::new(),
                             date: String::new(),
                             narration: None,
+                            party_gstin: None,
+                            place_of_supply: None,
                             lines: Vec::new(),
+                            inventory_entries: Vec::new(),
                         };
                     }
                     "ALLLEDGERENTRIES.LIST" | "LEDGERENTRIES.LIST" => {
@@ -157,9 +215,69 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
                             entry_type: "Dr".to_string(),
                             amount: Decimal::ZERO,
                             narration: None,
+                            bill_allocations: Vec::new(),
+                            bank_allocations: Vec::new(),
+                            cost_allocations: Vec::new(),
                         };
                         line_deemed_positive = None;
                         raw_line_amount = Decimal::ZERO;
+                    }
+                    "BILLALLOCATIONS.LIST" if state == State::InVoucherLine => {
+                        state = State::InBillAllocation;
+                        cur_bill = TallyXmlBillAllocation {
+                            bill_name: String::new(),
+                            bill_type: "NewRef".to_string(),
+                            credit_period_days: None,
+                            amount: Decimal::ZERO,
+                        };
+                    }
+                    "BANKALLOCATIONS.LIST" if state == State::InVoucherLine => {
+                        state = State::InBankAllocation;
+                        cur_bank = TallyXmlBankAllocation {
+                            transaction_type: "Other".to_string(),
+                            instrument_number: None,
+                            instrument_date: None,
+                            bank_date: None,
+                            favouring_name: None,
+                            amount: Decimal::ZERO,
+                        };
+                    }
+                    "CATEGORYALLOCATIONS.LIST" if state == State::InVoucherLine => {
+                        state = State::InCategoryAllocation;
+                        cur_cat_name = String::new();
+                    }
+                    "COSTCENTREALLOCATIONS.LIST" if state == State::InCategoryAllocation => {
+                        state = State::InCostCentreAllocation;
+                        cur_cost = TallyXmlCostAllocation {
+                            category_name: cur_cat_name.clone(),
+                            cost_centre_name: String::new(),
+                            amount: Decimal::ZERO,
+                        };
+                    }
+                    "ALLINVENTORYENTRIES.LIST" | "INVENTORYALLOCATIONS.LIST"
+                        if state == State::InVoucher || state == State::InVoucherLine =>
+                    {
+                        state = State::InInventoryEntry;
+                        cur_inv = TallyXmlInventoryEntry {
+                            stock_item_name: String::new(),
+                            actual_qty: Decimal::ZERO,
+                            billed_qty: Decimal::ZERO,
+                            unit_symbol: None,
+                            rate: Decimal::ZERO,
+                            discount: Decimal::ZERO,
+                            amount: Decimal::ZERO,
+                            batches: Vec::new(),
+                        };
+                    }
+                    "BATCHALLOCATIONS.LIST" if state == State::InInventoryEntry => {
+                        state = State::InBatchAllocation;
+                        cur_batch = TallyXmlBatchAllocation {
+                            godown_name: None,
+                            batch_name: None,
+                            mfg_date: None,
+                            expiry_period: None,
+                            amount: Decimal::ZERO,
+                        };
                     }
                     _ => {}
                 }
@@ -252,6 +370,8 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
                         }
                         "VOUCHERNUMBER" => cur_voucher.voucher_number = text,
                         "NARRATION" => cur_voucher.narration = Some(text),
+                        "PARTYGSTIN" => cur_voucher.party_gstin = Some(text),
+                        "PLACEOFSUPPLY" => cur_voucher.place_of_supply = Some(text),
                         _ => {}
                     },
                     State::InVoucherLine => match current_tag.as_str() {
@@ -265,6 +385,105 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
                             }
                         }
                         "NARRATION" => cur_line.narration = Some(text),
+                        _ => {}
+                    },
+                    State::InBillAllocation => match current_tag.as_str() {
+                        "NAME" => cur_bill.bill_name = text,
+                        "BILLTYPE" => {
+                            cur_bill.bill_type = match text.trim() {
+                                "New Ref" | "NewRef" => "NewRef".to_string(),
+                                "Agst Ref" | "AgstRef" => "AgstRef".to_string(),
+                                "Advance" => "Advance".to_string(),
+                                _ => "OnAccount".to_string(),
+                            };
+                        }
+                        "BILLCREDITPERIOD" => {
+                            let digits: String =
+                                text.chars().take_while(|c| c.is_ascii_digit()).collect();
+                            if let Ok(days) = digits.parse::<i64>() {
+                                cur_bill.credit_period_days = Some(days);
+                            }
+                        }
+                        "AMOUNT" => {
+                            if let Ok(d) = Decimal::from_str(&text) {
+                                cur_bill.amount = d.abs().round_dp(2);
+                            }
+                        }
+                        _ => {}
+                    },
+                    State::InBankAllocation => match current_tag.as_str() {
+                        "TRANSACTIONTYPE" => cur_bank.transaction_type = text,
+                        "INSTRUMENTNUMBER" => cur_bank.instrument_number = Some(text),
+                        "INSTRUMENTDATE" => {
+                            cur_bank.instrument_date = Some(normalize_tally_date(&text))
+                        }
+                        "BANKERSDATE" => cur_bank.bank_date = Some(normalize_tally_date(&text)),
+                        "PAYMENTFAVOURING" => cur_bank.favouring_name = Some(text),
+                        "AMOUNT" => {
+                            if let Ok(d) = Decimal::from_str(&text) {
+                                cur_bank.amount = d.abs().round_dp(2);
+                            }
+                        }
+                        _ => {}
+                    },
+                    State::InCategoryAllocation => {
+                        if current_tag == "CATEGORY" {
+                            cur_cat_name = text;
+                        }
+                    }
+                    State::InCostCentreAllocation => match current_tag.as_str() {
+                        "NAME" => cur_cost.cost_centre_name = text,
+                        "AMOUNT" => {
+                            if let Ok(d) = Decimal::from_str(&text) {
+                                cur_cost.amount = d.abs().round_dp(2);
+                            }
+                        }
+                        _ => {}
+                    },
+                    State::InInventoryEntry => match current_tag.as_str() {
+                        "STOCKITEMNAME" => cur_inv.stock_item_name = text,
+                        "ACTUALQTY" => {
+                            let (q, u) = split_qty_unit(&text);
+                            cur_inv.actual_qty = q;
+                            if cur_inv.unit_symbol.is_none() {
+                                cur_inv.unit_symbol = u;
+                            }
+                        }
+                        "BILLEDQTY" => {
+                            let (q, u) = split_qty_unit(&text);
+                            cur_inv.billed_qty = q;
+                            if cur_inv.unit_symbol.is_none() {
+                                cur_inv.unit_symbol = u;
+                            }
+                        }
+                        "RATE" => {
+                            let num_part = text.split('/').next().unwrap_or(&text).trim();
+                            if let Ok(d) = Decimal::from_str(num_part) {
+                                cur_inv.rate = d.abs().round_dp(4);
+                            }
+                        }
+                        "DISCOUNT" => {
+                            if let Ok(d) = Decimal::from_str(&text) {
+                                cur_inv.discount = d.abs().round_dp(2);
+                            }
+                        }
+                        "AMOUNT" => {
+                            if let Ok(d) = Decimal::from_str(&text) {
+                                cur_inv.amount = d.abs().round_dp(2);
+                            }
+                        }
+                        _ => {}
+                    },
+                    State::InBatchAllocation => match current_tag.as_str() {
+                        "GODOWNNAME" => cur_batch.godown_name = Some(text),
+                        "BATCHNAME" => cur_batch.batch_name = Some(text),
+                        "MFDON" => cur_batch.mfg_date = Some(normalize_tally_date(&text)),
+                        "EXPIRYPERIOD" => cur_batch.expiry_period = Some(text),
+                        "AMOUNT" => {
+                            if let Ok(d) = Decimal::from_str(&text) {
+                                cur_batch.amount = d.abs().round_dp(2);
+                            }
+                        }
                         _ => {}
                     },
                     State::Root => {}
@@ -311,6 +530,38 @@ pub fn parse_tally_xml(xml: &str) -> Result<TallyXmlDocument, OpenTallyError> {
                             doc.stock_items.push(cur_stock_item.clone());
                         }
                         state = State::Root;
+                    }
+                    "BILLALLOCATIONS.LIST" => {
+                        if !cur_bill.bill_name.is_empty() {
+                            cur_line.bill_allocations.push(cur_bill.clone());
+                        }
+                        state = State::InVoucherLine;
+                    }
+                    "BANKALLOCATIONS.LIST" => {
+                        cur_line.bank_allocations.push(cur_bank.clone());
+                        state = State::InVoucherLine;
+                    }
+                    "COSTCENTREALLOCATIONS.LIST" => {
+                        if !cur_cost.cost_centre_name.is_empty() {
+                            cur_line.cost_allocations.push(cur_cost.clone());
+                        }
+                        state = State::InCategoryAllocation;
+                    }
+                    "CATEGORYALLOCATIONS.LIST" => {
+                        state = State::InVoucherLine;
+                    }
+                    "BATCHALLOCATIONS.LIST" => {
+                        cur_inv.batches.push(cur_batch.clone());
+                        state = State::InInventoryEntry;
+                    }
+                    "ALLINVENTORYENTRIES.LIST" | "INVENTORYALLOCATIONS.LIST" => {
+                        if !cur_inv.stock_item_name.is_empty() {
+                            if cur_inv.billed_qty.is_zero() {
+                                cur_inv.billed_qty = cur_inv.actual_qty;
+                            }
+                            cur_voucher.inventory_entries.push(cur_inv.clone());
+                        }
+                        state = State::InVoucher;
                     }
                     "ALLLEDGERENTRIES.LIST" | "LEDGERENTRIES.LIST" => {
                         if !cur_line.ledger_name.is_empty() {
@@ -393,4 +644,13 @@ pub fn normalize_tally_date(s: &str) -> String {
     } else {
         trimmed.to_string()
     }
+}
+
+fn split_qty_unit(s: &str) -> (Decimal, Option<String>) {
+    let trimmed = s.trim();
+    let mut parts = trimmed.split_whitespace();
+    let qty_str = parts.next().unwrap_or("0");
+    let qty = Decimal::from_str(qty_str).unwrap_or(Decimal::ZERO).abs();
+    let unit = parts.next().map(|u| u.to_string());
+    (qty, unit)
 }

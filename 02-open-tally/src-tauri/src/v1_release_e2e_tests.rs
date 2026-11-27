@@ -307,7 +307,7 @@ async fn test_v1_e2e_gstr1_and_gstr3b_statutory_json_export() {
         .expect("b2b array must be present");
     assert!(!b2b.is_empty(), "b2b array must have invoice entries");
 
-    let hsn = gstr1_parsed["hsn"]
+    let hsn = gstr1_parsed["hsn"]["data"]
         .as_array()
         .expect("HSN array must be present");
     assert!(!hsn.is_empty(), "HSN summary array must have entries");

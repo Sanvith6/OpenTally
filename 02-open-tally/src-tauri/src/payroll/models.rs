@@ -32,10 +32,13 @@ pub struct Employee {
     pub esi_applicable: bool,
     pub pt_applicable: bool,
     pub is_active: bool,
+    pub work_state_code: String,
+    pub tax_regime: String,
+    pub annual_declared_deductions: String,
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CreateEmployeeInput {
     pub employee_code: String,
     pub name: String,
@@ -67,6 +70,32 @@ pub struct CreateEmployeeInput {
     pub esi_applicable: bool,
     #[serde(default = "default_true")]
     pub pt_applicable: bool,
+    #[serde(default = "default_state_ka")]
+    pub work_state_code: String,
+    #[serde(default = "default_tax_regime")]
+    pub tax_regime: String,
+    #[serde(default = "default_zero")]
+    pub annual_declared_deductions: String,
+}
+
+fn default_state_ka() -> String {
+    "29".to_string()
+}
+
+fn default_tax_regime() -> String {
+    "New".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct ProfessionalTaxSlab {
+    pub id: String,
+    pub company_id: String,
+    pub state_code: String,
+    pub min_gross: String,
+    pub max_gross: Option<String>,
+    pub monthly_tax: String,
+    pub february_tax: Option<String>,
+    pub created_at: String,
 }
 
 fn default_zero() -> String {
@@ -114,6 +143,7 @@ pub struct ComputedPayslipPreview {
     pub employee_esi: String,
     pub employer_esi: String,
     pub professional_tax: String,
+    pub tds_sec192: String,
     pub other_deductions: String,
     pub total_deductions: String,
     pub net_pay: String,
@@ -132,6 +162,7 @@ pub struct PayrollPreviewResult {
     pub total_employee_esi: String,
     pub total_employer_esi: String,
     pub total_pt: String,
+    pub total_tds_sec192: String,
     pub payslips: Vec<ComputedPayslipPreview>,
 }
 
@@ -169,6 +200,7 @@ pub struct PayrollPayslip {
     pub employee_esi: String,
     pub employer_esi: String,
     pub professional_tax: String,
+    pub tds_sec192: String,
     pub other_deductions: String,
     pub total_deductions: String,
     pub net_pay: String,

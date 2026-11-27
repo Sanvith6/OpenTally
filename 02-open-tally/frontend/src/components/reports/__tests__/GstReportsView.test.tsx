@@ -308,6 +308,30 @@ describe('GstReportsView Component', () => {
     expect(screen.getByText('₹ 1300.00')).toBeTruthy();
   });
 
+  it('switches to CMP-08 Quarterly tab and renders composition liability', async () => {
+    vi.spyOn(api, 'getCmp08QuarterlySummary').mockResolvedValue({
+      company_id: 'cmp_gst_1',
+      financial_year: 2026,
+      quarter: 1,
+      from_date: '2026-04-01',
+      to_date: '2026-06-30',
+      composition_rate: '1.00',
+      outward_turnover: '100000.00',
+      composition_tax_payable: '1000.00',
+      rcm_taxable_value: '0.00',
+      rcm_tax_payable: '0.00',
+      total_cmp08_liability: '1000.00',
+    });
+
+    render(<GstReportsView activeCompany={company} onBack={vi.fn()} />);
+    const cmpTab = screen.getByRole('tab', { name: /CMP-08 Quarterly/i });
+    fireEvent.click(cmpTab);
+
+    expect(await screen.findByTestId('cmp08-view')).toBeTruthy();
+    expect(screen.getByText('100000.00')).toBeTruthy();
+    expect(screen.getByText('Total CMP-08 Quarterly Liability')).toBeTruthy();
+  });
+
   it('switches to GST Settings & Masters tab and displays profile information', async () => {
     const onBack = vi.fn();
     render(<GstReportsView activeCompany={company} onBack={onBack} />);

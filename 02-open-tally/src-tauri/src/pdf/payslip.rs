@@ -30,6 +30,7 @@ struct PayslipPdfRow {
     employee_esi: String,
     employer_esi: String,
     professional_tax: String,
+    tds_sec192: String,
     other_deductions: String,
     total_deductions: String,
     net_pay: String,
@@ -70,6 +71,7 @@ pub async fn export_payslip_pdf(
                     ps.employee_esi,
                     ps.employer_esi,
                     ps.professional_tax,
+                    ps.tds_sec192,
                     ps.other_deductions,
                     ps.total_deductions,
                     ps.net_pay
@@ -232,6 +234,7 @@ fn render_payslip_pdf(row: &PayslipPdfRow) -> Vec<u8> {
         ("Employee Provident Fund (EPF)", &row.employee_pf),
         ("Employee State Insurance (ESI)", &row.employee_esi),
         ("Professional Tax (PT)", &row.professional_tax),
+        ("Income Tax (TDS Sec 192)", &row.tds_sec192),
         ("Other Deductions", &row.other_deductions),
     ];
     for (label, val) in deductions {

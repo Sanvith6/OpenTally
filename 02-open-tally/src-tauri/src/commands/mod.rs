@@ -1464,6 +1464,38 @@ pub async fn export_gstr1_json(
     exec_export_gstr1_json(&state, from_date, to_date).await
 }
 
+#[tauri::command]
+pub async fn validate_gstr1_export(
+    state: tauri::State<'_, AppState>,
+    from_date: String,
+    to_date: String,
+) -> Result<crate::gst::gstn_validator::GstnValidationReport, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::reports::gst::GstReportService::validate_gstr1_export(
+        state.db.pool(),
+        &company_id,
+        &from_date,
+        &to_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn get_cmp08_quarterly_summary(
+    state: tauri::State<'_, AppState>,
+    financial_year: i32,
+    quarter: u8,
+) -> Result<crate::reports::gst::Cmp08QuarterlySummary, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::reports::gst::GstReportService::get_cmp08_quarterly_summary(
+        state.db.pool(),
+        &company_id,
+        financial_year,
+        quarter,
+    )
+    .await
+}
+
 pub async fn exec_export_gstr3b_json(
     state: &AppState,
     from_date: String,
@@ -1888,6 +1920,195 @@ pub async fn export_form_26q_json(
     quarter: String,
 ) -> Result<String, OpenTallyError> {
     exec_export_form_26q_json(&state, company_id, financial_year, quarter).await
+}
+
+#[tauri::command]
+pub async fn get_form_27q_summary(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    financial_year: String,
+    quarter: String,
+) -> Result<crate::tds::models::Form26qSummary, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::reports::TdsReportService::get_form_27q_summary(
+        state.db.pool(),
+        &cid,
+        &financial_year,
+        &quarter,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_form_27q_json(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    financial_year: String,
+    quarter: String,
+) -> Result<String, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::reports::TdsReportService::export_form_27q_json(
+        state.db.pool(),
+        &cid,
+        &financial_year,
+        &quarter,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn get_form_27eq_summary(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    financial_year: String,
+    quarter: String,
+) -> Result<crate::tds::models::Form26qSummary, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::reports::TdsReportService::get_form_27eq_summary(
+        state.db.pool(),
+        &cid,
+        &financial_year,
+        &quarter,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_form_27eq_json(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    financial_year: String,
+    quarter: String,
+) -> Result<String, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::reports::TdsReportService::export_form_27eq_json(
+        state.db.pool(),
+        &cid,
+        &financial_year,
+        &quarter,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_pt_slabs(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    state_code: Option<String>,
+) -> Result<Vec<crate::payroll::models::ProfessionalTaxSlab>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::payroll::PayrollService::list_pt_slabs(state.db.pool(), &cid, state_code).await
+}
+
+#[tauri::command]
+pub async fn export_epfo_ecr_file(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    pay_period: String,
+) -> Result<String, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::payroll::PayrollService::export_epfo_ecr_file(state.db.pool(), &cid, &pay_period).await
+}
+
+#[tauri::command]
+pub async fn export_trial_balance_pdf(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    as_of_date: String,
+) -> Result<Vec<u8>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::pdf::statements::export_trial_balance_pdf(state.db.pool(), &cid, &as_of_date).await
+}
+
+#[tauri::command]
+pub async fn export_profit_and_loss_pdf(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    from_date: String,
+    to_date: String,
+) -> Result<Vec<u8>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::pdf::statements::export_profit_and_loss_pdf(state.db.pool(), &cid, &from_date, &to_date)
+        .await
+}
+
+#[tauri::command]
+pub async fn export_balance_sheet_pdf(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    as_of_date: String,
+) -> Result<Vec<u8>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::pdf::statements::export_balance_sheet_pdf(state.db.pool(), &cid, &as_of_date).await
+}
+
+#[tauri::command]
+pub async fn export_ledger_statement_pdf(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    ledger_id: String,
+    from_date: String,
+    to_date: String,
+) -> Result<Vec<u8>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::pdf::statements::export_ledger_statement_pdf(
+        state.db.pool(),
+        &cid,
+        &ledger_id,
+        &from_date,
+        &to_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_outstanding_aging_pdf(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    report_type: String,
+    as_of_date: String,
+) -> Result<Vec<u8>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::pdf::statements::export_outstanding_aging_pdf(
+        state.db.pool(),
+        &cid,
+        &report_type,
+        &as_of_date,
+    )
+    .await
 }
 
 pub async fn exec_export_form_26q_csv(
@@ -6208,6 +6429,109 @@ pub async fn import_custom_report_template(
         &company_id,
         &template_json,
         &actor,
+    )
+    .await
+}
+
+// Milestone 20: Distributor Inventory & Billing Depth
+#[tauri::command]
+pub async fn create_compound_unit(
+    state: tauri::State<'_, AppState>,
+    name: String,
+    symbol: String,
+    first_unit_id: String,
+    second_unit_id: String,
+    conversion_factor: String,
+) -> Result<crate::inventory::units::CompoundUnitDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::inventory::units::create_compound_unit(
+        state.db.pool(),
+        &company_id,
+        &name,
+        &symbol,
+        &first_unit_id,
+        &second_unit_id,
+        &conversion_factor,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_price_levels(
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<crate::inventory::pricing::PriceLevelDto>, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::inventory::pricing::list_price_levels(state.db.pool(), &company_id).await
+}
+
+#[tauri::command]
+pub async fn create_price_level(
+    state: tauri::State<'_, AppState>,
+    name: String,
+) -> Result<crate::inventory::pricing::PriceLevelDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::inventory::pricing::create_price_level(state.db.pool(), &company_id, &name).await
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+pub async fn upsert_price_list_entry(
+    state: tauri::State<'_, AppState>,
+    price_level_id: String,
+    stock_item_id: String,
+    effective_from: String,
+    min_qty: String,
+    max_qty: Option<String>,
+    unit_rate: String,
+    discount_pct: String,
+) -> Result<crate::inventory::pricing::PriceListEntryDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::inventory::pricing::upsert_price_list_entry(
+        state.db.pool(),
+        &company_id,
+        &price_level_id,
+        &stock_item_id,
+        &effective_from,
+        &min_qty,
+        max_qty.as_deref(),
+        &unit_rate,
+        &discount_pct,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn list_price_list_entries(
+    state: tauri::State<'_, AppState>,
+    price_level_id: Option<String>,
+) -> Result<Vec<crate::inventory::pricing::PriceListEntryDto>, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::inventory::pricing::list_price_list_entries(
+        state.db.pool(),
+        &company_id,
+        price_level_id.as_deref(),
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn resolve_item_price(
+    state: tauri::State<'_, AppState>,
+    stock_item_id: String,
+    party_ledger_id: Option<String>,
+    price_level_id: Option<String>,
+    quantity: String,
+    as_of_date: String,
+) -> Result<crate::inventory::pricing::ResolvedItemPriceDto, OpenTallyError> {
+    let company_id = require_active_company(&state).await?;
+    crate::inventory::pricing::resolve_item_price(
+        state.db.pool(),
+        &company_id,
+        &stock_item_id,
+        party_ledger_id.as_deref(),
+        price_level_id.as_deref(),
+        &quantity,
+        &as_of_date,
     )
     .await
 }

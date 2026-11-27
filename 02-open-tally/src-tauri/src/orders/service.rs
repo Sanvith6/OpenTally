@@ -1290,6 +1290,8 @@ impl OrdersService {
                 batch_number: f_line.batch_number,
                 mfg_date: f_line.mfg_date,
                 expiry_date: f_line.expiry_date,
+                billed_quantity: None,
+                entered_unit_id: None,
             });
 
             let new_fulfilled = current_fulfilled + f_line.fulfill_qty;
@@ -1323,6 +1325,12 @@ impl OrdersService {
             original_voucher_id: None,
             return_reason: None,
             tds_section_code: None,
+            supply_category: None,
+            itc_eligibility: None,
+            port_code: None,
+            shipping_bill_no: None,
+            shipping_bill_date: None,
+            allow_post_cutoff_note: None,
         };
 
         // Post commercial invoice voucher

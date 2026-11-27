@@ -290,6 +290,7 @@ pub async fn export_company_tally_xml(
 
             #[derive(sqlx::FromRow)]
             struct LineRow {
+                id: String,
                 ledger_name: String,
                 entry_type: String,
                 amount: String,
@@ -311,7 +312,7 @@ pub async fn export_company_tally_xml(
                 );
 
                 let lines = sqlx::query_as::<_, LineRow>(
-                    "SELECT l.name as ledger_name, vl.entry_type, vl.amount, vl.narration
+                    "SELECT vl.id, l.name as ledger_name, vl.entry_type, vl.amount, vl.narration
                      FROM voucher_lines vl
                      JOIN ledgers l ON l.company_id = vl.company_id AND l.id = vl.ledger_id
                      WHERE vl.company_id = ? AND vl.voucher_id = ?
@@ -337,11 +338,116 @@ pub async fn export_company_tally_xml(
 
                     let _ = writeln!(
                         xml,
-                        "            <ALLLEDGERENTRIES.LIST>\n              <LEDGERNAME>{}</LEDGERNAME>\n              <ISDEEMEDPOSITIVE>{}</ISDEEMEDPOSITIVE>\n              <AMOUNT>{}</AMOUNT>\n              <NARRATION>{}</NARRATION>\n            </ALLLEDGERENTRIES.LIST>",
+                        "            <ALLLEDGERENTRIES.LIST>\n              <LEDGERNAME>{}</LEDGERNAME>\n              <ISDEEMEDPOSITIVE>{}</ISDEEMEDPOSITIVE>\n              <AMOUNT>{}</AMOUNT>\n              <NARRATION>{}</NARRATION>",
                         escape_xml(&l.ledger_name),
                         deemed_positive,
                         amt_str,
                         escape_xml(line_narr)
+                    );
+
+                    // Emit nested BILLALLOCATIONS.LIST if present
+                    let bills: Vec<(String, String, String)> = sqlx::query_as(
+                        "SELECT bill_name, allocation_type, amount FROM bill_allocations WHERE company_id = ? AND voucher_id = ? AND voucher_line_id = ?",
+                    )
+                    .bind(&company_id_owned)
+                    .bind(&v.id)
+                    .bind(&l.id)
+                    .fetch_all(&mut *conn)
+                    .await
+                    .unwrap_or_default();
+                    for (bname, btype, bamt) in bills {
+                        let _ = writeln!(
+                            xml,
+                            "              <BILLALLOCATIONS.LIST>\n                <NAME>{}</NAME>\n                <BILLTYPE>{}</BILLTYPE>\n                <AMOUNT>{}</AMOUNT>\n              </BILLALLOCATIONS.LIST>",
+                            escape_xml(&bname),
+                            escape_xml(&btype),
+                            bamt
+                        );
+                    }
+
+                    // Emit nested BANKALLOCATIONS.LIST if present
+                    type BankExportRow = (
+                        String,
+                        Option<String>,
+                        Option<String>,
+                        Option<String>,
+                        Option<String>,
+                        String,
+                    );
+                    let banks: Vec<BankExportRow> = sqlx::query_as(
+                        "SELECT transaction_type, instrument_number, instrument_date, bank_date, favouring_name, amount FROM bank_allocations WHERE company_id = ? AND voucher_id = ? AND voucher_line_id = ?",
+                    )
+                    .bind(&company_id_owned)
+                    .bind(&v.id)
+                    .bind(&l.id)
+                    .fetch_all(&mut *conn)
+                    .await
+                    .unwrap_or_default();
+                    for (ttype, inum, idate, bdate, fav, bamt) in banks {
+                        let _ = writeln!(
+                            xml,
+                            "              <BANKALLOCATIONS.LIST>\n                <TRANSACTIONTYPE>{}</TRANSACTIONTYPE>\n                <INSTRUMENTNUMBER>{}</INSTRUMENTNUMBER>\n                <INSTRUMENTDATE>{}</INSTRUMENTDATE>\n                <BANKERSDATE>{}</BANKERSDATE>\n                <PAYMENTFAVOURING>{}</PAYMENTFAVOURING>\n                <AMOUNT>{}</AMOUNT>\n              </BANKALLOCATIONS.LIST>",
+                            escape_xml(&ttype),
+                            escape_xml(inum.as_deref().unwrap_or("")),
+                            escape_xml(idate.as_deref().unwrap_or("")),
+                            escape_xml(bdate.as_deref().unwrap_or("")),
+                            escape_xml(fav.as_deref().unwrap_or("")),
+                            bamt
+                        );
+                    }
+
+                    // Emit nested CATEGORYALLOCATIONS.LIST -> COSTCENTREALLOCATIONS.LIST
+                    let costs: Vec<(String, String, String)> = sqlx::query_as(
+                        "SELECT COALESCE(cat.name, 'Primary Cost Category'), cc.name, vca.amount
+                         FROM voucher_cost_allocations vca
+                         JOIN cost_centres cc ON cc.id = vca.cost_centre_id
+                         LEFT JOIN cost_categories cat ON cat.id = cc.category_id
+                         WHERE vca.company_id = ? AND vca.voucher_id = ? AND vca.voucher_line_id = ?",
+                    )
+                    .bind(&company_id_owned)
+                    .bind(&v.id)
+                    .bind(&l.id)
+                    .fetch_all(&mut *conn)
+                    .await
+                    .unwrap_or_default();
+                    for (cat_name, cc_name, camt) in costs {
+                        let _ = writeln!(
+                            xml,
+                            "              <CATEGORYALLOCATIONS.LIST>\n                <CATEGORY>{}</CATEGORY>\n                <COSTCENTREALLOCATIONS.LIST>\n                  <NAME>{}</NAME>\n                  <AMOUNT>{}</AMOUNT>\n                </COSTCENTREALLOCATIONS.LIST>\n              </CATEGORYALLOCATIONS.LIST>",
+                            escape_xml(&cat_name),
+                            escape_xml(&cc_name),
+                            camt
+                        );
+                    }
+
+                    xml.push_str("            </ALLLEDGERENTRIES.LIST>\n");
+                }
+
+                // Emit ALLINVENTORYENTRIES.LIST for linked stock_vouchers
+                let inv_rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+                    "SELECT si.name, svl.quantity, svl.unit_cost, svl.line_value, g.name
+                     FROM stock_vouchers sv
+                     JOIN stock_voucher_lines svl ON svl.stock_voucher_id = sv.id
+                     JOIN stock_items si ON si.id = svl.stock_item_id
+                     LEFT JOIN godowns g ON g.id = svl.godown_id
+                     WHERE sv.company_id = ? AND sv.accounting_voucher_id = ?",
+                )
+                .bind(&company_id_owned)
+                .bind(&v.id)
+                .fetch_all(&mut *conn)
+                .await
+                .unwrap_or_default();
+                for (iname, iqty, irate, ival, gname) in inv_rows {
+                    let _ = writeln!(
+                        xml,
+                        "            <ALLINVENTORYENTRIES.LIST>\n              <STOCKITEMNAME>{}</STOCKITEMNAME>\n              <ACTUALQTY>{}</ACTUALQTY>\n              <BILLEDQTY>{}</BILLEDQTY>\n              <RATE>{}</RATE>\n              <AMOUNT>{}</AMOUNT>\n              <BATCHALLOCATIONS.LIST>\n                <GODOWNNAME>{}</GODOWNNAME>\n                <AMOUNT>{}</AMOUNT>\n              </BATCHALLOCATIONS.LIST>\n            </ALLINVENTORYENTRIES.LIST>",
+                        escape_xml(&iname),
+                        iqty,
+                        iqty,
+                        irate,
+                        ival,
+                        escape_xml(gname.as_deref().unwrap_or("Main Location")),
+                        ival
                     );
                 }
 

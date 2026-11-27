@@ -998,6 +998,20 @@ export interface TallyXmlImportPreview {
   errors: TallyXmlValidationError[];
 }
 
+export interface XmlMigrationReconciliationReport {
+  source_voucher_count: number;
+  imported_voucher_count: number;
+  source_total_debit: string;
+  imported_total_debit: string;
+  source_total_credit: string;
+  imported_total_credit: string;
+  imported_trial_balance_difference: string;
+  bill_allocations_imported: number;
+  inventory_lines_imported: number;
+  bank_allocations_imported: number;
+  cost_centre_allocations_imported: number;
+}
+
 export interface TallyXmlImportResult {
   success: boolean;
   groups_created: number;
@@ -1005,6 +1019,7 @@ export interface TallyXmlImportResult {
   stock_items_created: number;
   vouchers_created: number;
   message: string;
+  reconciliation?: XmlMigrationReconciliationReport | null;
 }
 
 export interface CompanyFeaturesDto {
@@ -2117,4 +2132,106 @@ export interface CustomReportExecutionResult {
   rows: Record<string, string>[];
   numeric_totals: Record<string, string>;
   row_count: number;
+}
+
+
+// ==========================================
+// Milestone 19: GSTN Strictness & Complex GST
+// ==========================================
+
+export interface Gstr1ExportRow {
+  voucher_id: string;
+  voucher_number: string;
+  voucher_date: string;
+  exp_typ: string;
+  supply_category: string;
+  port_code?: string | null;
+  shipping_bill_no?: string | null;
+  shipping_bill_date?: string | null;
+  taxable_value: string;
+  igst_amount: string;
+  cess_amount: string;
+  invoice_value: string;
+}
+
+export interface Gstr1DocIssueRow {
+  doc_num: number;
+  doc_type: string;
+  series_name: string;
+  from_num: string;
+  to_num: string;
+  totnum: number;
+  cancel: number;
+  net_issue: number;
+}
+
+export interface Cmp08QuarterlySummary {
+  company_id: string;
+  financial_year: number;
+  quarter: number;
+  from_date: string;
+  to_date: string;
+  composition_rate: string;
+  outward_turnover: string;
+  composition_tax_payable: string;
+  rcm_taxable_value: string;
+  rcm_tax_payable: string;
+  total_cmp08_liability: string;
+}
+
+export interface GstnValidationIssue {
+  section: string;
+  field: string;
+  message: string;
+  severity: string;
+}
+
+export interface GstnValidationReport {
+  is_valid: boolean;
+  error_count: number;
+  warning_count: number;
+  errors: GstnValidationIssue[];
+  warnings: GstnValidationIssue[];
+}
+
+
+// ==========================================
+// Milestone 20: Distributor Inventory & Billing Depth
+// ==========================================
+
+export interface CompoundUnitDto {
+  id: string;
+  company_id: string;
+  name: string;
+  symbol: string;
+  unit_type: string;
+  first_unit_id?: string | null;
+  second_unit_id?: string | null;
+  conversion_factor?: string | null;
+}
+
+export interface PriceLevelDto {
+  id: string;
+  company_id: string;
+  name: string;
+  is_active: number;
+  created_at: string;
+}
+
+export interface PriceListEntryDto {
+  id: string;
+  company_id: string;
+  price_level_id: string;
+  stock_item_id: string;
+  effective_from: string;
+  min_qty: string;
+  max_qty?: string | null;
+  unit_rate: string;
+  discount_pct: string;
+}
+
+export interface ResolvedItemPriceDto {
+  unit_rate: string;
+  discount_pct: string;
+  matched_price_level?: string | null;
 }

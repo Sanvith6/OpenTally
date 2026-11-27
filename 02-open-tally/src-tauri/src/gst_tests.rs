@@ -387,6 +387,8 @@ async fn test_intra_state_sales_posting_with_gst() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -401,6 +403,12 @@ async fn test_intra_state_sales_posting_with_gst() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let result = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", input)
@@ -505,6 +513,8 @@ async fn test_inter_state_sales_posting_with_igst() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -519,6 +529,12 @@ async fn test_inter_state_sales_posting_with_igst() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let result = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", input)
@@ -604,6 +620,8 @@ async fn test_f9_purchase_posting_with_input_itc_and_fifo_layer_protection() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -618,6 +636,12 @@ async fn test_f9_purchase_posting_with_input_itc_and_fifo_layer_protection() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let result = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", input)
@@ -715,6 +739,8 @@ async fn test_gstr1_summary_b2b_b2c_and_hsn() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -729,6 +755,12 @@ async fn test_gstr1_summary_b2b_b2c_and_hsn() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv1)
         .await
@@ -762,6 +794,8 @@ async fn test_gstr1_summary_b2b_b2c_and_hsn() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -776,6 +810,12 @@ async fn test_gstr1_summary_b2b_b2c_and_hsn() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv_b2c_l)
         .await
@@ -809,6 +849,8 @@ async fn test_gstr1_summary_b2b_b2c_and_hsn() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -823,6 +865,12 @@ async fn test_gstr1_summary_b2b_b2c_and_hsn() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv_b2c_s)
         .await
@@ -889,6 +937,8 @@ async fn test_gstr3b_summary_tables() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -903,6 +953,12 @@ async fn test_gstr3b_summary_tables() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv1)
         .await
@@ -936,6 +992,8 @@ async fn test_gstr3b_summary_tables() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -950,6 +1008,12 @@ async fn test_gstr3b_summary_tables() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     CommercialPostingService::post_commercial_voucher(pool, "cmp_a", pur1)
         .await
@@ -1009,6 +1073,8 @@ async fn test_voucher_cancellation_gst_neutralization() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -1023,6 +1089,12 @@ async fn test_voucher_cancellation_gst_neutralization() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let posted = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv)
@@ -1100,6 +1172,8 @@ async fn test_anti_drift_tax_guard_and_audit_override() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![
             TaxPostingLine {
@@ -1127,6 +1201,12 @@ async fn test_anti_drift_tax_guard_and_audit_override() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let err = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", drift_input)
@@ -1168,6 +1248,8 @@ async fn test_anti_drift_tax_guard_and_audit_override() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: vec![
             TaxPostingLine {
@@ -1195,6 +1277,12 @@ async fn test_anti_drift_tax_guard_and_audit_override() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
 
     let success = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", allowed_input)
@@ -1246,6 +1334,8 @@ async fn test_multi_company_isolation() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -1260,6 +1350,12 @@ async fn test_multi_company_isolation() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv)
         .await
@@ -1313,6 +1409,8 @@ async fn test_export_gstr1_and_gstr3b_json() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -1327,6 +1425,12 @@ async fn test_export_gstr1_and_gstr3b_json() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     let posted = CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv)
         .await
@@ -1360,6 +1464,8 @@ async fn test_export_gstr1_and_gstr3b_json() {
             batch_number: None,
             mfg_date: None,
             expiry_date: None,
+            billed_quantity: None,
+            entered_unit_id: None,
         }],
         tax_lines: Vec::new(),
         bill_allocations: vec![BillAllocationPostingLine {
@@ -1374,6 +1480,12 @@ async fn test_export_gstr1_and_gstr3b_json() {
         original_voucher_id: None,
         return_reason: None,
         tds_section_code: None,
+        supply_category: None,
+        itc_eligibility: None,
+        port_code: None,
+        shipping_bill_no: None,
+        shipping_bill_date: None,
+        allow_post_cutoff_note: None,
     };
     let posted_cancel =
         CommercialPostingService::post_commercial_voucher(pool, "cmp_a", inv_to_cancel)
@@ -1404,7 +1516,7 @@ async fn test_export_gstr1_and_gstr3b_json() {
     let b2b = v1["b2b"].as_array().unwrap();
     assert_eq!(b2b.len(), 1);
     assert_eq!(
-        b2b[0]["voucher_number"],
+        b2b[0]["inv"][0]["inum"],
         posted.voucher.voucher.voucher_number
     );
     // Ensure cancelled voucher is excluded

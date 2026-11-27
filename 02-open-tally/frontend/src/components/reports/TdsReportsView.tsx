@@ -24,7 +24,7 @@ interface Props {
 const getToday = () => new Date().toISOString().slice(0, 10);
 
 export function TdsReportsView({ activeCompany, onBack, onViewVoucher }: Props) {
-  const [activeTab, setActiveTab] = useState<'outstanding' | 'challan' | 'form26q'>('outstanding');
+  const [activeTab, setActiveTab] = useState<'outstanding' | 'challan' | 'form26q' | 'form27q' | 'form27eq'>('outstanding');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -232,6 +232,20 @@ export function TdsReportsView({ activeCompany, onBack, onViewVoucher }: Props) 
           onClick={() => setActiveTab('form26q')}
         >
           Form 26Q Quarterly Return
+        </button>
+        <button
+          className={`ot-tds-tab-btn ${activeTab === 'form27q' ? 'active' : ''}`}
+          data-testid="tab-tds-form27q"
+          onClick={() => setActiveTab('form27q')}
+        >
+          Form 27Q (NRI)
+        </button>
+        <button
+          className={`ot-tds-tab-btn ${activeTab === 'form27eq' ? 'active' : ''}`}
+          data-testid="tab-tds-form27eq"
+          onClick={() => setActiveTab('form27eq')}
+        >
+          Form 27EQ (TCS)
         </button>
       </div>
 

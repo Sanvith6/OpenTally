@@ -14,6 +14,12 @@ pub struct TallyXmlLedger {
     pub parent: String,
     pub opening_balance: Decimal,
     pub is_deemed_positive: bool, // true = Dr, false = Cr
+    #[serde(default)]
+    pub party_gstin: Option<String>,
+    #[serde(default)]
+    pub state_name: Option<String>,
+    #[serde(default)]
+    pub pan: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -46,11 +52,64 @@ pub struct TallyXmlStockItem {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TallyXmlBillAllocation {
+    pub bill_name: String,
+    pub bill_type: String, // "NewRef" | "AgstRef" | "Advance" | "OnAccount"
+    pub credit_period_days: Option<i64>,
+    pub amount: Decimal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TallyXmlBatchAllocation {
+    pub godown_name: Option<String>,
+    pub batch_name: Option<String>,
+    pub mfg_date: Option<String>,
+    pub expiry_period: Option<String>,
+    pub amount: Decimal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TallyXmlInventoryEntry {
+    pub stock_item_name: String,
+    pub actual_qty: Decimal,
+    pub billed_qty: Decimal,
+    pub unit_symbol: Option<String>,
+    pub rate: Decimal,
+    pub discount: Decimal,
+    pub amount: Decimal,
+    #[serde(default)]
+    pub batches: Vec<TallyXmlBatchAllocation>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TallyXmlBankAllocation {
+    pub transaction_type: String,
+    pub instrument_number: Option<String>,
+    pub instrument_date: Option<String>,
+    pub bank_date: Option<String>,
+    pub favouring_name: Option<String>,
+    pub amount: Decimal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TallyXmlCostAllocation {
+    pub category_name: String,
+    pub cost_centre_name: String,
+    pub amount: Decimal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TallyXmlVoucherLine {
     pub ledger_name: String,
     pub entry_type: String, // "Dr" or "Cr"
     pub amount: Decimal,    // Strictly positive
     pub narration: Option<String>,
+    #[serde(default)]
+    pub bill_allocations: Vec<TallyXmlBillAllocation>,
+    #[serde(default)]
+    pub bank_allocations: Vec<TallyXmlBankAllocation>,
+    #[serde(default)]
+    pub cost_allocations: Vec<TallyXmlCostAllocation>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,7 +118,13 @@ pub struct TallyXmlVoucher {
     pub voucher_number: String,
     pub date: String, // YYYY-MM-DD
     pub narration: Option<String>,
+    #[serde(default)]
+    pub party_gstin: Option<String>,
+    #[serde(default)]
+    pub place_of_supply: Option<String>,
     pub lines: Vec<TallyXmlVoucherLine>,
+    #[serde(default)]
+    pub inventory_entries: Vec<TallyXmlInventoryEntry>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -96,6 +161,21 @@ pub struct TallyXmlImportPreview {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct XmlMigrationReconciliationReport {
+    pub source_voucher_count: usize,
+    pub imported_voucher_count: usize,
+    pub source_total_debit: String,
+    pub imported_total_debit: String,
+    pub source_total_credit: String,
+    pub imported_total_credit: String,
+    pub imported_trial_balance_difference: String,
+    pub bill_allocations_imported: usize,
+    pub inventory_lines_imported: usize,
+    pub bank_allocations_imported: usize,
+    pub cost_centre_allocations_imported: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TallyXmlImportResult {
     pub success: bool,
     pub groups_created: usize,
@@ -103,4 +183,6 @@ pub struct TallyXmlImportResult {
     pub stock_items_created: usize,
     pub vouchers_created: usize,
     pub message: String,
+    #[serde(default)]
+    pub reconciliation: Option<XmlMigrationReconciliationReport>,
 }

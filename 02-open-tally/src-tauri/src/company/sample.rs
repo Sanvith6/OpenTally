@@ -432,6 +432,8 @@ impl SampleCompanyService {
                     batch_number: None,
                     mfg_date: None,
                     expiry_date: None,
+                    billed_quantity: None,
+                    entered_unit_id: None,
                 },
                 CommercialLinePosting {
                     line_number: 2,
@@ -446,6 +448,8 @@ impl SampleCompanyService {
                     batch_number: None,
                     mfg_date: None,
                     expiry_date: None,
+                    billed_quantity: None,
+                    entered_unit_id: None,
                 },
             ],
             tax_lines: vec![],
@@ -461,6 +465,12 @@ impl SampleCompanyService {
             original_voucher_id: None,
             return_reason: None,
             tds_section_code: None,
+            supply_category: None,
+            itc_eligibility: None,
+            port_code: None,
+            shipping_bill_no: None,
+            shipping_bill_date: None,
+            allow_post_cutoff_note: None,
         };
         CommercialPostingService::post_commercial_voucher(pool, company_id, pur1_input).await?;
 
@@ -494,6 +504,8 @@ impl SampleCompanyService {
                 batch_number: None,
                 mfg_date: None,
                 expiry_date: None,
+                billed_quantity: None,
+                entered_unit_id: None,
             }],
             tax_lines: vec![],
             bill_allocations: vec![BillAllocationPostingLine {
@@ -508,6 +520,12 @@ impl SampleCompanyService {
             original_voucher_id: None,
             return_reason: None,
             tds_section_code: None,
+            supply_category: None,
+            itc_eligibility: None,
+            port_code: None,
+            shipping_bill_no: None,
+            shipping_bill_date: None,
+            allow_post_cutoff_note: None,
         };
         CommercialPostingService::post_commercial_voucher(pool, company_id, pur2_input).await?;
 
@@ -542,6 +560,8 @@ impl SampleCompanyService {
                 batch_number: None,
                 mfg_date: None,
                 expiry_date: None,
+                billed_quantity: None,
+                entered_unit_id: None,
             }],
             tax_lines: vec![],
             bill_allocations: vec![BillAllocationPostingLine {
@@ -556,6 +576,12 @@ impl SampleCompanyService {
             original_voucher_id: None,
             return_reason: None,
             tds_section_code: None,
+            supply_category: None,
+            itc_eligibility: None,
+            port_code: None,
+            shipping_bill_no: None,
+            shipping_bill_date: None,
+            allow_post_cutoff_note: None,
         };
         CommercialPostingService::post_commercial_voucher(pool, company_id, sal1_input).await?;
 
@@ -592,6 +618,8 @@ impl SampleCompanyService {
                     batch_number: None,
                     mfg_date: None,
                     expiry_date: None,
+                    billed_quantity: None,
+                    entered_unit_id: None,
                 },
                 CommercialLinePosting {
                     line_number: 2,
@@ -606,6 +634,8 @@ impl SampleCompanyService {
                     batch_number: None,
                     mfg_date: None,
                     expiry_date: None,
+                    billed_quantity: None,
+                    entered_unit_id: None,
                 },
             ],
             tax_lines: vec![],
@@ -621,6 +651,12 @@ impl SampleCompanyService {
             original_voucher_id: None,
             return_reason: None,
             tds_section_code: None,
+            supply_category: None,
+            itc_eligibility: None,
+            port_code: None,
+            shipping_bill_no: None,
+            shipping_bill_date: None,
+            allow_post_cutoff_note: None,
         };
         CommercialPostingService::post_commercial_voucher(pool, company_id, sal2_input).await?;
 

@@ -6,6 +6,8 @@ import {
   HsnSacCode,
   GstLedgerMapping,
   Gstr2bReconciliationReport,
+  Cmp08QuarterlySummary,
+  GstnValidationReport,
 } from '../../types';
 import {
   getCompanyGstProfile,
@@ -22,6 +24,8 @@ import {
   exportGstr2bReconciliationCsv,
   getCompanyGspConfig,
   saveCompanyGspConfig,
+  validateGstr1Export,
+  getCmp08QuarterlySummary,
 } from '../../services/api';
 import './Reports.css';
 
@@ -47,7 +51,11 @@ const getCurrentPeriod = () => {
 };
 
 export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTab }: Props) {
-  const [tab, setTab] = useState<'gstr1' | 'gstr3b' | 'gstr2b' | 'settings'>(initialTab || 'gstr1');
+  const [tab, setTab] = useState<'gstr1' | 'gstr3b' | 'gstr2b' | 'cmp08' | 'settings'>(initialTab || 'gstr1');
+  const [cmp08, setCmp08] = useState<Cmp08QuarterlySummary | null>(null);
+  const [cmp08Year, setCmp08Year] = useState<number>(2026);
+  const [cmp08Quarter, setCmp08Quarter] = useState<number>(1);
+  const [gstnValidation, setGstnValidation] = useState<GstnValidationReport | null>(null);
   const [fromDate, setFromDate] = useState(getMonthStart());
   const [toDate, setToDate] = useState(getToday());
   const [returnPeriod, setReturnPeriod] = useState(getCurrentPeriod());
@@ -100,6 +108,11 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
       } else if (tab === 'gstr2b') {
         const data = await getGstr2bReconciliationReport(returnPeriod);
         setGstr2b(data);
+      } else if (tab === 'cmp08') {
+        if (typeof getCmp08QuarterlySummary === 'function') {
+          const data = await getCmp08QuarterlySummary(cmp08Year, cmp08Quarter);
+          setCmp08(data);
+        }
       } else if (tab === 'settings') {
         const [profile, codes, mapping, gspCfg] = await Promise.all([
           getCompanyGstProfile(),
@@ -287,6 +300,14 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
             GSTR-2B (ITC Reconciliation)
           </button>
           <button
+            className={`ot-tab-btn ${tab === 'cmp08' ? 'active' : ''}`}
+            onClick={() => setTab('cmp08')}
+            role="tab"
+            aria-selected={tab === 'cmp08'}
+          >
+            CMP-08 Quarterly
+          </button>
+          <button
             className={`ot-tab-btn ${tab === 'settings' ? 'active' : ''}`}
             onClick={() => setTab('settings')}
             role="tab"
@@ -320,6 +341,33 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
             <button onClick={() => void loadData()} disabled={loading}>
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
+            {tab === 'gstr1' && (
+              <>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const rep = await validateGstr1Export(fromDate, toDate);
+                      setGstnValidation(rep);
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : String(err));
+                    }
+                  }}
+                >
+                  Validate for GSTN Portal
+                </button>
+                {gstnValidation && (
+                  <span
+                    className={`ot-badge ${gstnValidation.is_valid ? 'badge-credit' : 'badge-debit'}`}
+                    data-testid="gstn-readiness-badge"
+                  >
+                    {gstnValidation.is_valid
+                      ? `GSTN Ready (0 Errors, ${gstnValidation.warning_count} Warnings)`
+                      : `${gstnValidation.error_count} Schema Errors`}
+                  </span>
+                )}
+              </>
+            )}
             {tab === 'gstr1' && (
               <button
                 type="button"
@@ -1036,6 +1084,73 @@ export function GstReportsView({ activeCompany, onBack, onViewVoucher, initialTa
               <div className="ot-report-empty">
                 No GSTR-2B data found for period {returnPeriod}. Upload government portal GSTR-2B JSON or click Fetch.
               </div>
+            )}
+          </div>
+        )}
+
+        {/* -------------------- CMP-08 TAB -------------------- */}
+        {!loading && tab === 'cmp08' && (
+          <div data-testid="cmp08-view" style={{ marginTop: '1.5rem' }}>
+            <div className="ot-inventory-toolbar" style={{ marginBottom: '1rem' }}>
+              <label>
+                FY:
+                <input
+                  type="number"
+                  aria-label="CMP-08 Financial Year"
+                  value={cmp08Year}
+                  onChange={(e) => setCmp08Year(Number(e.target.value) || 2026)}
+                  style={{ width: '90px', marginLeft: '0.5rem' }}
+                />
+              </label>
+              <label>
+                Quarter:
+                <select
+                  aria-label="CMP-08 Quarter"
+                  value={cmp08Quarter}
+                  onChange={(e) => setCmp08Quarter(Number(e.target.value))}
+                  style={{ marginLeft: '0.5rem' }}
+                >
+                  <option value={1}>Q1 (Apr-Jun)</option>
+                  <option value={2}>Q2 (Jul-Sep)</option>
+                  <option value={3}>Q3 (Oct-Dec)</option>
+                  <option value={4}>Q4 (Jan-Mar)</option>
+                </select>
+              </label>
+              <button type="button" onClick={() => void loadData()}>
+                Refresh CMP-08
+              </button>
+            </div>
+            {cmp08 && (
+              <table className="ot-report-table">
+                <thead>
+                  <tr>
+                    <th>CMP-08 Particulars</th>
+                    <th data-numeric="true">Amount (₹)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>Outward Supplies Turnover ({cmp08.from_date} to {cmp08.to_date})</td>
+                    <td data-numeric="true">{cmp08.outward_turnover}</td>
+                  </tr>
+                  <tr>
+                    <td>Composition Tax Payable (@ {cmp08.composition_rate}%)</td>
+                    <td data-numeric="true">{cmp08.composition_tax_payable}</td>
+                  </tr>
+                  <tr>
+                    <td>Inward Supplies Liable to Reverse Charge (Taxable Value)</td>
+                    <td data-numeric="true">{cmp08.rcm_taxable_value}</td>
+                  </tr>
+                  <tr>
+                    <td>RCM Tax Payable</td>
+                    <td data-numeric="true">{cmp08.rcm_tax_payable}</td>
+                  </tr>
+                  <tr className="ot-grand-total-row">
+                    <td>Total CMP-08 Quarterly Liability</td>
+                    <td data-numeric="true">{cmp08.total_cmp08_liability}</td>
+                  </tr>
+                </tbody>
+              </table>
             )}
           </div>
         )}

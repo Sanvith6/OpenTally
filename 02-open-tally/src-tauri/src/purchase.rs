@@ -391,6 +391,8 @@ impl PurchaseDocumentService {
                     batch_number: None,
                     mfg_date: None,
                     expiry_date: None,
+                    billed_quantity: None,
+                    entered_unit_id: None,
                 })
             })
             .collect::<Result<Vec<_>, OpenTallyError>>()?;
@@ -422,6 +424,12 @@ impl PurchaseDocumentService {
             original_voucher_id: None,
             return_reason: None,
             tds_section_code,
+            supply_category: None,
+            itc_eligibility: None,
+            port_code: None,
+            shipping_bill_no: None,
+            shipping_bill_date: None,
+            allow_post_cutoff_note: None,
         };
 
         CommercialPostingService::post_commercial_voucher(pool, company_id, input).await

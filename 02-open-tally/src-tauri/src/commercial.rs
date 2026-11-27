@@ -69,6 +69,10 @@ pub struct CommercialLinePosting {
     pub mfg_date: Option<String>,
     #[serde(default)]
     pub expiry_date: Option<String>,
+    #[serde(default)]
+    pub billed_quantity: Option<Decimal>,
+    #[serde(default)]
+    pub entered_unit_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -101,6 +105,18 @@ pub struct CommercialPostingInput {
     pub return_reason: Option<String>,
     #[serde(default)]
     pub tds_section_code: Option<String>,
+    #[serde(default)]
+    pub supply_category: Option<String>,
+    #[serde(default)]
+    pub itc_eligibility: Option<String>,
+    #[serde(default)]
+    pub port_code: Option<String>,
+    #[serde(default)]
+    pub shipping_bill_no: Option<String>,
+    #[serde(default)]
+    pub shipping_bill_date: Option<String>,
+    #[serde(default)]
+    pub allow_post_cutoff_note: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -318,6 +334,42 @@ impl CommercialPostingService {
                         "Debit Note can only be linked to a Purchase bill ('vt_pur'), found '{}'",
                         orig_vt
                     )));
+                }
+
+                // Sec 34(2) Cross-FY Credit Note Cutoff Guard (Nov 30 following FY)
+                if input.document_type == CommercialDocumentType::CreditNote
+                    && orig_date.len() >= 10
+                    && input.date.len() >= 10
+                {
+                    if let (Ok(orig_y), Ok(orig_m)) = (
+                        orig_date[0..4].parse::<i32>(),
+                        orig_date[5..7].parse::<u32>(),
+                    ) {
+                        let fy_end_year = if orig_m >= 4 { orig_y + 1 } else { orig_y };
+                        let cutoff_date = format!("{}-11-30", fy_end_year);
+                        if input.date.as_str() > cutoff_date.as_str() {
+                            if !input.allow_post_cutoff_note.unwrap_or(false) {
+                                return Err(OpenTallyError::Validation(format!(
+                                    "Sec 34(2) Credit Note cutoff exceeded: original invoice '{}' ({}) belongs to FY ending {}-03-31 (statutory cutoff {}). Pass allow_post_cutoff_note=true to override.",
+                                    orig_number, orig_date, fy_end_year, cutoff_date
+                                )));
+                            }
+                            sqlx::query(
+                                "INSERT INTO audit_log (id, company_id, entity_type, entity_id, action, new_values, performed_by)
+                                 VALUES (?, ?, 'gst_sec34_cutoff_override', ?, 'UPDATE', ?, 'system')",
+                            )
+                            .bind(Uuid::new_v4().to_string())
+                            .bind(company_id)
+                            .bind(&orig_id)
+                            .bind(format!(
+                                "{{\"original_date\":\"{}\",\"credit_note_date\":\"{}\",\"cutoff\":\"{}\"}}",
+                                orig_date, input.date, cutoff_date
+                            ))
+                            .execute(&mut *conn)
+                            .await
+                            .map_err(OpenTallyError::Database)?;
+                        }
+                    }
                 }
 
                 // Over-return validation:
@@ -886,15 +938,64 @@ impl CommercialPostingService {
                                 }
                             }
 
-                            if available_qty < line.quantity {
+                            let val_method: String = sqlx::query_scalar::<_, String>(
+                                "SELECT COALESCE(valuation_method, 'FIFO') FROM stock_items WHERE company_id = ? AND id = ?",
+                            )
+                            .bind(company_id)
+                            .bind(item_id)
+                            .fetch_optional(&mut *conn)
+                            .await
+                            .ok()
+                            .flatten()
+                            .unwrap_or_else(|| "FIFO".to_string());
+
+                            if val_method == "LIFO" {
+                                parsed_layers.reverse();
+                            }
+
+                            let weighted_avg_cost_opt: Option<Decimal> =
+                                if val_method == "WeightedAverage" && available_qty > Decimal::ZERO
+                                {
+                                    let total_pool_val: Decimal = parsed_layers
+                                        .iter()
+                                        .map(|(_, rem, cost)| *rem * *cost)
+                                        .sum();
+                                    Some((total_pool_val / available_qty).round_dp(4))
+                                } else {
+                                    None
+                                };
+
+                            let billed_qty = line.billed_quantity.unwrap_or(line.quantity);
+                            if line.quantity <= Decimal::ZERO
+                                || billed_qty < Decimal::ZERO
+                                || billed_qty > line.quantity
+                            {
                                 return Err(OpenTallyError::Validation(format!(
-                                    "Insufficient stock for item '{}' in godown '{}'. Needed: {}, available in cost layers: {}",
-                                    item_id, godown_id, line.quantity, available_qty
+                                    "Invalid Actual/Billed qty on line {}: actual={}, billed={}",
+                                    line.line_number, line.quantity, billed_qty
                                 )));
                             }
 
-                            let mut need_qty = line.quantity;
+                            let base_actual_qty =
+                                crate::inventory::units::convert_to_base_quantity_tx(
+                                    conn,
+                                    company_id,
+                                    item_id,
+                                    line.quantity,
+                                    line.entered_unit_id.as_deref(),
+                                )
+                                .await?;
+
+                            if available_qty < base_actual_qty {
+                                return Err(OpenTallyError::Validation(format!(
+                                    "Insufficient stock for item '{}' in godown '{}'. Needed: {}, available in cost layers: {}",
+                                    item_id, godown_id, base_actual_qty, available_qty
+                                )));
+                            }
+
+                            let mut need_qty = base_actual_qty;
                             for (l_id, mut rem_qty, layer_cost) in parsed_layers {
+                                let effective_cost = weighted_avg_cost_opt.unwrap_or(layer_cost);
                                 if need_qty <= Decimal::ZERO {
                                     break;
                                 }
@@ -915,7 +1016,7 @@ impl CommercialPostingService {
                                 .map_err(OpenTallyError::Database)?;
 
                                 let consumption_id = Uuid::new_v4().to_string();
-                                let consumed_val = (take * layer_cost).round_dp(4);
+                                let consumed_val = (take * effective_cost).round_dp(4);
                                 if input.document_type == CommercialDocumentType::Sales {
                                     total_cogs += consumed_val;
                                 }
@@ -999,6 +1100,55 @@ impl CommercialPostingService {
             let ledger_mapping =
                 crate::gst::GstService::get_gst_ledger_mapping_tx(conn, company_id).await?;
             let is_reverse_charge = input.is_reverse_charge.unwrap_or(false);
+            let company_profile =
+                crate::gst::GstService::get_company_gst_profile_tx(conn, company_id).await?;
+            let is_composition = company_profile
+                .as_ref()
+                .map(|p| p.registration_type == "Composition")
+                .unwrap_or(false);
+
+            let supply_category =
+                if is_composition && input.document_type == CommercialDocumentType::Sales {
+                    "Composition".to_string()
+                } else {
+                    input
+                        .supply_category
+                        .clone()
+                        .unwrap_or_else(|| "Regular".to_string())
+                };
+            let is_lut_zero_rated =
+                supply_category == "ExportWithLUT" || supply_category == "SEZWithLUT";
+
+            if is_composition
+                && input.document_type == CommercialDocumentType::Sales
+                && input.tax_lines.iter().any(|t| t.amount > Decimal::ZERO)
+            {
+                return Err(OpenTallyError::Validation(
+                    "Composition dealer cannot charge GST on Sales invoices".to_string(),
+                ));
+            }
+            if is_lut_zero_rated && input.tax_lines.iter().any(|t| t.amount > Decimal::ZERO) {
+                return Err(OpenTallyError::Validation(
+                    "Export/SEZ with LUT cannot charge output GST".to_string(),
+                ));
+            }
+            if let Some(ref pc) = input.port_code {
+                let p = pc.trim();
+                if !p.is_empty() && (p.len() != 6 || !p.chars().all(|c| c.is_ascii_alphanumeric()))
+                {
+                    return Err(OpenTallyError::Validation(format!(
+                        "Invalid Indian customs port code '{}': must be 6 alphanumeric characters",
+                        p
+                    )));
+                }
+            }
+
+            let effective_pos =
+                if supply_category.starts_with("Export") || supply_category.starts_with("SEZ") {
+                    "96" // Other Country / Export / SEZ interstate
+                } else {
+                    pos_state
+                };
 
             let mut total_cgst = Decimal::ZERO;
             let mut total_sgst = Decimal::ZERO;
@@ -1046,11 +1196,25 @@ impl CommercialPostingService {
 
                 let calc_res = crate::gst::calculate_gst(&crate::gst::GstCalculationInput {
                     company_state_code: comp_state.to_string(),
-                    place_of_supply_state_code: pos_state.to_string(),
+                    place_of_supply_state_code: effective_pos.to_string(),
                     taxability,
                     taxable_value: line.line_amount,
-                    gst_rate,
-                    cess_rate,
+                    gst_rate: if (is_composition
+                        && input.document_type == CommercialDocumentType::Sales)
+                        || is_lut_zero_rated
+                    {
+                        Decimal::ZERO
+                    } else {
+                        gst_rate
+                    },
+                    cess_rate: if (is_composition
+                        && input.document_type == CommercialDocumentType::Sales)
+                        || is_lut_zero_rated
+                    {
+                        Decimal::ZERO
+                    } else {
+                        cess_rate
+                    },
                     is_reverse_charge,
                 });
 
@@ -1233,6 +1397,25 @@ impl CommercialPostingService {
             }
         } else if !input.tax_lines.is_empty() {
             computed_tax_lines = input.tax_lines.clone();
+        }
+
+        // Composition Purchase: disallow claiming Input ITC (tax absorbed, not ITC ledger)
+        let is_comp_dealer = crate::gst::GstService::get_company_gst_profile_tx(conn, company_id)
+            .await?
+            .map(|p| p.registration_type == "Composition")
+            .unwrap_or(false);
+        if is_comp_dealer && input.document_type == CommercialDocumentType::Purchase {
+            computed_tax_lines.clear();
+        }
+
+        // Reverse Charge (RCM) Purchase: supplier is credited ONLY taxable value;
+        // self-assessed RCM tax is posted as balanced Dr Input RCM ITC / Cr Output RCM Liability.
+        let mut rcm_self_assessed_tax = Decimal::ZERO;
+        if input.document_type == CommercialDocumentType::Purchase
+            && input.is_reverse_charge.unwrap_or(false)
+        {
+            rcm_self_assessed_tax = computed_tax_lines.iter().map(|t| t.amount).sum();
+            computed_tax_lines.clear();
         }
 
         let total_tax_amt: Decimal = computed_tax_lines.iter().map(|t| t.amount).sum();
@@ -1576,6 +1759,44 @@ impl CommercialPostingService {
             .map_err(OpenTallyError::Database)?;
         }
 
+        // Post balanced self-assessed RCM GL lines while voucher is still draft
+        if rcm_self_assessed_tax > Decimal::ZERO {
+            let rcm_itc_id =
+                Self::get_or_create_duties_ledger_tx(conn, company_id, "Input RCM ITC").await?;
+            let rcm_liab_id =
+                Self::get_or_create_duties_ledger_tx(conn, company_id, "Output RCM Liability")
+                    .await?;
+            let max_ln: i64 = sqlx::query_scalar(
+                "SELECT COALESCE(MAX(line_number), 0) FROM voucher_lines WHERE company_id = ? AND voucher_id = ?",
+            )
+            .bind(company_id)
+            .bind(&voucher_id)
+            .fetch_one(&mut *conn)
+            .await
+            .map_err(OpenTallyError::Database)?;
+
+            let rcm_amt_str = format!("{:.2}", rcm_self_assessed_tax.round_dp(2));
+            for (offset, (led_id, dr_cr)) in [(rcm_itc_id, "Dr"), (rcm_liab_id, "Cr")]
+                .into_iter()
+                .enumerate()
+            {
+                sqlx::query(
+                    "INSERT INTO voucher_lines (id, company_id, voucher_id, line_number, ledger_id, entry_type, amount, narration)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, 'Self-assessed RCM GST')",
+                )
+                .bind(Uuid::new_v4().to_string())
+                .bind(company_id)
+                .bind(&voucher_id)
+                .bind(max_ln + 1 + offset as i64)
+                .bind(led_id)
+                .bind(dr_cr)
+                .bind(&rcm_amt_str)
+                .execute(&mut *conn)
+                .await
+                .map_err(OpenTallyError::Database)?;
+            }
+        }
+
         // Now transition voucher to 'posted'
         sqlx::query(
             "UPDATE vouchers
@@ -1720,14 +1941,51 @@ impl CommercialPostingService {
             s
         };
 
+        let eff_supply_category =
+            if is_comp_dealer && input.document_type == CommercialDocumentType::Sales {
+                "Composition".to_string()
+            } else {
+                input
+                    .supply_category
+                    .clone()
+                    .unwrap_or_else(|| "Regular".to_string())
+            };
+        let eff_itc_eligibility =
+            if is_comp_dealer && input.document_type == CommercialDocumentType::Purchase {
+                "IneligibleSec17_5".to_string()
+            } else {
+                input
+                    .itc_eligibility
+                    .clone()
+                    .unwrap_or_else(|| "Eligible".to_string())
+            };
+        let eff_port_code = input
+            .port_code
+            .as_deref()
+            .map(|s| s.trim().to_uppercase())
+            .filter(|s| !s.is_empty());
+        let eff_sb_no = input
+            .shipping_bill_no
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let eff_sb_date = input
+            .shipping_bill_date
+            .as_deref()
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
         for rec in gst_detail_records {
             let detail_id = Uuid::new_v4().to_string();
             sqlx::query(
                 "INSERT INTO voucher_gst_details (
                     id, company_id, voucher_id, party_ledger_id, party_gstin, hsn_sac_code,
                     place_of_supply_state_code, supply_type, taxability, taxable_value, gst_rate,
-                    cgst_amount, sgst_amount, igst_amount, cess_amount, is_reverse_charge, is_cancelled
-                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+                    cgst_amount, sgst_amount, igst_amount, cess_amount, is_reverse_charge, is_cancelled,
+                    supply_category, itc_eligibility, port_code, shipping_bill_no, shipping_bill_date
+                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)",
             )
             .bind(&detail_id)
             .bind(company_id)
@@ -1745,6 +2003,11 @@ impl CommercialPostingService {
             .bind(to_canonical_gst(rec.10))
             .bind(to_canonical_gst(rec.11))
             .bind(rec.12)
+            .bind(&eff_supply_category)
+            .bind(&eff_itc_eligibility)
+            .bind(&eff_port_code)
+            .bind(&eff_sb_no)
+            .bind(&eff_sb_date)
             .execute(&mut *conn)
             .await
             .map_err(OpenTallyError::Database)?;
@@ -2178,6 +2441,48 @@ impl CommercialPostingService {
         }
 
         Ok(())
+    }
+
+    async fn get_or_create_duties_ledger_tx(
+        conn: &mut sqlx::SqliteConnection,
+        company_id: &str,
+        ledger_name: &str,
+    ) -> Result<String, OpenTallyError> {
+        let existing: Option<String> = sqlx::query_scalar(
+            "SELECT id FROM ledgers WHERE company_id = ? AND name = ? COLLATE NOCASE LIMIT 1",
+        )
+        .bind(company_id)
+        .bind(ledger_name)
+        .fetch_optional(&mut *conn)
+        .await
+        .map_err(OpenTallyError::Database)?;
+
+        if let Some(id) = existing {
+            return Ok(id);
+        }
+
+        let group_id: String = sqlx::query_scalar(
+        "SELECT id FROM account_groups WHERE company_id = ? AND name = 'Duties & Taxes' COLLATE NOCASE LIMIT 1",
+    )
+    .bind(company_id)
+    .fetch_one(&mut *conn)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+        let new_id = Uuid::new_v4().to_string();
+        sqlx::query(
+        "INSERT INTO ledgers (id, company_id, group_id, name, is_reserved, ledger_classification)
+         VALUES (?, ?, ?, ?, 0, 'standard')",
+    )
+    .bind(&new_id)
+    .bind(company_id)
+    .bind(&group_id)
+    .bind(ledger_name)
+    .execute(&mut *conn)
+    .await
+    .map_err(OpenTallyError::Database)?;
+
+        Ok(new_id)
     }
 
     async fn resolve_default_commercial_ledger(

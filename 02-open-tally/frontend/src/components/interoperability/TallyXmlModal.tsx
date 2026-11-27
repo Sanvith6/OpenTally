@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Company, TallyXmlImportPreview } from '../../types';
+import {
+  Company,
+  TallyXmlImportPreview,
+  XmlMigrationReconciliationReport,
+} from '../../types';
 import {
   exportCompanyTallyXml,
   previewTallyXmlImport,
@@ -30,6 +34,8 @@ export const TallyXmlModal: React.FC<Props> = ({
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null);
+  const [reconciliation, setReconciliation] =
+    useState<XmlMigrationReconciliationReport | null>(null);
 
   // Export states
   const [fromDate, setFromDate] = useState('2026-04-01');
@@ -90,11 +96,13 @@ export const TallyXmlModal: React.FC<Props> = ({
     setImporting(true);
     setImportError(null);
     setImportSuccessMsg(null);
+    setReconciliation(null);
 
     try {
       const result = await executeTallyXmlImport(xmlContent);
       if (result.success) {
         setImportSuccessMsg(result.message);
+        setReconciliation(result.reconciliation ?? null);
         if (onImportSuccess) {
           onImportSuccess();
         }
@@ -273,6 +281,45 @@ export const TallyXmlModal: React.FC<Props> = ({
             {importSuccessMsg && (
               <div className="ot-report-success" style={{ marginTop: '14px' }}>
                 {importSuccessMsg}
+              </div>
+            )}
+
+            {reconciliation && (
+              <div className="ot-xml-preview-card" style={{ marginTop: '12px' }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: '13px', color: '#f8fafc' }}>
+                  Migration Reconciliation Report
+                </h4>
+                <div className="ot-xml-stat-grid">
+                  <div className="ot-xml-stat-box">
+                    <div className="ot-xml-stat-title">Vouchers (Src / Imp)</div>
+                    <div className="ot-xml-stat-num">
+                      {reconciliation.source_voucher_count} / {reconciliation.imported_voucher_count}
+                    </div>
+                  </div>
+                  <div className="ot-xml-stat-box">
+                    <div className="ot-xml-stat-title">Total Debit</div>
+                    <div className="ot-xml-stat-num">{reconciliation.imported_total_debit}</div>
+                    <div className="ot-xml-stat-sub">Src: {reconciliation.source_total_debit}</div>
+                  </div>
+                  <div className="ot-xml-stat-box">
+                    <div className="ot-xml-stat-title">Total Credit</div>
+                    <div className="ot-xml-stat-num">{reconciliation.imported_total_credit}</div>
+                    <div className="ot-xml-stat-sub">
+                      Diff: {reconciliation.imported_trial_balance_difference}
+                    </div>
+                  </div>
+                  <div className="ot-xml-stat-box">
+                    <div className="ot-xml-stat-title">Nested Allocations</div>
+                    <div className="ot-xml-stat-sub">
+                      Bills: {reconciliation.bill_allocations_imported} · Inv:{' '}
+                      {reconciliation.inventory_lines_imported}
+                    </div>
+                    <div className="ot-xml-stat-sub">
+                      Bank: {reconciliation.bank_allocations_imported} · CC:{' '}
+                      {reconciliation.cost_centre_allocations_imported}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

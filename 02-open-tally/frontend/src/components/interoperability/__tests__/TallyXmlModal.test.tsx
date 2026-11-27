@@ -137,6 +137,19 @@ describe('TallyXmlModal', () => {
       stock_items_created: 0,
       vouchers_created: 1,
       message: 'Successfully imported 2 masters and 1 vouchers.',
+      reconciliation: {
+        source_voucher_count: 1,
+        imported_voucher_count: 1,
+        source_total_debit: '1000.00',
+        imported_total_debit: '1000.00',
+        source_total_credit: '1000.00',
+        imported_total_credit: '1000.00',
+        imported_trial_balance_difference: '0.00',
+        bill_allocations_imported: 2,
+        inventory_lines_imported: 1,
+        bank_allocations_imported: 1,
+        cost_centre_allocations_imported: 1,
+      },
     };
 
     vi.spyOn(api, 'previewTallyXmlImport').mockResolvedValue(mockPreview);
@@ -167,6 +180,8 @@ describe('TallyXmlModal', () => {
     });
 
     expect(screen.getByText('Successfully imported 2 masters and 1 vouchers.')).toBeTruthy();
+    expect(screen.getByText('Migration Reconciliation Report')).toBeTruthy();
+    expect(screen.getByText(/Bills: 2/)).toBeTruthy();
   });
 
   it('triggers onClose when Close button or Esc key is pressed', () => {

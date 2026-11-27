@@ -11,12 +11,14 @@ pub mod accounting;
 pub mod attribution;
 pub mod batches;
 pub mod bom;
+pub mod pricing;
 pub mod reports;
 #[cfg(test)]
 mod stage15_tests;
 pub mod stock_balance;
 pub mod stock_journal;
 pub mod stock_vouchers;
+pub mod units;
 pub mod valuation;
 pub use accounting::*;
 pub use attribution::*;
