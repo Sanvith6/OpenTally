@@ -40,6 +40,8 @@ mod closing_budgets_audit_tests;
 #[cfg(test)]
 mod commercial_tests;
 #[cfg(test)]
+mod factory_extensibility_tests;
+#[cfg(test)]
 mod godown_batch_costing_tests;
 #[cfg(test)]
 mod gsp_extensions_tests;
@@ -325,6 +327,12 @@ pub fn run() {
             commands::export_balance_sheet_pdf,
             commands::export_ledger_statement_pdf,
             commands::export_outstanding_aging_pdf,
+            commands::dispatch_job_work_material_out,
+            commands::receive_job_work_material_in,
+            commands::get_itc04_report,
+            commands::export_itc04_json,
+            commands::parse_weighbridge_reading,
+            commands::lookup_stock_item_by_barcode,
             commands::import_and_reconcile_gstr2b,
             commands::get_gstr2b_reconciliation_report,
             commands::export_gstr2b_reconciliation_csv,

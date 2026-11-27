@@ -5,6 +5,28 @@ OpenTally follows [Semantic Versioning](https://semver.org/) and strict clean-ro
 
 ---
 
+## [4.0.0] — 2026-11-27
+
+OpenTally v4.0.0 Production Hardening Release delivering GSTN portal strictness, distributor inventory depth, deep nested Tally XML fidelity, pan-India payroll/TDS, 100k-voucher SQLite scale hardening, CA A4 Financial Statement PDF pack, and Factory Job-Work / Clean-Room TDL extensibility.
+
+### Added (Milestones 19–25)
+- **Milestone 19 — Official GSTN Portal Schema Strictness (`v3.1.0-gstn-strict`):**
+  - RCM, SEZ/LUT Zero-Rated Exports, Composition Scheme (`CMP-08`), Ineligible/Reversed ITC (Sec 17(5) & Rule 42/43), and Sec 34(2) Cross-FY Credit Note cutoff guardrails.
+- **Milestone 20 — Distributor Inventory & Billing Depth (`v3.2.0-inventory-depth`):**
+  - Compound & Alternate UoMs, Actual vs. Billed Quantity (Free Goods), Tiered Price Levels with quantity slabs, and Weighted Average & LIFO inventory valuation.
+- **Milestone 21 — Deep Nested Tally XML Fidelity:**
+  - Streaming `quick-xml` parser/exporter for `<BILLALLOCATIONS.LIST>`, `<ALLINVENTORYENTRIES.LIST>` + `<BATCHALLOCATIONS.LIST>`, `<BANKALLOCATIONS.LIST>`, `<CATEGORYALLOCATIONS.LIST>` / `<COSTCENTREALLOCATIONS.LIST>`, and post-import `XmlMigrationReconciliationReport`.
+- **Milestone 22 — Pan-India Statutory Payroll & TDS (`v3.4.0-pan-india-statutory`):**
+  - Data-driven state-wise PT slabs (`KA`, `MH` w/ Feb ₹300, `GJ`, `WB`, `AP`, `TS`, `TN`, `KL`), Salary TDS Sec 192 (New vs. Old Regime), EPFO ECR `#~#` export, and Form 27Q (NRI) / Form 27EQ (TCS).
+- **Milestone 23 — High-Volume SQLite Scale Hardening & Invariant Fuzzing (`v3.5.0-scale-indexes`):**
+  - Covering/composite scale indexes + `ANALYZE;`, 260-op deterministic invariant fuzz harness, 10k CI scale gate, and 100k-voucher WAL benchmark.
+- **Milestone 24 — Trial Balance O(L+M) Optimization & CA A4 PDF Print Pack:**
+  - Eliminated Trial Balance N+1 bottleneck (11,269 ms → 1,236 ms on 100k vouchers) and added pure-Rust `%PDF-1.4` exports for Trial Balance, P&L, Balance Sheet, Ledger Statement, and Outstanding Aging.
+- **Milestone 25 — Factory Job-Work (GST ITC-04), Multi-Level BOM + Scrap & Clean-Room TDL Replacement (`v4.1.0-factory-extensibility`):**
+  - Job-Work Material Out/In challans with CGST Sec 143 aging (+365d/+1095d) & Form GST ITC-04 Table 4/5A JSON export, recursive multi-level BOM explosion with cycle detection & scrap/by-product cost recovery, Custom Fields, HMAC-SHA256 signed Webhooks, and Weighbridge/Barcode bridge.
+
+---
+
 ## [3.0.0] — 2026-11-26
 
 OpenTally v3.0.0 Enterprise Release adding Multi-Currency & Forex accounting, CTS-2010 Bank Cheque PDF printing, Multi-User LAN Host/Client Mode (`TallyPrime Gold`), BYO-GSP e-Invoice/e-Way Bill connector, and Declarative Custom Report Extensions.

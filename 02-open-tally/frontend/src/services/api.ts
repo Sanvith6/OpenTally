@@ -2543,6 +2543,44 @@ export async function exportOutstandingAgingPdf(
   });
 }
 
+export async function getItc04Report(
+  fromDate: string,
+  toDate: string,
+  companyId?: string
+): Promise<any> {
+  if (!isTauriEnv()) {
+    return { company_id: companyId || '', from_date: fromDate, to_date: toDate, table_4: [], table_5a: [] };
+  }
+  return await invoke('get_itc04_report', {
+    fromDate,
+    toDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function exportItc04Json(
+  fromDate: string,
+  toDate: string,
+  companyId?: string
+): Promise<string> {
+  if (!isTauriEnv()) return '{}';
+  return await invoke<string>('export_itc04_json', {
+    fromDate,
+    toDate,
+    companyId: companyId || null,
+  });
+}
+
+export async function parseWeighbridgeReading(
+  rawFrame: string,
+  tareWeight: string
+): Promise<{ gross_weight: string; tare_weight: string; net_weight: string; unit: string }> {
+  if (!isTauriEnv()) {
+    return { gross_weight: '0.00', tare_weight: tareWeight, net_weight: '0.00', unit: 'KG' };
+  }
+  return await invoke('parse_weighbridge_reading', { rawFrame, tareWeight });
+}
+
 export async function exportForm26qCsv(
   financialYear: string,
   quarter: string,

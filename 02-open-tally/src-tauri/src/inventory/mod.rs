@@ -11,6 +11,7 @@ pub mod accounting;
 pub mod attribution;
 pub mod batches;
 pub mod bom;
+pub mod job_work;
 pub mod pricing;
 pub mod reports;
 #[cfg(test)]

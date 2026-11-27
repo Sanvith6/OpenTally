@@ -5189,6 +5189,7 @@ fn schema_version_rank(ver: &str) -> usize {
         "3.2.0-inventory-depth" => 27,
         "3.4.0-pan-india-statutory" => 28,
         "3.5.0-scale-indexes" => 29,
+        "4.1.0-factory-extensibility" => 30,
         _ => 0,
     }
 }
@@ -5287,6 +5288,9 @@ pub async fn run_all_migrations(pool: &Pool<Sqlite>) -> Result<(), OpenTallyErro
     }
     if rank < 29 {
         run_milestone23_scale_indexes_migration(pool).await?;
+    }
+    if rank < 30 {
+        run_milestone25_factory_extensibility_migration(pool).await?;
     }
     Ok(())
 }
@@ -5614,6 +5618,189 @@ pub async fn run_milestone20_inventory_billing_depth_migration(
 /// Milestone 23: High-Volume SQLite Scale Hardening (100k Vouchers).
 /// Adds covering/composite indexes for hot report paths and runs `ANALYZE;`.
 /// Stamps schema version `v3.5.0-scale-indexes` in `_opentally_metadata`.
+/// Milestone 25: Factory Job-Work (GST ITC-04), Multi-Level BOM + Scrap Costing & Clean-Room TDL Replacement.
+/// Stamps schema version `v4.1.0-factory-extensibility` in `_opentally_metadata`.
+pub async fn run_milestone25_factory_extensibility_migration(
+    pool: &Pool<Sqlite>,
+) -> Result<(), OpenTallyError> {
+    let current_version: String =
+        sqlx::query_scalar("SELECT schema_version FROM _opentally_metadata WHERE id = 1")
+            .fetch_one(pool)
+            .await?;
+
+    if current_version == "v4.1.0-factory-extensibility" {
+        return Ok(());
+    }
+
+    let mut tx = pool.begin().await?;
+
+    sqlx::query(
+        r#"
+        CREATE TABLE IF NOT EXISTS job_work_challans (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            challan_number TEXT NOT NULL,
+            challan_type TEXT NOT NULL CHECK (challan_type IN ('MaterialOut', 'MaterialIn')),
+            challan_date TEXT NOT NULL,
+            job_worker_ledger_id TEXT NOT NULL,
+            external_godown_id TEXT NOT NULL,
+            linked_out_challan_id TEXT,
+            goods_category TEXT NOT NULL CHECK (goods_category IN ('Input', 'CapitalGood')),
+            statutory_due_date TEXT NOT NULL,
+            stock_voucher_id TEXT,
+            status TEXT NOT NULL DEFAULT 'Open' CHECK (status IN ('Open', 'PartiallyReturned', 'Closed', 'Cancelled')),
+            narration TEXT,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (company_id, challan_number),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_jw_challans_company_type
+            ON job_work_challans(company_id, challan_type, challan_date);
+
+        CREATE TABLE IF NOT EXISTS job_work_challan_lines (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            challan_id TEXT NOT NULL,
+            stock_item_id TEXT NOT NULL,
+            dispatched_qty TEXT NOT NULL DEFAULT '0' CHECK (
+                dispatched_qty NOT GLOB '*[^0-9.]*'
+                AND dispatched_qty NOT LIKE '%.%.%'
+                AND dispatched_qty != ''
+                AND dispatched_qty != '.'
+            ),
+            returned_qty TEXT NOT NULL DEFAULT '0' CHECK (
+                returned_qty NOT GLOB '*[^0-9.]*'
+                AND returned_qty NOT LIKE '%.%.%'
+                AND returned_qty != ''
+                AND returned_qty != '.'
+            ),
+            scrap_qty TEXT NOT NULL DEFAULT '0' CHECK (
+                scrap_qty NOT GLOB '*[^0-9.]*'
+                AND scrap_qty NOT LIKE '%.%.%'
+                AND scrap_qty != ''
+                AND scrap_qty != '.'
+            ),
+            unit_cost TEXT NOT NULL DEFAULT '0.00' CHECK (
+                unit_cost NOT GLOB '*[^0-9.]*'
+                AND unit_cost NOT LIKE '%.%.%'
+                AND unit_cost != ''
+                AND unit_cost != '.'
+            ),
+            line_value TEXT NOT NULL DEFAULT '0.00' CHECK (
+                line_value NOT GLOB '*[^0-9.]*'
+                AND line_value NOT LIKE '%.%.%'
+                AND line_value != ''
+                AND line_value != '.'
+            ),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (challan_id) REFERENCES job_work_challans(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS bom_byproducts (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            bom_id TEXT NOT NULL,
+            byproduct_stock_item_id TEXT NOT NULL,
+            expected_qty TEXT NOT NULL CHECK (
+                expected_qty NOT GLOB '*[^0-9.]*'
+                AND expected_qty NOT LIKE '%.%.%'
+                AND expected_qty != ''
+                AND expected_qty != '.'
+            ),
+            recovery_rate TEXT NOT NULL CHECK (
+                recovery_rate NOT GLOB '*[^0-9.]*'
+                AND recovery_rate NOT LIKE '%.%.%'
+                AND recovery_rate != ''
+                AND recovery_rate != '.'
+            ),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS custom_field_definitions (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            entity_scope TEXT NOT NULL CHECK (entity_scope IN ('Voucher', 'Ledger', 'StockItem')),
+            field_key TEXT NOT NULL,
+            label TEXT NOT NULL,
+            field_type TEXT NOT NULL CHECK (field_type IN ('Text', 'Decimal', 'Date', 'Boolean')),
+            is_required INTEGER NOT NULL DEFAULT 0 CHECK (is_required IN (0, 1)),
+            show_on_pdf INTEGER NOT NULL DEFAULT 0 CHECK (show_on_pdf IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (company_id, entity_scope, field_key),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS custom_field_values (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            definition_id TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            value_text TEXT NOT NULL,
+            UNIQUE (company_id, definition_id, entity_id),
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (definition_id) REFERENCES custom_field_definitions(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS webhook_subscriptions (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            name TEXT NOT NULL,
+            event_type TEXT NOT NULL CHECK (event_type IN (
+                'voucher.posted', 'voucher.cancelled', 'stock.moved',
+                'jobwork.dispatched', 'jobwork.received'
+            )),
+            target_url TEXT NOT NULL,
+            hmac_secret_ref TEXT NOT NULL,
+            is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS webhook_delivery_logs (
+            id TEXT PRIMARY KEY NOT NULL,
+            company_id TEXT NOT NULL,
+            subscription_id TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            payload_json TEXT NOT NULL,
+            signature_header TEXT NOT NULL,
+            status TEXT NOT NULL CHECK (status IN ('Pending', 'Delivered', 'Failed')),
+            http_status INTEGER,
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE CASCADE,
+            FOREIGN KEY (subscription_id) REFERENCES webhook_subscriptions(id) ON DELETE CASCADE
+        );
+        "#,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    let has_barcode: i64 = sqlx::query_scalar(
+        "SELECT COUNT(*) FROM pragma_table_info('stock_items') WHERE name = 'barcode'",
+    )
+    .fetch_one(&mut *tx)
+    .await?;
+    if has_barcode == 0 {
+        sqlx::query("ALTER TABLE stock_items ADD COLUMN barcode TEXT")
+            .execute(&mut *tx)
+            .await?;
+    }
+    sqlx::query(
+        "CREATE INDEX IF NOT EXISTS idx_stock_items_barcode ON stock_items(company_id, barcode)",
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    sqlx::query(
+        "UPDATE _opentally_metadata SET schema_version = 'v4.1.0-factory-extensibility', app_version = ? WHERE id = 1",
+    )
+    .bind(env!("CARGO_PKG_VERSION"))
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
 pub async fn run_milestone23_scale_indexes_migration(
     pool: &Pool<Sqlite>,
 ) -> Result<(), OpenTallyError> {

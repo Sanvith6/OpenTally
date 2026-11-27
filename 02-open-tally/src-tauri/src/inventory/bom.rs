@@ -812,80 +812,13 @@ impl BomService {
         .await
         .map_err(OpenTallyError::Database)?;
 
-        // Resolve or create batch if batch_number is supplied
-        let batch_id = if let Some(ref b_num) = input.batch_number {
-            let b_num = b_num.trim();
-            if !b_num.is_empty() {
-                if let Some(ref mfg) = input.mfg_date {
-                    chrono::NaiveDate::from_str(mfg).map_err(|_| {
-                        OpenTallyError::Validation(format!(
-                            "Invalid mfg_date format '{}', expected YYYY-MM-DD",
-                            mfg
-                        ))
-                    })?;
-                }
-                if let Some(ref exp) = input.expiry_date {
-                    chrono::NaiveDate::from_str(exp).map_err(|_| {
-                        OpenTallyError::Validation(format!(
-                            "Invalid expiry_date format '{}', expected YYYY-MM-DD",
-                            exp
-                        ))
-                    })?;
-                }
-                if let (Some(ref mfg), Some(ref exp)) = (&input.mfg_date, &input.expiry_date) {
-                    if mfg > exp {
-                        return Err(OpenTallyError::Validation(
-                            "Manufacturing date cannot be after expiry date".to_string(),
-                        ));
-                    }
-                }
-
-                let existing_batch_id: Option<String> = sqlx::query_scalar(
-                    "SELECT id FROM stock_item_batches WHERE company_id = ? AND stock_item_id = ? AND batch_number = ? COLLATE NOCASE",
-                )
-                .bind(&input.company_id)
-                .bind(&bom.finished_stock_item_id)
-                .bind(b_num)
-                .fetch_optional(&mut *tx)
-                .await
-                .map_err(OpenTallyError::Database)?;
-
-                let b_id = match existing_batch_id {
-                    Some(bid) => bid,
-                    None => {
-                        let bid = Uuid::new_v4().to_string();
-                        sqlx::query(
-                            "INSERT INTO stock_item_batches (
-                                id, company_id, stock_item_id, batch_number, mfg_date, expiry_date, is_active
-                            ) VALUES (?, ?, ?, ?, ?, ?, 1)",
-                        )
-                        .bind(&bid)
-                        .bind(&input.company_id)
-                        .bind(&bom.finished_stock_item_id)
-                        .bind(b_num)
-                        .bind(input.mfg_date.as_deref().or(Some(&input.production_date)))
-                        .bind(input.expiry_date.as_deref())
-                        .execute(&mut *tx)
-                        .await
-                        .map_err(OpenTallyError::Database)?;
-                        bid
-                    }
-                };
-                Some(b_id)
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
         // Insert stock_voucher_line for production
         let prod_line_id = Uuid::new_v4().to_string();
         sqlx::query(
             "INSERT INTO stock_voucher_lines (
                 id, company_id, voucher_id, line_number, stock_item_id, unit_id,
-                destination_godown_id, quantity, description, batch_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOM Finished Goods Production', ?)",
+                destination_godown_id, quantity, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOM Finished Goods Production')",
         )
         .bind(&prod_line_id)
         .bind(&input.company_id)
@@ -895,7 +828,6 @@ impl BomService {
         .bind(&finished_base_unit_id)
         .bind(&input.destination_godown_id)
         .bind(produced_qty.normalize().to_string())
-        .bind(&batch_id)
         .execute(&mut *tx)
         .await
         .map_err(OpenTallyError::Database)?;
@@ -905,8 +837,8 @@ impl BomService {
         sqlx::query(
             "INSERT INTO inventory_cost_layers (
                 id, company_id, stock_item_id, godown_id, source_voucher_id, source_line_id,
-                receipt_date, original_quantity, remaining_quantity, unit_cost, original_value, batch_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                receipt_date, original_quantity, remaining_quantity, unit_cost, original_value
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&fg_layer_id)
         .bind(&input.company_id)
@@ -919,7 +851,6 @@ impl BomService {
         .bind(produced_qty.normalize().to_string())
         .bind(landed_unit_cost.normalize().to_string())
         .bind(total_manufacturing_cost.normalize().to_string())
-        .bind(&batch_id)
         .execute(&mut *tx)
         .await
         .map_err(OpenTallyError::Database)?;
@@ -929,8 +860,8 @@ impl BomService {
         sqlx::query(
             "INSERT INTO stock_movements (
                 id, company_id, stock_item_id, godown_id, voucher_id, voucher_line_id,
-                movement_date, movement_type, signed_quantity, batch_id
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'transfer_in', ?, ?)",
+                movement_date, movement_type, signed_quantity
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'transfer_in', ?)",
         )
         .bind(&fg_mv_id)
         .bind(&input.company_id)
@@ -940,58 +871,17 @@ impl BomService {
         .bind(&prod_line_id)
         .bind(&input.production_date)
         .bind(produced_qty.normalize().to_string())
-        .bind(&batch_id)
         .execute(&mut *tx)
         .await
         .map_err(OpenTallyError::Database)?;
 
         // 5. Post Balanced GL Lines for Overhead Allocation if overheads present
         if total_overhead_cost > Decimal::ZERO {
-            // Check inventory_account_mappings first, fallback to Stock-in-Hand ledger
-            let mapped_asset_ledger: Option<String> = sqlx::query_scalar(
-                "SELECT inventory_asset_ledger_id FROM inventory_account_mappings WHERE company_id = ? AND enabled = 1",
-            )
-            .bind(&input.company_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(OpenTallyError::Database)?;
-
-            let stock_ledger_id = match mapped_asset_ledger {
-                Some(lid) => lid,
-                None => {
-                    let fallback_ledger: Option<String> = sqlx::query_scalar(
-                        "SELECT l.id FROM ledgers l
-                         JOIN account_groups ag ON ag.company_id = l.company_id AND ag.id = l.group_id
-                         WHERE l.company_id = ? AND (ag.name = 'Stock-in-Hand' OR l.name = 'Stock-in-Hand')
-                         LIMIT 1",
-                    )
-                    .bind(&input.company_id)
-                    .fetch_optional(&mut *tx)
-                    .await
-                    .map_err(OpenTallyError::Database)?;
-
-                    match fallback_ledger {
-                        Some(lid) => lid,
-                        None => {
-                            return Err(OpenTallyError::Validation(
-                                "No Inventory Asset / Stock-in-Hand ledger found for overhead capitalization. Please configure inventory account mappings or create a Stock-in-Hand ledger.".into(),
-                            ));
-                        }
-                    }
-                }
-            };
-
-            // Post GL voucher
-            let gl_vch_id = Uuid::new_v4().to_string();
-            let gl_number = format!("GL-MFG-{}", gl_vch_id[..8].to_uppercase());
-
-            // Find Journal voucher type and manual series, creating default series if none exists
-            let j_vch_series: Option<(String, String)> = sqlx::query_as(
-                "SELECT vt.id, vns.id
-                 FROM voucher_types vt
-                 JOIN voucher_number_series vns ON vns.company_id = vt.company_id AND vns.voucher_type_id = vt.id
-                 WHERE vt.company_id = ? AND vt.name = 'Journal' AND vns.numbering_method = 'manual'
-                 ORDER BY vns.id ASC
+            // Find Stock-in-Hand ledger or default inventory ledger
+            let stock_in_hand_ledger: Option<String> = sqlx::query_scalar(
+                "SELECT l.id FROM ledgers l
+                 JOIN account_groups ag ON ag.company_id = l.company_id AND ag.id = l.group_id
+                 WHERE l.company_id = ? AND (ag.name = 'Stock-in-Hand' OR l.name = 'Stock-in-Hand')
                  LIMIT 1",
             )
             .bind(&input.company_id)
@@ -999,122 +889,113 @@ impl BomService {
             .await
             .map_err(OpenTallyError::Database)?;
 
-            let (vt_id, series_id) = match j_vch_series {
-                Some(s) => s,
-                None => {
-                    let vt_id: String = sqlx::query_scalar(
-                        "SELECT id FROM voucher_types WHERE company_id = ? AND name = 'Journal'",
-                    )
-                    .bind(&input.company_id)
-                    .fetch_one(&mut *tx)
-                    .await
-                    .map_err(OpenTallyError::Database)?;
+            if let Some(stock_ledger_id) = stock_in_hand_ledger {
+                // Post GL voucher
+                let gl_vch_id = Uuid::new_v4().to_string();
+                let gl_number = format!("GL-MFG-{}", gl_vch_id[..8].to_uppercase());
 
-                    let sid = format!("vns_mfg_jnl_{}", &Uuid::new_v4().to_string()[..8]);
-                    sqlx::query(
-                        "INSERT INTO voucher_number_series (id, company_id, voucher_type_id, series_name, series_code, numbering_method, restart_period)
-                         VALUES (?, ?, ?, 'Manufacturing Journal', 'MFG', 'manual', 'never')",
-                    )
-                    .bind(&sid)
-                    .bind(&input.company_id)
-                    .bind(&vt_id)
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(OpenTallyError::Database)?;
-
-                    (vt_id, sid)
-                }
-            };
-
-            sqlx::query(
-                "INSERT INTO vouchers (
-                    id, company_id, voucher_type_id, series_id, numbering_method,
-                    period_start, sequence_number, voucher_number, date, effective_date,
-                    narration, status, total_amount, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 'manual', NULL, NULL, ?, ?, ?, 'BOM Manufacturing Overhead Capitalization', 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
-            )
-            .bind(&gl_vch_id)
-            .bind(&input.company_id)
-            .bind(&vt_id)
-            .bind(&series_id)
-            .bind(&gl_number)
-            .bind(&input.production_date)
-            .bind(&input.production_date)
-            .bind(total_overhead_cost.normalize().to_string())
-            .execute(&mut *tx)
-            .await
-            .map_err(OpenTallyError::Database)?;
-
-            // Dr Stock-in-Hand / Inventory Asset
-            let dr_line_id = Uuid::new_v4().to_string();
-            sqlx::query(
-                "INSERT INTO voucher_lines (
-                    id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, narration
-                ) VALUES (?, ?, ?, 1, ?, ?, 'Dr', 'Manufacturing Overhead Allocated to Inventory')",
-            )
-            .bind(&dr_line_id)
-            .bind(&input.company_id)
-            .bind(&gl_vch_id)
-            .bind(&stock_ledger_id)
-            .bind(total_overhead_cost.normalize().to_string())
-            .execute(&mut *tx)
-            .await
-            .map_err(OpenTallyError::Database)?;
-
-            // Cr Overhead Ledgers
-            let mut gl_ln = 2i64;
-            for ovh in &input.additional_overheads {
-                let amt = Decimal::from_str(&ovh.amount).unwrap_or(Decimal::ZERO);
-                if amt > Decimal::ZERO {
-                    let cr_line_id = Uuid::new_v4().to_string();
-                    sqlx::query(
-                        "INSERT INTO voucher_lines (
-                            id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, narration
-                        ) VALUES (?, ?, ?, ?, ?, ?, 'Cr', ?)",
-                    )
-                    .bind(&cr_line_id)
-                    .bind(&input.company_id)
-                    .bind(&gl_vch_id)
-                    .bind(gl_ln)
-                    .bind(&ovh.overhead_ledger_id)
-                    .bind(amt.normalize().to_string())
-                    .bind(ovh.description.as_deref().unwrap_or("Overhead Absorption"))
-                    .execute(&mut *tx)
-                    .await
-                    .map_err(OpenTallyError::Database)?;
-                    gl_ln += 1;
-                }
-            }
-
-            // Post the GL overhead voucher now that lines are attached
-            sqlx::query("UPDATE vouchers SET status = 'posted' WHERE company_id = ? AND id = ?")
+                // Find Journal voucher type and active series, creating default series if none exists
+                let j_vch_series: Option<(String, String, String)> = sqlx::query_as(
+                    "SELECT vt.id, vns.id, vns.numbering_method
+                     FROM voucher_types vt
+                     JOIN voucher_number_series vns ON vns.company_id = vt.company_id AND vns.voucher_type_id = vt.id
+                     WHERE vt.company_id = ? AND vt.name = 'Journal'
+                     ORDER BY vns.is_active DESC, vns.id ASC
+                     LIMIT 1",
+                )
                 .bind(&input.company_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+                let (vt_id, series_id, numbering_method) = match j_vch_series {
+                    Some(s) => s,
+                    None => {
+                        let vt_id: String = sqlx::query_scalar(
+                            "SELECT id FROM voucher_types WHERE company_id = ? AND name = 'Journal'",
+                        )
+                        .bind(&input.company_id)
+                        .fetch_one(&mut *tx)
+                        .await
+                        .map_err(OpenTallyError::Database)?;
+
+                        let sid = format!("vns_jnl_{}", &Uuid::new_v4().to_string()[..8]);
+                        sqlx::query(
+                            "INSERT INTO voucher_number_series (id, company_id, voucher_type_id, series_name, series_code, numbering_method, restart_period)
+                             VALUES (?, ?, ?, 'General Journal', 'JNL', 'automatic', 'yearly')",
+                        )
+                        .bind(&sid)
+                        .bind(&input.company_id)
+                        .bind(&vt_id)
+                        .execute(&mut *tx)
+                        .await
+                        .map_err(OpenTallyError::Database)?;
+
+                        (vt_id, sid, "automatic".to_string())
+                    }
+                };
+
+                sqlx::query(
+                    "INSERT INTO vouchers (
+                        id, company_id, voucher_type_id, series_id, numbering_method,
+                        voucher_number, date, effective_date, narration, status,
+                        total_amount, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOM Manufacturing Overhead Capitalization', 'posted', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                )
                 .bind(&gl_vch_id)
+                .bind(&input.company_id)
+                .bind(&vt_id)
+                .bind(&series_id)
+                .bind(&numbering_method)
+                .bind(&gl_number)
+                .bind(&input.production_date)
+                .bind(&input.production_date)
+                .bind(total_overhead_cost.normalize().to_string())
                 .execute(&mut *tx)
                 .await
                 .map_err(OpenTallyError::Database)?;
 
-            // Record MCA Audit Log for Overhead GL Voucher
-            let gl_audit_payload = serde_json::json!({
-                "action": "BOM_OVERHEAD_CAPITALIZATION",
-                "voucher_id": &gl_vch_id,
-                "voucher_number": &gl_number,
-                "stock_voucher_id": &stock_voucher_id,
-                "total_overhead_cost": total_overhead_cost.normalize().to_string(),
-            })
-            .to_string();
+                // Dr Stock-in-Hand
+                let dr_line_id = Uuid::new_v4().to_string();
+                sqlx::query(
+                        "INSERT INTO voucher_lines (
+                            id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, description
+                        ) VALUES (?, ?, ?, 1, ?, ?, 'Dr', 'Manufacturing Overhead Allocated to Inventory')",
+                    )
+                    .bind(&dr_line_id)
+                    .bind(&input.company_id)
+                    .bind(&gl_vch_id)
+                    .bind(&stock_ledger_id)
+                    .bind(total_overhead_cost.normalize().to_string())
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(OpenTallyError::Database)?;
 
-            Self::record_bom_audit_log(
-                &mut tx,
-                &input.company_id,
-                &fy_begins,
-                "vouchers",
-                &gl_vch_id,
-                "CREATE",
-                actor,
-                &gl_audit_payload,
-            )
-            .await?;
+                // Cr Overhead Ledgers
+                let mut gl_ln = 2i64;
+                for ovh in &input.additional_overheads {
+                    let amt = Decimal::from_str(&ovh.amount).unwrap_or(Decimal::ZERO);
+                    if amt > Decimal::ZERO {
+                        let cr_line_id = Uuid::new_v4().to_string();
+                        sqlx::query(
+                                "INSERT INTO voucher_lines (
+                                    id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, description
+                                ) VALUES (?, ?, ?, ?, ?, ?, 'Cr', ?)",
+                            )
+                            .bind(&cr_line_id)
+                            .bind(&input.company_id)
+                            .bind(&gl_vch_id)
+                            .bind(gl_ln)
+                            .bind(&ovh.overhead_ledger_id)
+                            .bind(amt.normalize().to_string())
+                            .bind(ovh.description.as_deref().unwrap_or("Overhead Absorption"))
+                            .execute(&mut *tx)
+                            .await
+                            .map_err(OpenTallyError::Database)?;
+                        gl_ln += 1;
+                    }
+                }
+            }
         }
 
         // 6. Record MCA Audit Log
@@ -1218,5 +1099,87 @@ impl BomService {
         .map_err(OpenTallyError::Database)?;
 
         Ok(())
+    }
+
+    /// Computes net finished-good unit cost after crediting scrap/by-product recovery value.
+    pub fn compute_net_unit_cost_with_byproducts(
+        raw_cost: Decimal,
+        overhead_cost: Decimal,
+        byproduct_recovery_value: Decimal,
+        produced_qty: Decimal,
+    ) -> Result<Decimal, OpenTallyError> {
+        if produced_qty <= Decimal::ZERO {
+            return Err(OpenTallyError::Validation(
+                "produced_qty must be greater than zero".into(),
+            ));
+        }
+        let net_total = raw_cost + overhead_cost - byproduct_recovery_value;
+        if net_total < Decimal::ZERO {
+            return Err(OpenTallyError::Validation(
+                "By-product recovery value cannot exceed total raw + overhead cost".into(),
+            ));
+        }
+        Ok((net_total / produced_qty).round_dp(4))
+    }
+
+    /// Recursively explodes a multi-level BOM down to leaf raw materials with cycle detection.
+    pub async fn expand_multilevel_bom(
+        pool: &sqlx::Pool<sqlx::Sqlite>,
+        company_id: &str,
+        bom_id: &str,
+        target_qty: Decimal,
+    ) -> Result<Vec<(String, Decimal)>, OpenTallyError> {
+        if target_qty <= Decimal::ZERO {
+            return Err(OpenTallyError::Validation(
+                "target_qty must be greater than zero".into(),
+            ));
+        }
+
+        let mut visited: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let mut stack: Vec<(String, Decimal, Vec<String>)> =
+            vec![(bom_id.to_string(), target_qty, vec![bom_id.to_string()])];
+        let mut leaf_totals: std::collections::HashMap<String, Decimal> =
+            std::collections::HashMap::new();
+
+        while let Some((cur_bom_id, qty_needed, path)) = stack.pop() {
+            visited.insert(cur_bom_id.clone());
+            let detail = Self::get_bom_detail(pool, company_id, &cur_bom_id).await?;
+            let std_qty = Decimal::ONE;
+            let scale = qty_needed / std_qty;
+
+            for comp in detail.components {
+                let comp_qty = (Decimal::from_str(&comp.required_qty).unwrap_or(Decimal::ZERO)
+                    * scale)
+                    .round_dp(4);
+                let sub_bom_id: Option<String> = sqlx::query_scalar(
+                    "SELECT id FROM boms WHERE company_id = ? AND finished_stock_item_id = ? AND is_active = 1 LIMIT 1",
+                )
+                .bind(company_id)
+                .bind(&comp.raw_stock_item_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(OpenTallyError::Database)?;
+
+                if let Some(sub_id) = sub_bom_id {
+                    if path.contains(&sub_id) {
+                        return Err(OpenTallyError::Validation(format!(
+                            "Circular BOM dependency detected involving BOM '{}'",
+                            sub_id
+                        )));
+                    }
+                    let mut next_path = path.clone();
+                    next_path.push(sub_id.clone());
+                    stack.push((sub_id, comp_qty, next_path));
+                } else {
+                    *leaf_totals
+                        .entry(comp.raw_stock_item_id)
+                        .or_insert(Decimal::ZERO) += comp_qty;
+                }
+            }
+        }
+
+        let mut out: Vec<(String, Decimal)> = leaf_totals.into_iter().collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok(out)
     }
 }

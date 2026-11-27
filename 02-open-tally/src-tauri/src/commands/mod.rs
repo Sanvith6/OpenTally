@@ -2111,6 +2111,108 @@ pub async fn export_outstanding_aging_pdf(
     .await
 }
 
+#[tauri::command]
+pub async fn dispatch_job_work_material_out(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    request: crate::inventory::job_work::DispatchJobWorkOutRequest,
+) -> Result<crate::inventory::job_work::JobWorkChallanDto, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::inventory::job_work::JobWorkService::dispatch_job_work_material_out(
+        state.db.pool(),
+        &cid,
+        request,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn receive_job_work_material_in(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    request: crate::inventory::job_work::ReceiveJobWorkInRequest,
+) -> Result<crate::inventory::job_work::JobWorkChallanDto, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::inventory::job_work::JobWorkService::receive_job_work_material_in(
+        state.db.pool(),
+        &cid,
+        request,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn get_itc04_report(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    from_date: String,
+    to_date: String,
+) -> Result<crate::inventory::job_work::FormItc04Report, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::inventory::job_work::JobWorkService::get_itc04_report(
+        state.db.pool(),
+        &cid,
+        &from_date,
+        &to_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn export_itc04_json(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    from_date: String,
+    to_date: String,
+) -> Result<String, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::inventory::job_work::JobWorkService::export_itc04_json(
+        state.db.pool(),
+        &cid,
+        &from_date,
+        &to_date,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn parse_weighbridge_reading(
+    raw_frame: String,
+    tare_weight: String,
+) -> Result<crate::extensions::WeighbridgeReading, OpenTallyError> {
+    crate::extensions::HardwareBridgeService::parse_weighbridge_reading(&raw_frame, &tare_weight)
+}
+
+#[tauri::command]
+pub async fn lookup_stock_item_by_barcode(
+    state: tauri::State<'_, AppState>,
+    company_id: Option<String>,
+    barcode: String,
+) -> Result<Option<(String, String)>, OpenTallyError> {
+    let cid = match company_id {
+        Some(c) => c,
+        None => require_active_company(&state).await?,
+    };
+    crate::extensions::HardwareBridgeService::lookup_stock_item_by_barcode(
+        state.db.pool(),
+        &cid,
+        &barcode,
+    )
+    .await
+}
+
 pub async fn exec_export_form_26q_csv(
     state: &AppState,
     company_id: Option<String>,
