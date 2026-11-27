@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Company,
   VoucherType,
@@ -19,7 +19,13 @@ import { VoucherLineGrid } from './VoucherLineGrid';
 import { VoucherTotalBar } from './VoucherTotalBar';
 import { DraftsModal } from './DraftsModal';
 import { BillWiseAllocationModal } from './BillWiseAllocationModal';
+import { formatFromScaledBigInt } from '../../utils/decimal';
+import { minorAmount } from './terminalAmounts';
+import { useTerminalKeyboard } from './terminalKeyboard';
+import { AcceptVoucherDialog } from './AcceptVoucherDialog';
+import { postAccountingVoucher } from '../../services/voucherTerminalApi';
 import './VoucherEntryView.css';
+import { VoucherEntryToolbar } from './VoucherEntryToolbar';
 
 interface VoucherEntryViewProps {
   activeCompany: Company | null;
@@ -63,8 +69,19 @@ export function VoucherEntryView({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notification, setNotification] = useState<string | null>(null);
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [posted, setPosted] = useState(false);
+  const accepting = useRef(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
 
   const dateInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (/payment|contra|receipt/i.test(initialTypeId || '')) setLines([
+      { id: 'payment-dr', ledger_id: '', entry_type: 'Dr', amount: '', narration: '' },
+      { id: 'payment-cr', ledger_id: '', entry_type: 'Cr', amount: '', narration: '' },
+    ]);
+  }, [initialTypeId]);
+  useEffect(() => { if (!loading) dateInputRef.current?.focus(); }, [loading]);
 
   const showNotification = (msg: string) => {
     setNotification(msg);
@@ -143,19 +160,19 @@ export function VoucherEntryView({
 
   // Compute Running Dr / Cr totals and difference
   const { debitTotal, creditTotal, difference, isBalanced } = useMemo(() => {
-    let dr = 0;
-    let cr = 0;
+    let dr = 0n;
+    let cr = 0n;
     for (const l of lines) {
-      const val = parseFloat(l.amount) || 0;
+      const val = minorAmount(l.amount);
       if (l.entry_type === 'Dr') dr += val;
       else if (l.entry_type === 'Cr') cr += val;
     }
-    const diff = Math.abs(dr - cr);
-    const balanced = dr === cr && lines.length > 0 && dr > 0;
+    const diff = dr > cr ? dr - cr : cr - dr;
+    const balanced = dr === cr && lines.length > 0 && dr > 0n;
     return {
-      debitTotal: dr.toFixed(2),
-      creditTotal: cr.toFixed(2),
-      difference: diff.toFixed(2),
+      debitTotal: formatFromScaledBigInt(dr, 2, 2),
+      creditTotal: formatFromScaledBigInt(cr, 2, 2),
+      difference: formatFromScaledBigInt(diff, 2, 2),
       isBalanced: balanced,
     };
   }, [lines]);
@@ -210,6 +227,7 @@ export function VoucherEntryView({
 
   // Reset to clean draft
   const handleNewDraft = () => {
+    setPosted(false);
     setActiveDraftId(null);
     setProvisionalNumber('DRAFT-NEW');
     setReferenceNo('');
@@ -238,7 +256,7 @@ export function VoucherEntryView({
         reference_no: referenceNo || null,
         reference_date: referenceDate || null,
         narration: narration || null,
-        lines: lines.filter((l) => l.ledger_id && parseFloat(l.amount) > 0),
+        lines: lines.filter((l) => l.ledger_id && minorAmount(l.amount) > 0n),
       };
 
       const result = await saveVoucherDraft(payload);
@@ -252,6 +270,30 @@ export function VoucherEntryView({
       setSaving(false);
     }
   };
+
+  const handleAccept = async () => {
+    if (accepting.current || posted) return;
+    if (!isBalanced || lines.length < 2 || lines.some((line) => !line.ledger_id || minorAmount(line.amount) <= 0n)) {
+      setError('Complete every ledger and positive amount; Debit and Credit must balance exactly before accepting.');
+      setAcceptOpen(false); return;
+    }
+    if (!selectedTypeId || !selectedSeriesId) { setError('Select a voucher type and active numbering series.'); return; }
+    accepting.current = true; setSaving(true); setError(null);
+    try {
+      const draft = await saveVoucherDraft({ voucher_id: activeDraftId, voucher_type_id: selectedTypeId,
+        series_id: selectedSeriesId, date, effective_date: effectiveDate || null, reference_no: referenceNo || null,
+        reference_date: referenceDate || null, narration: narration || null, lines });
+      setActiveDraftId(draft.voucher.id);
+      const result = await postAccountingVoucher(draft.voucher.id);
+      setProvisionalNumber(result.voucher.voucher_number); setPosted(true); setAcceptOpen(false);
+      showNotification(`Voucher ${result.voucher.voucher_number} posted successfully.`);
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)); setAcceptOpen(false); }
+    finally { accepting.current = false; setSaving(false); }
+  };
+
+  useTerminalKeyboard({ container: workspaceRef, onAccept: () => void handleAccept(), onBack: onBackToGateway,
+    onSave: () => void handleSaveDraft(), onDate: () => dateInputRef.current?.focus(), onVoucherType: setSelectedTypeId,
+    onInsert: () => { handleAddLine(); setTimeout(() => document.getElementById(`line-type-${lines.length}`)?.focus(), 0); } });
 
   // Load an existing draft
   const handleSelectDraft = async (voucherId: string) => {
@@ -285,172 +327,23 @@ export function VoucherEntryView({
     }
   };
 
-  // Keyboard navigation shortcuts
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      // Don't intercept if drafts modal is open
-      if (isDraftsModalOpen) {
-        if (e.key === 'Escape') {
-          setIsDraftsModalOpen(false);
-        }
-        return;
-      }
-
-      if (e.key === 'F2') {
-        e.preventDefault();
-        dateInputRef.current?.focus();
-      } else if (e.key === 'F4') {
-        e.preventDefault();
-        setSelectedTypeId('vt_contra');
-      } else if (e.key === 'F5') {
-        e.preventDefault();
-        setSelectedTypeId('vt_payment');
-      } else if (e.key === 'F6') {
-        e.preventDefault();
-        setSelectedTypeId('vt_receipt');
-      } else if (e.key === 'F7') {
-        e.preventDefault();
-        setSelectedTypeId('vt_jnl');
-      } else if (e.key === 'F8') {
-        e.preventDefault();
-        setSelectedTypeId('vt_sales');
-      } else if (e.key === 'F9') {
-        e.preventDefault();
-        setSelectedTypeId('vt_pur');
-      } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
-        e.preventDefault();
-        handleSaveDraft();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        e.stopPropagation();
-        onBackToGateway();
-      }
-    },
-    [isDraftsModalOpen, onBackToGateway]
-  );
-
-  useEffect(() => {
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleKeyDown]);
-
-  const currentTypeName = useMemo(() => {
-    return voucherTypes.find((vt) => vt.id === selectedTypeId)?.name || 'Accounting Voucher';
-  }, [voucherTypes, selectedTypeId]);
-
-  const ribbonMeta = useMemo(() => {
-    switch (selectedTypeId) {
-      case 'vt_contra':
-        return { cls: 'ot-ribbon-contra', label: 'Contra Voucher (F4)', sub: 'Cash / Bank Fund Transfer' };
-      case 'vt_payment':
-        return { cls: 'ot-ribbon-payment', label: 'Payment Voucher (F5)', sub: 'Cash / Bank Disbursement' };
-      case 'vt_receipt':
-        return { cls: 'ot-ribbon-receipt', label: 'Receipt Voucher (F6)', sub: 'Cash / Bank Collection' };
-      case 'vt_jnl':
-        return { cls: 'ot-ribbon-journal', label: 'Journal Voucher (F7)', sub: 'Non-Cash Adjustment & Accrual' };
-      case 'vt_sales':
-        return { cls: 'ot-ribbon-sales', label: 'Sales Voucher (F8)', sub: 'Outward Commercial Entry' };
-      case 'vt_pur':
-        return { cls: 'ot-ribbon-purchase', label: 'Purchase Voucher (F9)', sub: 'Inward Commercial Entry' };
-      case 'vt_debit_note':
-      case 'vt_credit_note':
-        return { cls: 'ot-ribbon-notes', label: `${currentTypeName}`, sub: 'Debit / Credit Note Adjustment' };
-      default:
-        return { cls: 'ot-ribbon-journal', label: currentTypeName, sub: 'Double-Entry Voucher Posting' };
-    }
-  }, [selectedTypeId, currentTypeName]);
-
   return (
-    <div className="ot-voucher-entry-workspace">
-      {/* Signature Voucher Color Ribbon */}
-      <div className={`ot-voucher-ribbon ${ribbonMeta.cls}`} data-testid="voucher-entry-ribbon">
-        <span>{ribbonMeta.label}</span>
-        <span>{ribbonMeta.sub}</span>
-      </div>
-
-      {/* Top Breadcrumb & Navigation */}
-      <div className="ot-voucher-top-bar">
-        <div className="ot-breadcrumb">
-          <span className="ot-crumb-link" onClick={onBackToGateway}>
-            Gateway
-          </span>
-          <span className="ot-crumb-sep">&gt;</span>
-          <span className="ot-crumb-active">Accounting Vouchers</span>
-          <span className="ot-badge-clean" style={{ marginLeft: '12px' }}>
-            Sprint 2 Stage 4
-          </span>
-        </div>
-
-        <div className="ot-top-actions">
-          {onSwitchToMasters && (
-            <button
-              type="button"
-              className="ot-btn ot-btn-secondary"
-              onClick={onSwitchToMasters}
-              title="Configure Voucher Types & Numbering Series"
-            >
-              Voucher Masters Config
-            </button>
-          )}
-          <button
-            type="button"
-            className="ot-btn ot-btn-secondary"
-            onClick={() => setIsDraftsModalOpen(true)}
-            title="Open saved drafts modal"
-          >
-            Saved Drafts
-          </button>
-          <button
-            type="button"
-            className="ot-btn"
-            onClick={onBackToGateway}
-            title="Return to Gateway (Esc)"
-          >
-            Gateway (Esc)
-          </button>
-        </div>
-      </div>
-
-      {notification && (
-        <div className="ot-notification-banner">
-          <span className="ot-notification-icon">&#9432;</span>
-          <span className="ot-notification-text">{notification}</span>
-          <button className="ot-notification-close" onClick={() => setNotification(null)}>
-            &times;
-          </button>
-        </div>
-      )}
-
-      {error && (
-        <div className="ot-alert ot-alert-danger" style={{ margin: '12px 24px' }}>
-          {error}
-        </div>
-      )}
-
+    <div className="ot-voucher-entry-workspace" ref={workspaceRef} data-terminal-entry>
+      <VoucherEntryToolbar typeId={selectedTypeId} types={voucherTypes} onBack={onBackToGateway} onMasters={onSwitchToMasters}
+        onDrafts={() => setIsDraftsModalOpen(true)} notification={notification} onClearNotification={() => setNotification(null)} error={error} />
       {loading ? (
         <div style={{ padding: '48px', textAlign: 'center' }}>Loading voucher workspace...</div>
       ) : (
         <div className="ot-voucher-workspace-body">
           {/* Header Form */}
           <VoucherHeaderForm
-            voucherTypes={voucherTypes}
-            selectedTypeId={selectedTypeId}
-            onSelectType={setSelectedTypeId}
-            seriesList={seriesList}
-            selectedSeriesId={selectedSeriesId}
-            onSelectSeries={setSelectedSeriesId}
-            date={date}
-            onChangeDate={setDate}
-            effectiveDate={effectiveDate}
-            onChangeEffectiveDate={setEffectiveDate}
-            referenceNo={referenceNo}
-            onChangeReferenceNo={setReferenceNo}
-            referenceDate={referenceDate}
-            onChangeReferenceDate={setReferenceDate}
-            narration={narration}
-            onChangeNarration={setNarration}
-            provisionalNumber={provisionalNumber}
-            dateInputRef={dateInputRef}
+            voucherTypes={voucherTypes} selectedTypeId={selectedTypeId} onSelectType={setSelectedTypeId}
+            seriesList={seriesList} selectedSeriesId={selectedSeriesId} onSelectSeries={setSelectedSeriesId}
+            date={date} onChangeDate={setDate} effectiveDate={effectiveDate} onChangeEffectiveDate={setEffectiveDate}
+            referenceNo={referenceNo} onChangeReferenceNo={setReferenceNo}
+            referenceDate={referenceDate} onChangeReferenceDate={setReferenceDate}
+            narration={narration} onChangeNarration={setNarration}
+            provisionalNumber={provisionalNumber} dateInputRef={dateInputRef}
           />
 
           {/* Line Items Table */}
@@ -467,17 +360,17 @@ export function VoucherEntryView({
 
           {/* Sticky Running Totals and Balance Bar */}
           <VoucherTotalBar
-            debitTotal={debitTotal}
-            creditTotal={creditTotal}
-            difference={difference}
-            isBalanced={isBalanced}
+            debitTotal={debitTotal} creditTotal={creditTotal} difference={difference} isBalanced={isBalanced}
             onSaveDraft={handleSaveDraft}
             onOpenDraftsModal={() => setIsDraftsModalOpen(true)}
             onNewDraft={handleNewDraft}
-            saving={saving}
-          />
+            saving={saving} />
+          <button type="button" className="ot-btn ot-btn-primary" data-terminal-order={1000} data-terminal-accept
+            disabled={saving || posted} onClick={() => setAcceptOpen(true)}>Accept [Y/N] Â· Ctrl+A</button>
         </div>
       )}
+
+      {acceptOpen && <AcceptVoucherDialog busy={saving} onYes={() => void handleAccept()} onNo={() => setAcceptOpen(false)} />}
 
       {/* Bill-Wise Allocation Modal */}
       {billAllocLineIndex !== null && lines[billAllocLineIndex] && (

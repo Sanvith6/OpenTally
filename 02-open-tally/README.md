@@ -87,10 +87,10 @@ Built with **Tauri v2**, **Rust** (core double-entry engine, SQLite + WAL + SQLC
 
 ### 2. Automated Backend & Frontend Test Suites
 ```powershell
-# Run all 492 Rust unit, integration, and security tests
+# Run all Rust unit, integration, and security tests (536 passed; 1 ignored)
 cargo test --manifest-path 02-open-tally/src-tauri/Cargo.toml
 
-# Run all 128 Vitest React component and integration tests
+# Run all 170 Vitest React component and integration tests
 npm --prefix 02-open-tally/frontend test -- --run
 ```
 
@@ -108,7 +108,7 @@ $env:OPENTALLY_DATA_DIR = "$env:TEMP\opentally_e2e_db"
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = "--remote-debugging-port=9222"
 .\02-open-tally\src-tauri\target\debug\opentally.exe
 
-# Run 15-step real-app Playwright E2E verification
+# Run the live app audit, including 1280x800 and 1440x900 sweeps
 node 02-open-tally/frontend/e2e/playwright_tally_audit.mjs
 ```
 

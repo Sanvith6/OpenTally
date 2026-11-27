@@ -20,7 +20,8 @@ describe('SalesVoucherView', () => {
 
   it('supports accounting-only and inventory line controls', () => {
     render(<SalesVoucherView activeCompany={company} onBack={() => undefined} />);
-    expect(screen.getByRole('option', { name: 'Accounting-only line' })).toBeTruthy();
+    expect(screen.getByRole('combobox', { name: 'Stock item 1' })).toBeTruthy();
+    expect(screen.getByLabelText('Billed quantity 1')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add line' }));
     expect(screen.getAllByPlaceholderText('Line description')).toHaveLength(2);
     expect(screen.getByRole('button', { name: 'Back to Gateway' })).toBeTruthy();

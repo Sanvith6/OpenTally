@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AccountGroup, BalanceSheetLedgerRow, BalanceSheetReport, Company } from '../../types';
-import { getBalanceSheet, listAccountGroups } from '../../services/api';
+import { exportBalanceSheetPdf, getBalanceSheet, listAccountGroups } from '../../services/api';
+import { subtractDecimals } from '../../utils/decimal';
+import { PdfExportAction } from './PdfExportAction';
+import { TFormatRow, TFormatStatement } from './TFormatStatement';
 import './Reports.css';
 
 interface Props { activeCompany: Company | null; onBack: () => void; }
@@ -31,16 +34,22 @@ function downloadCsv(report: BalanceSheetReport): void {
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `balance-sheet-${report.as_of_date}.csv`; anchor.click(); URL.revokeObjectURL(url);
 }
 
-function Section({ title, rows }: { title: string; rows: BalanceSheetLedgerRow[] }) {
-  if (rows.length === 0) return null;
-  return <>
-    <tr className="ot-report-section-row"><th colSpan={3}>{title}</th><th colSpan={4}></th></tr>
-    {rows.map((row) => <tr key={row.ledger_id}><td></td><td>{row.account_group_name}</td><td>{row.ledger_name}</td><td className="money">{row.debit}</td><td className="money">{row.credit}</td><td className="money">{row.presentation_amount}</td><td>{row.balance_type}</td></tr>)}
-  </>;
+function section(title: string, rows: BalanceSheetLedgerRow[]): TFormatRow[] {
+  if (rows.length === 0) return [];
+  return [{ label: title, kind: 'section' }, ...rows.map((row) => ({
+    label: row.ledger_name, group: row.account_group_name, amount: row.presentation_amount,
+  }))];
 }
 
-function sectionRows(rows: BalanceSheetLedgerRow[], classification: string): BalanceSheetLedgerRow[] {
-  return rows.filter((row) => row.classification === classification);
+function BalanceSheetStatement({ report }: { report: BalanceSheetReport }) {
+  const liabilities = [...section('Liabilities', report.liability_rows),
+    { label: 'Total Liabilities', amount: report.total_liabilities, kind: 'subtotal' as const },
+    ...section('Equity / Capital', report.equity_rows),
+    { label: `Current-period ${report.current_period_result_type}`, amount: report.current_period_result_type === 'Loss'
+      ? subtractDecimals('0.00', report.current_period_profit_or_loss) : report.current_period_profit_or_loss, kind: 'balance' as const },
+    { label: 'Total Equity', amount: report.total_equity, kind: 'subtotal' as const }];
+  return <TFormatStatement name="Balance Sheet T-format" leftTitle="Liabilities & Capital" rightTitle="Assets"
+    left={liabilities} right={section('Assets', report.asset_rows)} leftTotal={report.total_liabilities_and_equity} rightTotal={report.total_assets} />;
 }
 
 export function BalanceSheetView({ activeCompany, onBack }: Props) {
@@ -73,24 +82,12 @@ export function BalanceSheetView({ activeCompany, onBack }: Props) {
       <label className="ot-report-field"><span>Include zero balances</span><input type="checkbox" checked={includeZero} onChange={(event) => setIncludeZero(event.target.checked)} /></label>
       <button className="ot-report-action" onClick={() => void load()} disabled={loading || !activeCompany}>Refresh</button>
       <button className="ot-report-action" onClick={() => report && downloadCsv(report)} disabled={!report}>Export CSV</button>
+      <PdfExportAction filename={`balance-sheet-${asOfDate}.pdf`} disabled={!activeCompany || loading || !report}
+        loadPdf={() => exportBalanceSheetPdf(asOfDate, activeCompany?.id)} />
     </div>
     {report && <div className="ot-report-summary"><div className="ot-report-summary-card"><span>Total assets</span><strong>{report.total_assets}</strong></div><div className="ot-report-summary-card"><span>Liabilities + equity</span><strong>{report.total_liabilities_and_equity}</strong></div><div className="ot-report-summary-card"><span>Difference</span><strong>{report.balance_difference}</strong></div><div className="ot-report-summary-card"><span>Status</span><strong>{report.is_balanced ? 'Balanced' : 'Not balanced'}</strong></div></div>}
     <div className="ot-report-card">
-      {loading ? <div className="ot-report-loading">Loading Balance Sheet…</div> : error ? <div className="ot-report-error">{error}</div> : !report || report.ledger_count === 0 ? <div className="ot-report-empty">No balance-sheet accounts for this selection.</div> : <table className="ot-report-table"><thead><tr><th></th><th>Account group</th><th>Ledger</th><th className="money">Debit</th><th className="money">Credit</th><th className="money">Balance</th><th>Type</th></tr></thead><tbody>
-        <Section title="Assets — Fixed Assets" rows={sectionRows(report.asset_rows, 'fixed_assets')} />
-        <Section title="Assets — Current Assets" rows={sectionRows(report.asset_rows, 'current_assets')} />
-        <Section title="Assets — Other Assets" rows={sectionRows(report.asset_rows, 'other_assets')} />
-        <tr className="ot-report-result-row"><th colSpan={6}>Total Assets</th><th className="money">{report.total_assets}</th></tr>
-        <Section title="Liabilities — Long-term" rows={sectionRows(report.liability_rows, 'long_term_liabilities')} />
-        <Section title="Liabilities — Current" rows={sectionRows(report.liability_rows, 'current_liabilities')} />
-        <Section title="Liabilities — Other" rows={sectionRows(report.liability_rows, 'other_liabilities')} />
-        <tr className="ot-report-subtotal"><th colSpan={6}>Total Liabilities</th><th className="money">{report.total_liabilities}</th></tr>
-        <Section title="Equity / Capital" rows={report.equity_rows} />
-        <tr className="ot-report-subtotal"><th colSpan={6}>Current-period {report.current_period_result_type}</th><th className="money">{report.current_period_profit_or_loss}</th></tr>
-        <tr className="ot-report-result-row"><th colSpan={6}>Total Equity</th><th className="money">{report.total_equity}</th></tr>
-        <tr className="ot-report-result-row"><th colSpan={6}>Total Liabilities + Equity</th><th className="money">{report.total_liabilities_and_equity}</th></tr>
-        <tr className="ot-report-result-row"><th colSpan={6}>Balance Difference ({report.is_balanced ? 'Balanced' : 'Not balanced'})</th><th className="money">{report.balance_difference}</th></tr>
-      </tbody></table>}
+      {loading ? <div className="ot-report-loading">Loading Balance Sheet…</div> : error ? <div className="ot-report-error">{error}</div> : !report ? <div className="ot-report-empty">No balance-sheet accounts for this selection.</div> : <BalanceSheetStatement report={report} />}
     </div>
   </section>;
 }

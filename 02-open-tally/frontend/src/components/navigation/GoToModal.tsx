@@ -14,6 +14,8 @@ interface ScreenCatalogItem {
 }
 
 const STATIC_SCREENS: ScreenCatalogItem[] = [
+  { id: 'scr_price_levels', title: 'Price Levels & Quantity Slabs', subtitle: 'Distributor pricing, slabs and effective dates', category: 'Master', view: 'price_levels', hotkey: '[' },
+  { id: 'scr_job_work', title: 'Job-Work & GST ITC-04', subtitle: 'Material Out, Material In, Table 4 and Table 5A', category: 'Screen', view: 'job_work', hotkey: ']' },
   { id: 'scr_gateway', title: 'Gateway of OpenTally', subtitle: 'Main application portal', category: 'Screen', view: 'gateway' },
   { id: 'scr_coa', title: 'Chart of Accounts', subtitle: 'Ledger hierarchy and groups tree', category: 'Master', view: 'chart_of_accounts' },
   { id: 'scr_vch_entry', title: 'Voucher Entry (Accounting Vouchers)', subtitle: 'Create Payment, Receipt, Sales, Purchase vouchers', category: 'Screen', view: 'voucher_entry', hotkey: 'V' },

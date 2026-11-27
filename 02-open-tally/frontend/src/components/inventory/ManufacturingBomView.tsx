@@ -17,6 +17,8 @@ import {
   listStockItems,
 } from '../../services/api';
 import '../reports/Reports.css';
+import { ManufacturingAdvancedPanel } from './ManufacturingAdvancedPanel';
+import { isPositiveFactoryDecimal, previewFactoryConsumption } from '../../utils/factoryDecimal';
 
 interface Props {
   activeCompany: Company | null;
@@ -31,7 +33,7 @@ interface OverheadRow {
 }
 
 export function ManufacturingBomView({ activeCompany, onBack }: Props) {
-  const [activeTab, setActiveTab] = useState<'boms' | 'produce'>('boms');
+  const [activeTab, setActiveTab] = useState<'boms' | 'produce' | 'advanced'>('boms');
   const [boms, setBoms] = useState<BomDetail[]>([]);
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [godowns, setGodowns] = useState<Godown[]>([]);
@@ -136,8 +138,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
       setError('BOM name is required');
       return;
     }
-    const bQty = parseFloat(bomBaseQty);
-    if (isNaN(bQty) || bQty <= 0) {
+    if (!isPositiveFactoryDecimal(bomBaseQty)) {
       setError('Base output quantity must be greater than zero');
       return;
     }
@@ -154,8 +155,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
         );
         return;
       }
-      const rQty = parseFloat(c.required_qty);
-      if (isNaN(rQty) || rQty <= 0) {
+      if (!isPositiveFactoryDecimal(c.required_qty)) {
         setError(`Required quantity in component #${i + 1} must be positive`);
         return;
       }
@@ -221,9 +221,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
   const currentBom = boms.find((b) => b.id === selectedBomId);
 
   // Live scaling calculation
-  const parsedProduced = parseFloat(producedQty) || 0;
-  const parsedBase = currentBom ? parseFloat(currentBom.base_output_qty) || 1 : 1;
-  const scaleRatio = parsedBase > 0 ? parsedProduced / parsedBase : 0;
+  const scaleRatio = previewFactoryConsumption(producedQty, '1', currentBom?.base_output_qty || '1');
 
   // Handle production execution
   const handleExecuteProduction = async (e: React.FormEvent) => {
@@ -233,7 +231,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
       setError('Please select a Bill of Materials recipe');
       return;
     }
-    if (parsedProduced <= 0) {
+    if (!isPositiveFactoryDecimal(producedQty)) {
       setError('Produced quantity must be greater than zero');
       return;
     }
@@ -248,7 +246,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
       setProdResult(null);
 
       const overheadPayload = overheads
-        .filter((o) => o.overhead_ledger_id && parseFloat(o.amount) > 0)
+        .filter((o) => o.overhead_ledger_id && isPositiveFactoryDecimal(o.amount))
         .map((o) => ({
           overhead_ledger_id: o.overhead_ledger_id,
           amount: o.amount,
@@ -358,6 +356,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
         >
           2. Manufacturing Stock Journal (Production)
         </button>
+        <button className="ot-report-action" aria-pressed={activeTab === 'advanced'} onClick={() => setActiveTab('advanced')}>3. Multi-Level BOM &amp; Scrap Recovery</button>
       </div>
 
       {message && (
@@ -390,6 +389,10 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
         </div>
       )}
 
+      {activeTab === 'advanced' && activeCompany && <>
+        <label className="ot-report-field">BOM for explosion<select value={selectedBomId} onChange={(event) => setSelectedBomId(event.target.value)}><option value="">Select BOM</option>{boms.map((bom) => <option key={bom.id} value={bom.id}>{bom.bom_name}</option>)}</select></label>
+        <ManufacturingAdvancedPanel companyId={activeCompany.id} bomId={selectedBomId} />
+      </>}
       {/* TAB 1: BOM RECIPES */}
       {activeTab === 'boms' && (
         <div>
@@ -1073,7 +1076,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
                         fontWeight: 600,
                       }}
                     >
-                      Proportional Component Consumption Preview (Scaling Factor: {scaleRatio.toFixed(4)}x)
+                      Proportional Component Consumption Preview (Scaling Factor: {scaleRatio}x)
                     </h4>
                     <span style={{ fontSize: '12px', color: '#666' }}>
                       Base Output: {currentBom.base_output_qty} units → Target: {producedQty} units
@@ -1111,8 +1114,7 @@ export function ManufacturingBomView({ activeCompany, onBack }: Props) {
                     </thead>
                     <tbody>
                       {currentBom.components.map((comp) => {
-                        const baseCompQty = parseFloat(comp.required_qty) || 0;
-                        const scaledQty = (scaleRatio * baseCompQty).toFixed(4);
+                        const scaledQty = previewFactoryConsumption(producedQty, comp.required_qty, currentBom.base_output_qty);
                         return (
                           <tr
                             key={comp.id}

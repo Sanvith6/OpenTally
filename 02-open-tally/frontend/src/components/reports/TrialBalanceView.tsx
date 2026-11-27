@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AccountGroup, Company, TrialBalanceReport } from '../../types';
-import { getTrialBalance, listAccountGroups } from '../../services/api';
+import { exportTrialBalancePdf, getTrialBalance, listAccountGroups } from '../../services/api';
+import { PdfExportAction } from './PdfExportAction';
 import '../reports/Reports.css';
 
 interface Props {
@@ -70,6 +71,8 @@ export function TrialBalanceView({ activeCompany, onBack, onViewLedger }: Props)
         <label className="ot-report-field"><span>Include zero balances</span><input type="checkbox" checked={includeZero} onChange={(event) => setIncludeZero(event.target.checked)} /></label>
         <button className="ot-report-action" onClick={() => void load()} disabled={loading || !activeCompany}>Refresh</button>
         <button className="ot-report-action" onClick={() => report && downloadCsv(report)} disabled={!report}>Export CSV</button>
+        <PdfExportAction filename={`trial-balance-${asOfDate}.pdf`} disabled={!activeCompany || loading || !report}
+          loadPdf={() => exportTrialBalancePdf(asOfDate, activeCompany?.id)} />
       </div>
       {report && <div className="ot-report-summary"><div className="ot-report-summary-card"><span>Closing debit</span><strong>{report.total_debit}</strong></div><div className="ot-report-summary-card"><span>Closing credit</span><strong>{report.total_credit}</strong></div><div className="ot-report-summary-card"><span>Difference</span><strong>{report.difference}</strong></div><div className="ot-report-summary-card"><span>Ledgers</span><strong>{report.ledger_count}</strong></div></div>}
       <div className="ot-report-card">

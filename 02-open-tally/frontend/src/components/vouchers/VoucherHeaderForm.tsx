@@ -52,6 +52,7 @@ export function VoucherHeaderForm({
           </label>
           <select
             id="voucher-type-select"
+            data-terminal-order={20}
             className="ot-input"
             value={selectedTypeId}
             onChange={(e) => onSelectType(e.target.value)}
@@ -69,6 +70,7 @@ export function VoucherHeaderForm({
           <label htmlFor="voucher-series-select">Numbering Series</label>
           <select
             id="voucher-series-select"
+            data-terminal-order={30}
             className="ot-input"
             value={selectedSeriesId}
             onChange={(e) => onSelectSeries(e.target.value)}
@@ -101,6 +103,7 @@ export function VoucherHeaderForm({
           </label>
           <input
             id="voucher-date-input"
+            data-terminal-order={10}
             ref={dateInputRef}
             type="date"
             className="ot-input"
@@ -114,6 +117,7 @@ export function VoucherHeaderForm({
           <label htmlFor="voucher-effective-date-input">Effective Date</label>
           <input
             id="voucher-effective-date-input"
+            data-terminal-order={40}
             type="date"
             className="ot-input"
             value={effectiveDate}
@@ -128,6 +132,7 @@ export function VoucherHeaderForm({
           <label htmlFor="voucher-ref-no">Reference No.</label>
           <input
             id="voucher-ref-no"
+            data-terminal-order={50}
             type="text"
             className="ot-input"
             placeholder="e.g. PO-2026-091"
@@ -141,6 +146,7 @@ export function VoucherHeaderForm({
           <label htmlFor="voucher-ref-date">Reference Date</label>
           <input
             id="voucher-ref-date"
+            data-terminal-order={60}
             type="date"
             className="ot-input"
             value={referenceDate}
@@ -153,6 +159,7 @@ export function VoucherHeaderForm({
           <label htmlFor="voucher-header-narration">Header Narration</label>
           <input
             id="voucher-header-narration"
+            data-terminal-order={900}
             type="text"
             className="ot-input"
             placeholder="Overall voucher narration or remarks"

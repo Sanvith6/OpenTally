@@ -15,6 +15,14 @@ export function DraftsModal({
   onSelectDraft,
   voucherTypes,
 }: DraftsModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const close = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); onClose(); }
+    };
+    window.addEventListener('keydown', close, true);
+    return () => window.removeEventListener('keydown', close, true);
+  }, [isOpen, onClose]);
   const [drafts, setDrafts] = useState<VoucherSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

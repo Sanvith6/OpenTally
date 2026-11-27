@@ -5,6 +5,24 @@ OpenTally follows [Semantic Versioning](https://semver.org/) and strict clean-ro
 
 ---
 
+## [4.0.1] — 2026-11-27
+
+Pre-demo UI wiring and keyboard-first hardening for the v4.0.0 feature set.
+
+### Added and corrected
+- Added live Gateway/navigation routes for distributor price levels and factory job-work; wired job-work dispatch, receipt, ITC-04 export, custom fields, signed webhook configuration, weighbridge/barcode helpers, and advanced BOM/scrap recovery panels to native services.
+- Added Ctrl+P PDF exports for trial balance, profit and loss, balance sheet, ledger statements, and outstanding aging. Reports honor the selected company/date scope; P&L and balance sheet use classic T-format layouts.
+- Added Enter-to-advance, Ctrl+A accept/post, modal-first Escape, and searchable ledger/party/item selection across accounting, sales, and purchase voucher flows.
+- Exposed the existing EPFO ECR exporter in the payroll register with a pay-period download action.
+- Preserved actual inventory quantity separately from billed quantity in sales and purchase drafts and posting. Exact Decimal calculations use billed quantity for financial values and actual quantity for stock movement.
+- Hardened webhook destination parsing against hostname-prefix and credential confusion; fixed nested BOM expansion to use the BOM schema and base output quantity.
+- Fixed manufacturing overhead journal line insertion and posting order, and linked produced finished goods to their batch when supplied.
+
+### Verification
+- Rust: 536 tests passed, 1 ignored; strict all-target Clippy and rustfmt checks passed.
+- Frontend: 170 Vitest tests passed; TypeScript and production Vite build passed.
+- Live desktop audit artifacts are recorded under `docs/v4.0.1-ui-audit/` after native CDP verification.
+
 ## [4.0.0] — 2026-11-27
 
 OpenTally v4.0.0 Production Hardening Release delivering GSTN portal strictness, distributor inventory depth, deep nested Tally XML fidelity, pan-India payroll/TDS, 100k-voucher SQLite scale hardening, CA A4 Financial Statement PDF pack, and Factory Job-Work / Clean-Room TDL extensibility.

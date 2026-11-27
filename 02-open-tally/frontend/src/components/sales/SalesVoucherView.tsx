@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Company,
   Godown,
@@ -23,6 +23,12 @@ import {
   previewGstCalculation,
 } from '../../services/api';
 import '../reports/Reports.css';
+import { CommercialLineFields } from '../vouchers/CommercialLineFields';
+import { CommercialGstPreview } from '../vouchers/CommercialTaxPreview';
+import { taxableLinesTotal, minorAmount } from '../vouchers/terminalAmounts';
+import { useTerminalKeyboard } from '../vouchers/terminalKeyboard';
+import { AcceptVoucherDialog } from '../vouchers/AcceptVoucherDialog';
+import { SearchableAccountSelect } from '../vouchers/SearchableAccountSelect';
 
 interface Props {
   activeCompany: Company | null;
@@ -65,6 +71,10 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [acceptOpen, setAcceptOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const terminalRef = useRef<HTMLElement>(null);
 
   // GST State
   const [placeOfSupplyStateCode, setPlaceOfSupplyStateCode] = useState('');
@@ -109,24 +119,13 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
       return;
     }
 
-    const totalTaxable = form.lines.reduce((acc, line) => {
-      const q = parseFloat(line.quantity) || 0;
-      const r = parseFloat(line.rate) || 0;
-      let lineTotal = q * r;
-      if (line.discount_kind === 'amount') {
-        lineTotal = Math.max(0, lineTotal - (parseFloat(line.discount_value) || 0));
-      } else if (line.discount_kind === 'percentage') {
-        const pct = parseFloat(line.discount_value) || 0;
-        lineTotal = Math.max(0, lineTotal * (1 - pct / 100));
-      }
-      return acc + lineTotal;
-    }, 0);
+    const totalTaxable = taxableLinesTotal(form.lines);
 
-    if (totalTaxable > 0) {
+    if (minorAmount(totalTaxable) > 0n) {
       previewGstCalculation(
         placeOfSupplyStateCode.trim() || '27',
         'Taxable',
-        totalTaxable.toFixed(2),
+        totalTaxable,
         '18.00',
         '0.00',
         isReverseCharge
@@ -176,6 +175,7 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
           unit_id: line.unit_id || '',
           godown_id: line.godown_id || '',
           quantity: line.quantity,
+          billed_quantity: line.billed_quantity ?? null,
           rate: line.rate,
           discount_kind: line.discount_kind,
           discount_value: line.discount_value,
@@ -186,21 +186,27 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
     }
   };
 
-  const submit = async () => {
+  const submit = async (accept = false) => {
+    if (submitLock.current) return;
     setError(null);
     if (!form.party_id || !form.series_id || form.lines.some((x) => !x.description.trim())) {
       setError('Customer, series, and every line description are required.');
       return;
     }
+    submitLock.current = true; setSubmitting(true);
     try {
-      if (editingId) await updateSalesDraft(editingId, form);
-      else await createSalesDraft(form);
-      setNotice(editingId ? 'Sales draft updated.' : 'Sales draft created.');
+      const saved = editingId ? await updateSalesDraft(editingId, form) : await createSalesDraft(form);
+      if (accept) {
+        setEditingId(saved.document.id);
+        const result = await postSalesDocument(saved.document.id);
+        setNotice(`Sales document posted. Voucher: ${result.voucher.voucher.voucher_number}`);
+      } else setNotice(editingId ? 'Sales draft updated.' : 'Sales draft created.');
+      setAcceptOpen(false);
       reset();
       await load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    }
+      setError(e instanceof Error ? e.message : String(e)); setAcceptOpen(false);
+    } finally { submitLock.current = false; setSubmitting(false); }
   };
 
   const post = async (id: string) => {
@@ -214,8 +220,11 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
     }
   };
 
+  useTerminalKeyboard({ container: terminalRef, onAccept: () => void submit(true), onBack });
+  useEffect(() => { terminalRef.current?.querySelector<HTMLElement>('[data-terminal-order="10"]')?.focus(); }, []);
+
   return (
-    <section className="ot-report-screen">
+    <section className="ot-report-screen" ref={terminalRef} data-terminal-entry>
       <div className="ot-voucher-ribbon ot-ribbon-sales" data-testid="voucher-ribbon-sales">
         <span>Sales Voucher (F8)</span>
         <span>Outward Taxable Supply &amp; Inventory Delivery</span>
@@ -247,15 +256,10 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
             Atomic GL + FIFO Inventory posting is active with Indian GST calculation.
           </p>
           <div className="ot-inventory-fields">
-            <select aria-label="Customer" value={form.party_id} onChange={(e) => set('party_id', e.target.value)}>
-              <option value="">Customer</option>
-              {parties.map((x) => (
-                <option key={x.id} value={x.id}>
-                  {x.display_name} · {x.party_code}
-                </option>
-              ))}
-            </select>
+            <SearchableAccountSelect label="Customer" order={20} value={form.party_id} onChange={(id) => set('party_id', id)}
+              options={parties.map((row) => ({ id: row.id, name: `${row.display_name} · ${row.party_code}` }))} />
             <input
+              data-terminal-order={30}
               aria-label="Series"
               placeholder="Sales series ID"
               value={form.series_id}
@@ -263,6 +267,7 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
             />
             <input
               type="date"
+              data-terminal-order={10}
               aria-label="Invoice date"
               value={form.invoice_date}
               onChange={(e) => set('invoice_date', e.target.value)}
@@ -299,155 +304,27 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
               <span>Reverse Charge</span>
             </label>
             <textarea
+              data-terminal-order={900}
               placeholder="Narration"
               value={form.narration || ''}
               onChange={(e) => set('narration', e.target.value)}
             />
           </div>
 
-          {form.lines.map((line, index) => (
-            <div className="ot-inventory-fields" key={index}>
-              <input
-                placeholder="Line description"
-                value={line.description}
-                onChange={(e) => setLine(index, 'description', e.target.value)}
-              />
-              <select
-                aria-label={`Stock item ${index + 1}`}
-                value={line.stock_item_id || ''}
-                onChange={(e) => setLine(index, 'stock_item_id', e.target.value)}
-              >
-                <option value="">Accounting-only line</option>
-                {items.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label={`Unit ${index + 1}`}
-                value={line.unit_id || ''}
-                onChange={(e) => setLine(index, 'unit_id', e.target.value)}
-              >
-                <option value="">Unit</option>
-                {units.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.symbol}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label={`Godown ${index + 1}`}
-                value={line.godown_id || ''}
-                onChange={(e) => setLine(index, 'godown_id', e.target.value)}
-              >
-                <option value="">Godown</option>
-                {godowns.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
-              </select>
-              <input
-                aria-label={`Quantity ${index + 1}`}
-                value={line.quantity}
-                onChange={(e) => setLine(index, 'quantity', e.target.value)}
-              />
-              <input
-                aria-label={`Rate ${index + 1}`}
-                value={line.rate}
-                onChange={(e) => setLine(index, 'rate', e.target.value)}
-              />
-              <select
-                aria-label={`Discount ${index + 1}`}
-                value={line.discount_kind}
-                onChange={(e) => setLine(index, 'discount_kind', e.target.value)}
-              >
-                <option value="none">No discount</option>
-                <option value="amount">Amount</option>
-                <option value="percentage">Percentage</option>
-              </select>
-              <input
-                aria-label={`Discount value ${index + 1}`}
-                value={line.discount_value}
-                onChange={(e) => setLine(index, 'discount_value', e.target.value)}
-              />
-              {form.lines.length > 1 && (
-                <button onClick={() => set('lines', form.lines.filter((_, i) => i !== index))}>
-                  Remove line
-                </button>
-              )}
-            </div>
-          ))}
+          {form.lines.map((line, index) => <CommercialLineFields key={index} line={line} index={index}
+            items={items} units={units} godowns={godowns} onChange={(field, value) => setLine(index, field, value)}
+            onRemove={form.lines.length > 1 ? () => set('lines', form.lines.filter((_, i) => i !== index)) : undefined} />)}
 
           <button onClick={() => set('lines', [...form.lines, newLine()])}>Add line</button>
 
           {/* Live GST Preview Box */}
-          {gstPreview && (
-            <div
-              data-testid="gst-preview-box"
-              style={{
-                marginTop: '1.25rem',
-                padding: '1rem',
-                background: '#f4fbf7',
-                border: '1px solid #c2ebd5',
-                borderRadius: '6px',
-              }}
-            >
-              <h4 style={{ margin: '0 0 0.5rem 0', color: '#145a32' }}>
-                GST Calculation Preview ({gstPreview.supply_type})
-              </h4>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
-                  gap: '0.75rem',
-                  fontSize: '0.9rem',
-                }}
-              >
-                <div>
-                  <span style={{ color: '#666', display: 'block' }}>Taxable Value:</span>
-                  <strong>₹ {gstPreview.taxable_value}</strong>
-                </div>
-                {gstPreview.supply_type === 'IntraState' ? (
-                  <>
-                    <div>
-                      <span style={{ color: '#666', display: 'block' }}>CGST ({gstPreview.cgst_rate}%):</span>
-                      <strong>₹ {gstPreview.cgst_amount}</strong>
-                    </div>
-                    <div>
-                      <span style={{ color: '#666', display: 'block' }}>SGST ({gstPreview.sgst_rate}%):</span>
-                      <strong>₹ {gstPreview.sgst_amount}</strong>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <span style={{ color: '#666', display: 'block' }}>IGST ({gstPreview.igst_rate}%):</span>
-                    <strong>₹ {gstPreview.igst_amount}</strong>
-                  </div>
-                )}
-                {parseFloat(gstPreview.cess_amount) > 0 && (
-                  <div>
-                    <span style={{ color: '#666', display: 'block' }}>Cess ({gstPreview.cess_rate}%):</span>
-                    <strong>₹ {gstPreview.cess_amount}</strong>
-                  </div>
-                )}
-                <div>
-                  <span style={{ color: '#666', display: 'block' }}>Total Tax:</span>
-                  <strong style={{ color: '#b03a2e' }}>₹ {gstPreview.total_tax}</strong>
-                </div>
-                <div>
-                  <span style={{ color: '#666', display: 'block' }}>Grand Total:</span>
-                  <strong style={{ color: '#196f3d', fontSize: '1.05rem' }}>₹ {gstPreview.grand_total}</strong>
-                </div>
-              </div>
-            </div>
-          )}
+          <CommercialGstPreview preview={gstPreview} />
 
           <div style={{ marginTop: '1rem', display: 'flex', gap: '0.5rem' }}>
-            <button onClick={() => void submit()} disabled={!activeCompany}>
+            <button onClick={() => void submit()} disabled={!activeCompany || submitting}>
               {editingId ? 'Update draft' : 'Save draft'}
             </button>
+            <button data-terminal-order={1000} data-terminal-accept disabled={!activeCompany || submitting} onClick={() => setAcceptOpen(true)}>Accept [Y/N] · Ctrl+A</button>
             {editingId && <button onClick={reset}>Cancel edit</button>}
           </div>
         </div>
@@ -500,6 +377,7 @@ export function SalesVoucherView({ activeCompany, onBack }: Props) {
           </table>
         )}
       </div>
+      {acceptOpen && <AcceptVoucherDialog busy={submitting} onYes={() => void submit(true)} onNo={() => setAcceptOpen(false)} />}
     </section>
   );
 }

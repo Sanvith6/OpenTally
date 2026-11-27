@@ -31,6 +31,7 @@ describe('Factory workflows', () => {
     await screen.findByRole('option', { name: 'External Worker' });
     const external = screen.getByLabelText('External job-worker godown');
     expect(external.querySelectorAll('option')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: 'Add Dispatch Line' })).toBeNull();
     fireEvent.change(screen.getByLabelText('Out challan number'), { target: { value: 'JW-001' } });
     fireEvent.change(screen.getByLabelText('Job-worker party'), { target: { value: 'worker-1' } });
     fireEvent.change(screen.getByLabelText('Source godown'), { target: { value: 'internal' } });
@@ -56,6 +57,7 @@ describe('Factory workflows', () => {
   it('creates PDF-visible custom field definitions', async () => {
     render(<FactoryExtensibilityView activeCompany={company} onBack={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Custom Fields' }));
+    expect(Array.from(screen.getByLabelText('Entity scope').querySelectorAll('option')).map((option) => option.value)).toEqual(['Voucher', 'Ledger', 'StockItem']);
     fireEvent.change(screen.getByLabelText('Field key'), { target: { value: 'vehicle_number' } });
     fireEvent.change(screen.getByLabelText('Field label'), { target: { value: 'Vehicle Number' } });
     fireEvent.click(screen.getByLabelText('Show on PDF'));
@@ -71,6 +73,8 @@ describe('Factory workflows', () => {
     fireEvent.change(screen.getByLabelText('Signing secret'), { target: { value: 'never-display-me' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create Webhook' }));
     await waitFor(() => expect((screen.getByLabelText('Signing secret') as HTMLInputElement).value).toBe(''));
+    expect(invoke).toHaveBeenCalledWith('create_webhook_subscription', expect.objectContaining({ input: expect.objectContaining({ event_type: 'voucher.posted' }) }));
+    expect(Array.from(screen.getByLabelText('Event').querySelectorAll('option')).map((option) => option.value)).toEqual(['voucher.posted', 'voucher.cancelled', 'stock.moved', 'jobwork.dispatched', 'jobwork.received']);
     expect(screen.queryByText('never-display-me')).toBeNull();
   });
 

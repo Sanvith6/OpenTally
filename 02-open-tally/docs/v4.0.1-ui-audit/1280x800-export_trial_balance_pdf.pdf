@@ -1,0 +1,58 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1118 >>
+stream
+q 0.92 g 0.75 w 40.00 775.00 515.28 40.00 re B Q
+BT /F2 13.00 Tf 177.08 798.00 Td (Bharath Precision Components Pvt Ltd) Tj ET
+BT /F2 10.00 Tf 255.02 783.00 Td (TRIAL BALANCE) Tj ET
+BT /F1 8.50 Tf 40.00 760.00 Td (As of: 2025-04-01) Tj ET
+q 0.90 g 0.60 w 40.00 738.00 515.28 18.00 re B Q
+BT /F2 8.50 Tf 46.00 743.00 Td (Particulars \(Ledger / Group\)) Tj ET
+BT /F2 8.50 Tf 397.83 743.00 Td (Debit \(INR\)) Tj ET
+BT /F2 8.50 Tf 498.77 743.00 Td (Credit \(INR\)) Tj ET
+BT /F1 8.00 Tf 46.00 722.00 Td (HDFC Bank Current A/c) Tj ET
+BT /F1 8.00 Tf 404.37 722.00 Td (5,00,000.00) Tj ET
+BT /F1 8.00 Tf 534.16 722.00 Td (0.00) Tj ET
+BT /F1 8.00 Tf 46.00 708.00 Td (Share Capital) Tj ET
+BT /F1 8.00 Tf 430.16 708.00 Td (0.00) Tj ET
+BT /F1 8.00 Tf 508.37 708.00 Td (5,00,000.00) Tj ET
+q 0.75 w 40.00 700.00 m 555.28 700.00 l s Q
+BT /F2 9.00 Tf 46.00 688.00 Td (Grand Total) Tj ET
+BT /F2 9.00 Tf 395.57 688.00 Td (5,00,000.00) Tj ET
+BT /F2 9.00 Tf 499.57 688.00 Td (5,00,000.00) Tj ET
+q 0.75 w 40.00 684.00 m 555.28 684.00 l s Q
+q 0.75 w 40.00 681.50 m 555.28 681.50 l s Q
+BT /F1 8.00 Tf 46.00 668.00 Td (Difference: 0.00) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000263 00000 n 
+0000001433 00000 n 
+0000001503 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1578
+%%EOF

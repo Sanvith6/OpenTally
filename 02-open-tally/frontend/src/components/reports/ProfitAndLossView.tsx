@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AccountGroup, Company, ProfitAndLossLedgerRow, ProfitAndLossReport } from '../../types';
-import { getProfitAndLoss, listAccountGroups } from '../../services/api';
+import { exportProfitAndLossPdf, getProfitAndLoss, listAccountGroups } from '../../services/api';
+import { addDecimals } from '../../utils/decimal';
+import { PdfExportAction } from './PdfExportAction';
+import { TFormatRow, TFormatStatement } from './TFormatStatement';
 import './Reports.css';
 
 interface Props {
@@ -40,12 +43,28 @@ function downloadCsv(report: ProfitAndLossReport): void {
   URL.revokeObjectURL(url);
 }
 
-function Section({ title, rows, subtotal }: { title: string; rows: ProfitAndLossLedgerRow[]; subtotal: string }) {
-  return <>
-    <tr className="ot-report-section-row"><th colSpan={3}>{title}</th><th colSpan={3}></th></tr>
-    {rows.map((row) => <tr key={row.ledger_id}><td></td><td>{row.account_group_name}</td><td>{row.ledger_name}</td><td className="money">{row.debit}</td><td className="money">{row.credit}</td><td className="money">{row.contribution}</td></tr>)}
-    <tr className="ot-report-subtotal"><td colSpan={5}>{title} subtotal</td><td className="money">{subtotal}</td></tr>
-  </>;
+function section(title: string, rows: ProfitAndLossLedgerRow[], subtotal: string): TFormatRow[] {
+  return [{ label: title, kind: 'section' },
+    ...rows.map((row) => ({ label: row.ledger_name, group: row.account_group_name, amount: row.contribution })),
+    { label: `${title} subtotal`, amount: subtotal, kind: 'subtotal' }];
+}
+
+function ProfitAndLossStatement({ report }: { report: ProfitAndLossReport }) {
+  const expenses = [...section('Direct Expenses', report.direct_expense_rows, report.direct_expense_subtotal),
+    ...section('Indirect Expenses', report.indirect_expense_rows, report.indirect_expense_subtotal)];
+  const income = [...section('Direct Income', report.direct_income_rows, report.direct_income_subtotal),
+    ...section('Indirect Income', report.indirect_income_rows, report.indirect_income_subtotal)];
+  let expenseTotal = addDecimals(report.direct_expense_subtotal, report.indirect_expense_subtotal);
+  let incomeTotal = addDecimals(report.direct_income_subtotal, report.indirect_income_subtotal);
+  if (report.net_result_type === 'Profit') {
+    expenses.push({ label: 'Net Profit', amount: report.net_profit_or_loss, kind: 'balance' });
+    expenseTotal = addDecimals(expenseTotal, report.net_profit_or_loss);
+  } else if (report.net_result_type === 'Loss') {
+    income.push({ label: 'Net Loss', amount: report.net_profit_or_loss, kind: 'balance' });
+    incomeTotal = addDecimals(incomeTotal, report.net_profit_or_loss);
+  }
+  return <TFormatStatement name="Profit & Loss T-format" leftTitle="Expenses" rightTitle="Income"
+    left={expenses} right={income} leftTotal={expenseTotal} rightTotal={incomeTotal} />;
 }
 
 export function ProfitAndLossView({ activeCompany, onBack }: Props) {
@@ -87,17 +106,12 @@ export function ProfitAndLossView({ activeCompany, onBack }: Props) {
       <label className="ot-report-field"><span>Include zero balances</span><input type="checkbox" checked={includeZero} onChange={(event) => setIncludeZero(event.target.checked)} /></label>
       <button className="ot-report-action" onClick={() => void load()} disabled={loading || !activeCompany}>Refresh</button>
       <button className="ot-report-action" onClick={() => report && downloadCsv(report)} disabled={!report}>Export CSV</button>
+      <PdfExportAction filename={`profit-and-loss-${from}-${to}.pdf`} disabled={!activeCompany || loading || !report}
+        loadPdf={() => exportProfitAndLossPdf(from, to, activeCompany?.id)} />
     </div>
     {report && <div className="ot-report-summary"><div className="ot-report-summary-card"><span>Gross {report.gross_result_type}</span><strong>{report.gross_profit_or_loss}</strong></div><div className="ot-report-summary-card"><span>Net {report.net_result_type}</span><strong>{report.net_profit_or_loss}</strong></div><div className="ot-report-summary-card"><span>Ledgers</span><strong>{report.ledger_count}</strong></div></div>}
     <div className="ot-report-card">
-      {loading ? <div className="ot-report-loading">Loading Profit &amp; Loss…</div> : error ? <div className="ot-report-error">{error}</div> : !report || report.ledger_count === 0 ? <div className="ot-report-empty">No income or expense activity for this period.</div> : <table className="ot-report-table"><thead><tr><th></th><th>Account group</th><th>Ledger</th><th className="money">Debit</th><th className="money">Credit</th><th className="money">Contribution</th></tr></thead><tbody>
-        <Section title="Direct Income" rows={report.direct_income_rows} subtotal={report.direct_income_subtotal} />
-        <Section title="Direct Expenses" rows={report.direct_expense_rows} subtotal={report.direct_expense_subtotal} />
-        <tr className="ot-report-result-row"><th colSpan={5}>Gross {report.gross_result_type}</th><th className="money">{report.gross_profit_or_loss}</th></tr>
-        <Section title="Indirect Income" rows={report.indirect_income_rows} subtotal={report.indirect_income_subtotal} />
-        <Section title="Indirect Expenses" rows={report.indirect_expense_rows} subtotal={report.indirect_expense_subtotal} />
-        <tr className="ot-report-result-row"><th colSpan={5}>Net {report.net_result_type}</th><th className="money">{report.net_profit_or_loss}</th></tr>
-      </tbody></table>}
+      {loading ? <div className="ot-report-loading">Loading Profit &amp; Loss…</div> : error ? <div className="ot-report-error">{error}</div> : !report ? <div className="ot-report-empty">No income or expense activity for this period.</div> : <ProfitAndLossStatement report={report} />}
     </div>
   </section>;
 }

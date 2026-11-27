@@ -1,6 +1,6 @@
 [package]
 name = "opentally-core"
-version = "4.0.0"
+version = "4.0.1"
 description = "OpenTally Desktop Application Core"
 authors = ["OpenTally Architecture & Engineering Team"]
 edition = "2021"

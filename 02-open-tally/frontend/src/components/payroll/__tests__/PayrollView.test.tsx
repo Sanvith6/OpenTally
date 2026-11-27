@@ -12,6 +12,7 @@ vi.mock('../../../services/api', () => ({
   getPayrollStatutorySummary: vi.fn(),
   exportPayslipPdf: vi.fn(),
   exportPayrollCsv: vi.fn(),
+  exportEpfoEcrFile: vi.fn(),
 }));
 
 const mockCompany: Company = {
@@ -113,6 +114,7 @@ describe('PayrollView', () => {
     vi.mocked(api.getPayrollStatutorySummary).mockResolvedValue(mockSummary);
     vi.mocked(api.exportPayslipPdf).mockResolvedValue([37, 80, 68, 70]);
     vi.mocked(api.exportPayrollCsv).mockResolvedValue('Employee Code,Net Pay\nEMP-001,18050\n');
+    vi.mocked(api.exportEpfoEcrFile).mockResolvedValue('ECR-LINE');
     window.URL.createObjectURL = vi.fn(() => 'blob:mock');
     window.URL.revokeObjectURL = vi.fn();
   });
@@ -175,6 +177,14 @@ describe('PayrollView', () => {
     await waitFor(() => {
       expect(api.exportPayrollCsv).toHaveBeenCalledWith('2026-04', 'cmp_1');
     });
+  });
+
+  it('exports the statutory EPFO ECR file for the selected pay period', async () => {
+    render(<PayrollView activeCompany={mockCompany} onBack={onBack} />);
+    await waitFor(() => expect(screen.getByText('Ramesh Kumar')).toBeTruthy());
+    fireEvent.click(screen.getByRole('tab', { name: /Payslips & Statutory Register/i }));
+    fireEvent.click(await screen.findByTestId('export-epfo-ecr-btn'));
+    await waitFor(() => expect(api.exportEpfoEcrFile).toHaveBeenCalledWith('2026-04', 'cmp_1'));
   });
 
   it('unwinds modal form first and then navigates back on Esc key', async () => {

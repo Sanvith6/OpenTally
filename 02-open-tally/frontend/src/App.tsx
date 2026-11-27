@@ -46,7 +46,9 @@ import { SecurityControlView } from './components/security/SecurityControlView';
 import { ManufacturingBomView } from './components/inventory/ManufacturingBomView';
 import { PayrollView } from './components/payroll/PayrollView';
 import { MultiCurrencyView } from './components/currency/MultiCurrencyView';
-import { CustomReportsView } from './components/extensions/CustomReportsView';
+import { FactoryExtensibilityView } from './components/extensions/FactoryExtensibilityView';
+import { JobWorkView } from './components/inventory/JobWorkView';
+import { PriceLevelsView } from './components/inventory/PriceLevelsView';
 import { CompanyLoginModal } from './components/security/CompanyLoginModal';
 import { LanServerModal } from './components/lan/LanServerModal';
 import {
@@ -69,6 +71,8 @@ import './App.css';
 
 function getInitialTitle(view: string): string {
   switch (view) {
+    case 'price_levels': return 'Price Levels & Quantity Slabs';
+    case 'job_work': return 'Job-Work & GST ITC-04';
     case 'chart_of_accounts':
       return 'Chart of Accounts';
     case 'voucher_masters':
@@ -328,6 +332,7 @@ export function App() {
   // Centralized Global Keyboard Interceptor (TallyPrime Function Keys & Esc Hierarchy)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       // 1. Function Keys
       if (e.key === 'F1') {
         e.preventDefault();
@@ -431,6 +436,9 @@ export function App() {
         } else if (isSelectModalOpen) {
           e.preventDefault();
           setIsSelectModalOpen(false);
+        } else if (document.querySelector('[role="dialog"], .ot-modal-overlay, .ot-modal-backdrop')) {
+          // A child workspace owns its open sub-modal and unwinds it first.
+          return;
         } else if (navStack.length > 1) {
           e.preventDefault();
           popView();
@@ -704,7 +712,11 @@ export function App() {
           ) : currentView === 'multi_currency' && activeCompany ? (
             <MultiCurrencyView activeCompany={activeCompany} onBack={popView} />
           ) : currentView === 'custom_reports' && activeCompany ? (
-            <CustomReportsView activeCompany={activeCompany} onBack={popView} />
+            <FactoryExtensibilityView activeCompany={activeCompany} onBack={popView} />
+          ) : currentView === 'price_levels' && activeCompany ? (
+            <PriceLevelsView activeCompany={activeCompany} onBack={popView} />
+          ) : currentView === 'job_work' && activeCompany ? (
+            <JobWorkView activeCompany={activeCompany} onBack={popView} />
           ) : (
             <div className="ot-workspace-grid">
               <section className="ot-col-company">
@@ -861,6 +873,11 @@ export function App() {
                         showNotification('Please select or create an active company first (F3).');
                         setIsSelectModalOpen(true);
                       } else pushView('security_control', 'Users & Passwords (Security Control)');
+                    } else if (item.id === 'price_levels' || item.id === 'job_work') {
+                      if (!activeCompany) {
+                        showNotification('Select an active company first (F3).');
+                        setIsSelectModalOpen(true);
+                      } else pushView(item.id, item.id === 'job_work' ? 'Job-Work & GST ITC-04' : 'Price Levels & Quantity Slabs');
                     } else if (item.id === 'manufacturing_bom') {
                       if (!activeCompany) {
                         showNotification('Please select or create an active company first (F3).');

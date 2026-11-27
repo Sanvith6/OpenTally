@@ -1,0 +1,59 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 1195 >>
+stream
+q 0.92 g 0.75 w 40.00 775.00 515.28 40.00 re B Q
+BT /F2 13.00 Tf 177.08 798.00 Td (Bharath Precision Components Pvt Ltd) Tj ET
+BT /F2 10.00 Tf 175.78 783.00 Td (LEDGER STATEMENT: Apex Automations Pvt Ltd) Tj ET
+BT /F1 8.50 Tf 40.00 760.00 Td (Period: 2025-04-01 to 2026-11-27) Tj ET
+q 0.90 g 0.60 w 40.00 738.00 515.28 18.00 re B Q
+BT /F2 8.50 Tf 46.00 743.00 Td (Date) Tj ET
+BT /F2 8.50 Tf 115.00 743.00 Td (Vch Type / No) Tj ET
+BT /F2 8.50 Tf 384.36 743.00 Td (Debit) Tj ET
+BT /F2 8.50 Tf 456.30 743.00 Td (Credit) Tj ET
+BT /F2 8.50 Tf 516.63 743.00 Td (Balance) Tj ET
+BT /F1 8.00 Tf 46.00 722.00 Td (2025-04-20) Tj ET
+BT /F1 8.00 Tf 115.00 722.00 Td (Sales SAL/2025/0001) Tj ET
+BT /F1 8.00 Tf 370.59 722.00 Td (18,880.00) Tj ET
+BT /F1 8.00 Tf 465.16 722.00 Td (0.00) Tj ET
+BT /F1 8.00 Tf 516.82 722.00 Td (18880 Dr) Tj ET
+BT /F1 8.00 Tf 46.00 708.00 Td (2025-05-02) Tj ET
+BT /F1 8.00 Tf 115.00 708.00 Td (Receipt RCPT/2025/0002) Tj ET
+BT /F1 8.00 Tf 390.16 708.00 Td (0.00) Tj ET
+BT /F1 8.00 Tf 445.59 708.00 Td (10,000.00) Tj ET
+BT /F1 8.00 Tf 510.59 708.00 Td (8880.00 Dr) Tj ET
+q 0.75 w 40.00 698.00 m 555.28 698.00 l s Q
+BT /F2 9.00 Tf 46.00 684.00 Td (Closing Balance: 8880.00 Dr) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000263 00000 n 
+0000001510 00000 n 
+0000001580 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+1655
+%%EOF

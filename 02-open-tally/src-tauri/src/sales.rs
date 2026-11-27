@@ -31,6 +31,8 @@ pub struct SalesLineRequest {
     pub unit_id: Option<String>,
     pub godown_id: Option<String>,
     pub quantity: String,
+    #[serde(default)]
+    pub billed_quantity: Option<String>,
     pub rate: String,
     pub discount_kind: DiscountKind,
     pub discount_value: String,
@@ -83,6 +85,7 @@ pub struct SalesDocumentLine {
     pub unit_id: Option<String>,
     pub godown_id: Option<String>,
     pub quantity: String,
+    pub billed_quantity: Option<String>,
     pub rate: String,
     pub discount_kind: String,
     pub discount_value: String,
@@ -379,13 +382,20 @@ impl SalesDocumentService {
                     unit_id: l.unit_id,
                     godown_id: l.godown_id,
                     quantity: qty,
+                    billed_quantity: l
+                        .billed_quantity
+                        .as_deref()
+                        .map(Decimal::from_str_exact)
+                        .transpose()
+                        .map_err(|_| {
+                            OpenTallyError::IntegrityViolation("Invalid billed quantity".to_owned())
+                        })?,
                     rate,
                     discount_amount,
                     line_amount,
                     batch_number: None,
                     mfg_date: None,
                     expiry_date: None,
-                    billed_quantity: None,
                     entered_unit_id: None,
                 })
             })
@@ -452,6 +462,7 @@ struct Prepared {
 struct PreparedLine {
     request: SalesLineRequest,
     quantity: Decimal,
+    billed_quantity: Option<Decimal>,
     rate: Decimal,
     discount_value: Decimal,
     discount_amount: Decimal,
@@ -521,6 +532,16 @@ async fn prepare(
             ));
         }
         let rate = nonnegative(&line.rate, "rate")?;
+        let billed_quantity = line
+            .billed_quantity
+            .as_deref()
+            .map(|value| nonnegative(value, "billed quantity"))
+            .transpose()?;
+        if billed_quantity.is_some_and(|billed| billed > quantity) {
+            return Err(OpenTallyError::Validation(
+                "Billed quantity cannot exceed actual quantity".to_owned(),
+            ));
+        }
         let discount_value = nonnegative(&line.discount_value, "discount")?;
         if line.stock_item_id.is_some() && (line.unit_id.is_none() || line.godown_id.is_none()) {
             return Err(OpenTallyError::Validation(
@@ -533,7 +554,7 @@ async fn prepare(
             ));
         }
         validate_reference(pool, company_id, &line).await?;
-        let gross = quantity * rate;
+        let gross = billed_quantity.unwrap_or(quantity) * rate;
         let discount_amount = match line.discount_kind {
             DiscountKind::None => {
                 if discount_value != Decimal::ZERO {
@@ -566,6 +587,7 @@ async fn prepare(
         lines.push(PreparedLine {
             request: line,
             quantity,
+            billed_quantity,
             rate,
             discount_value,
             discount_amount,
@@ -659,7 +681,7 @@ async fn insert_sales(
     let mut lines = Vec::new();
     audit(&mut tx, company_id, id, "CREATE", None, None).await?;
     let document = sqlx::query_as::<_, SalesDocument>("SELECT id,company_id,voucher_id,party_id,invoice_date,document_reference,due_date,due_date_source,due_date_override_reason,narration,status,subtotal,discount_total,additional_charges,net_total,tax_status,created_at,updated_at FROM sales_documents WHERE company_id=? AND id=?").bind(company_id).bind(id).fetch_one(&mut *tx).await?;
-    let rows = sqlx::query_as::<_, SalesDocumentLine>("SELECT id,company_id,sales_document_id,line_number,description,stock_item_id,unit_id,godown_id,quantity,rate,discount_kind,discount_value,discount_amount,line_amount,created_at FROM sales_document_lines WHERE company_id=? AND sales_document_id=? ORDER BY line_number").bind(company_id).bind(id).fetch_all(&mut *tx).await?;
+    let rows = sqlx::query_as::<_, SalesDocumentLine>("SELECT id,company_id,sales_document_id,line_number,description,stock_item_id,unit_id,godown_id,quantity,billed_quantity,rate,discount_kind,discount_value,discount_amount,line_amount,created_at FROM sales_document_lines WHERE company_id=? AND sales_document_id=? ORDER BY line_number").bind(company_id).bind(id).fetch_all(&mut *tx).await?;
     lines.extend(rows);
     tx.commit().await?;
     Ok((document, lines))
@@ -673,11 +695,11 @@ async fn insert_lines(
 ) -> Result<(), OpenTallyError> {
     for (index, line) in lines.into_iter().enumerate() {
         let line_id = Uuid::new_v4().to_string();
-        sqlx::query("INSERT INTO sales_document_lines (id,company_id,sales_document_id,line_number,description,stock_item_id,unit_id,godown_id,quantity,rate,discount_kind,discount_value,discount_amount,line_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+        sqlx::query("INSERT INTO sales_document_lines (id,company_id,sales_document_id,line_number,description,stock_item_id,unit_id,godown_id,quantity,billed_quantity,rate,discount_kind,discount_value,discount_amount,line_amount) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
             .bind(&line_id).bind(company_id).bind(document_id).bind((index + 1) as i64)
             .bind(line.request.description.trim()).bind(&line.request.stock_item_id)
             .bind(&line.request.unit_id).bind(&line.request.godown_id)
-            .bind(line.quantity.normalize().to_string()).bind(line.rate.normalize().to_string())
+            .bind(line.quantity.normalize().to_string()).bind(line.billed_quantity.map(|v| v.normalize().to_string())).bind(line.rate.normalize().to_string())
             .bind(line.request.discount_kind.as_str()).bind(line.discount_value.normalize().to_string())
             .bind(line.discount_amount.normalize().to_string()).bind(line.line_amount.normalize().to_string())
             .execute(&mut **tx).await.map_err(map_constraint)?;
@@ -697,7 +719,7 @@ async fn select_lines(
     company_id: &str,
     id: &str,
 ) -> Result<Vec<SalesDocumentLine>, OpenTallyError> {
-    Ok(sqlx::query_as::<_, SalesDocumentLine>("SELECT id,company_id,sales_document_id,line_number,description,stock_item_id,unit_id,godown_id,quantity,rate,discount_kind,discount_value,discount_amount,line_amount,created_at FROM sales_document_lines WHERE company_id=? AND sales_document_id=? ORDER BY line_number").bind(company_id).bind(id).fetch_all(pool).await?)
+    Ok(sqlx::query_as::<_, SalesDocumentLine>("SELECT id,company_id,sales_document_id,line_number,description,stock_item_id,unit_id,godown_id,quantity,billed_quantity,rate,discount_kind,discount_value,discount_amount,line_amount,created_at FROM sales_document_lines WHERE company_id=? AND sales_document_id=? ORDER BY line_number").bind(company_id).bind(id).fetch_all(pool).await?)
 }
 fn date(value: &str) -> Result<NaiveDate, OpenTallyError> {
     NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|_| {
@@ -802,6 +824,7 @@ mod stage18_tests {
             unit_id: None,
             godown_id: None,
             quantity: "1".to_owned(),
+            billed_quantity: None,
             rate: "100.25".to_owned(),
             discount_kind: DiscountKind::None,
             discount_value: "0".to_owned(),
@@ -879,6 +902,7 @@ mod stage18_tests {
             unit_id: Some("unit_a".to_owned()),
             godown_id: Some("godown_a".to_owned()),
             quantity: "2.50".to_owned(),
+            billed_quantity: None,
             rate: "10.00".to_owned(),
             discount_kind: DiscountKind::Percentage,
             discount_value: "10".to_owned(),

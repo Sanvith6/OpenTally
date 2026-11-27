@@ -661,8 +661,8 @@ impl CommercialPostingService {
                     sqlx::query(
                         "INSERT INTO stock_voucher_lines (
                             id, company_id, voucher_id, line_number, stock_item_id,
-                            unit_id, godown_id, quantity, unit_cost, line_value, description
-                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                            unit_id, godown_id, quantity, billed_quantity, unit_cost, line_value, description
+                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     )
                     .bind(&sv_line_id)
                     .bind(company_id)
@@ -672,6 +672,7 @@ impl CommercialPostingService {
                     .bind(unit_id)
                     .bind(godown_id)
                     .bind(line.quantity.normalize().to_string())
+                    .bind(line.billed_quantity.map(|value| value.normalize().to_string()))
                     .bind(unit_cost.normalize().to_string())
                     .bind(line.line_amount.normalize().to_string())
                     .bind(&line.description)

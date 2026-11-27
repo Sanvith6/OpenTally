@@ -14,6 +14,7 @@ import {
   getPayrollStatutorySummary,
   exportPayslipPdf,
   exportPayrollCsv,
+  exportEpfoEcrFile,
 } from '../../services/api';
 
 interface PayrollViewProps {
@@ -333,6 +334,22 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ activeCompany, onBack 
       a.download = `Payroll_Register_${payPeriod}.csv`;
       a.click();
       URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  const handleExportEcr = async () => {
+    try {
+      const contents = await exportEpfoEcrFile(payPeriod, activeCompany.id);
+      const blob = new Blob([contents], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `EPFO_ECR_${payPeriod}.txt`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setStatusMsg(contents ? `EPFO ECR exported for ${payPeriod}.` : `No posted PF payroll rows exist for ${payPeriod}; empty ECR exported.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -760,6 +777,10 @@ export const PayrollView: React.FC<PayrollViewProps> = ({ activeCompany, onBack 
               data-testid="export-payroll-csv-btn"
             >
               Export Payroll CSV
+            </button>
+            <button type="button" className="ot-btn ot-btn-secondary" onClick={() => void handleExportEcr()}
+              data-testid="export-epfo-ecr-btn">
+              Export EPFO ECR
             </button>
           </div>
 

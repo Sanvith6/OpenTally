@@ -812,13 +812,29 @@ impl BomService {
         .await
         .map_err(OpenTallyError::Database)?;
 
+        let batch_id = if let Some(batch_number) = input.batch_number.as_deref() {
+            Some(
+                crate::inventory::batches::BatchService::get_or_create_batch(
+                    &mut tx,
+                    &input.company_id,
+                    &bom.finished_stock_item_id,
+                    batch_number,
+                    input.mfg_date.as_deref(),
+                    input.expiry_date.as_deref(),
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+
         // Insert stock_voucher_line for production
         let prod_line_id = Uuid::new_v4().to_string();
         sqlx::query(
             "INSERT INTO stock_voucher_lines (
                 id, company_id, voucher_id, line_number, stock_item_id, unit_id,
-                destination_godown_id, quantity, description
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOM Finished Goods Production')",
+                destination_godown_id, quantity, batch_id, description
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'BOM Finished Goods Production')",
         )
         .bind(&prod_line_id)
         .bind(&input.company_id)
@@ -828,6 +844,7 @@ impl BomService {
         .bind(&finished_base_unit_id)
         .bind(&input.destination_godown_id)
         .bind(produced_qty.normalize().to_string())
+        .bind(&batch_id)
         .execute(&mut *tx)
         .await
         .map_err(OpenTallyError::Database)?;
@@ -837,8 +854,8 @@ impl BomService {
         sqlx::query(
             "INSERT INTO inventory_cost_layers (
                 id, company_id, stock_item_id, godown_id, source_voucher_id, source_line_id,
-                receipt_date, original_quantity, remaining_quantity, unit_cost, original_value
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                receipt_date, original_quantity, remaining_quantity, unit_cost, original_value, batch_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(&fg_layer_id)
         .bind(&input.company_id)
@@ -851,6 +868,7 @@ impl BomService {
         .bind(produced_qty.normalize().to_string())
         .bind(landed_unit_cost.normalize().to_string())
         .bind(total_manufacturing_cost.normalize().to_string())
+        .bind(&batch_id)
         .execute(&mut *tx)
         .await
         .map_err(OpenTallyError::Database)?;
@@ -860,8 +878,8 @@ impl BomService {
         sqlx::query(
             "INSERT INTO stock_movements (
                 id, company_id, stock_item_id, godown_id, voucher_id, voucher_line_id,
-                movement_date, movement_type, signed_quantity
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'transfer_in', ?)",
+                movement_date, movement_type, signed_quantity, batch_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, 'transfer_in', ?, ?)",
         )
         .bind(&fg_mv_id)
         .bind(&input.company_id)
@@ -871,6 +889,7 @@ impl BomService {
         .bind(&prod_line_id)
         .bind(&input.production_date)
         .bind(produced_qty.normalize().to_string())
+        .bind(&batch_id)
         .execute(&mut *tx)
         .await
         .map_err(OpenTallyError::Database)?;
@@ -940,7 +959,7 @@ impl BomService {
                         id, company_id, voucher_type_id, series_id, numbering_method,
                         voucher_number, date, effective_date, narration, status,
                         total_amount, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOM Manufacturing Overhead Capitalization', 'posted', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'BOM Manufacturing Overhead Capitalization', 'draft', ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
                 )
                 .bind(&gl_vch_id)
                 .bind(&input.company_id)
@@ -959,7 +978,7 @@ impl BomService {
                 let dr_line_id = Uuid::new_v4().to_string();
                 sqlx::query(
                         "INSERT INTO voucher_lines (
-                            id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, description
+                            id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, narration
                         ) VALUES (?, ?, ?, 1, ?, ?, 'Dr', 'Manufacturing Overhead Allocated to Inventory')",
                     )
                     .bind(&dr_line_id)
@@ -979,7 +998,7 @@ impl BomService {
                         let cr_line_id = Uuid::new_v4().to_string();
                         sqlx::query(
                                 "INSERT INTO voucher_lines (
-                                    id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, description
+                                    id, company_id, voucher_id, line_number, ledger_id, amount, entry_type, narration
                                 ) VALUES (?, ?, ?, ?, ?, ?, 'Cr', ?)",
                             )
                             .bind(&cr_line_id)
@@ -995,6 +1014,13 @@ impl BomService {
                         gl_ln += 1;
                     }
                 }
+
+                sqlx::query("UPDATE vouchers SET status='posted', updated_at=CURRENT_TIMESTAMP WHERE company_id=? AND id=? AND status='draft'")
+                    .bind(&input.company_id)
+                    .bind(&gl_vch_id)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(OpenTallyError::Database)?;
             }
         }
 
@@ -1144,15 +1170,23 @@ impl BomService {
         while let Some((cur_bom_id, qty_needed, path)) = stack.pop() {
             visited.insert(cur_bom_id.clone());
             let detail = Self::get_bom_detail(pool, company_id, &cur_bom_id).await?;
-            let std_qty = Decimal::ONE;
+            let std_qty = Decimal::from_str(&detail.base_output_qty).map_err(|_| {
+                OpenTallyError::Validation("Invalid BOM base output quantity".into())
+            })?;
+            if std_qty <= Decimal::ZERO {
+                return Err(OpenTallyError::Validation(
+                    "BOM base output quantity must be positive".into(),
+                ));
+            }
             let scale = qty_needed / std_qty;
 
             for comp in detail.components {
-                let comp_qty = (Decimal::from_str(&comp.required_qty).unwrap_or(Decimal::ZERO)
-                    * scale)
+                let comp_qty = (Decimal::from_str(&comp.required_qty).map_err(|_| {
+                    OpenTallyError::Validation("Invalid BOM component quantity".into())
+                })? * scale)
                     .round_dp(4);
                 let sub_bom_id: Option<String> = sqlx::query_scalar(
-                    "SELECT id FROM boms WHERE company_id = ? AND finished_stock_item_id = ? AND is_active = 1 LIMIT 1",
+                    "SELECT id FROM bill_of_materials WHERE company_id = ? AND finished_stock_item_id = ? AND is_active = 1 ORDER BY id LIMIT 1",
                 )
                 .bind(company_id)
                 .bind(&comp.raw_stock_item_id)

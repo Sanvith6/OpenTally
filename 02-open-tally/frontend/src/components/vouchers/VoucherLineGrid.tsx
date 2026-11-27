@@ -1,4 +1,6 @@
 import { Ledger, VoucherEntryType, VoucherLineInput } from '../../types';
+import { SearchableAccountSelect } from './SearchableAccountSelect';
+import { minorAmount } from './terminalAmounts';
 
 interface VoucherLineGridProps {
   lines: VoucherLineInput[];
@@ -92,6 +94,7 @@ export function VoucherLineGrid({
                   <td style={{ textAlign: 'center' }}>
                     <select
                       id={`line-type-${idx}`}
+                      data-terminal-order={100 + idx * 10}
                       className="ot-input ot-entry-type-select"
                       value={line.entry_type}
                       onChange={(e) =>
@@ -106,21 +109,15 @@ export function VoucherLineGrid({
 
                   {/* Ledger Account Combobox */}
                   <td>
-                    <select
+                    <SearchableAccountSelect
                       id={`line-ledger-${idx}`}
-                      className="ot-input ot-ledger-select"
+                      label={`Ledger account ${idx + 1}`}
+                      order={101 + idx * 10}
                       value={line.ledger_id}
-                      onChange={(e) => onUpdateLine(idx, { ledger_id: e.target.value })}
-                      onKeyDown={(e) => handleKeyDown(e, idx, 'ledger_id')}
-                    >
-                      <option value="">-- Select Ledger Account --</option>
-                      {ledgers.map((l) => (
-                        <option key={l.id} value={l.id}>
-                          {l.name}
-                        </option>
-                      ))}
-                    </select>
-                    {onOpenBillAllocations && line.ledger_id && parseFloat(line.amount) > 0 && (
+                      onChange={(id) => onUpdateLine(idx, { ledger_id: id })}
+                      options={ledgers}
+                    />
+                    {onOpenBillAllocations && line.ledger_id && minorAmount(line.amount) > 0n && (
                       <div style={{ marginTop: '4px' }}>
                         <button
                           type="button"
@@ -228,6 +225,7 @@ export function VoucherLineGrid({
                     {isDr ? (
                       <input
                         id={`line-amount-${idx}`}
+                        data-terminal-order={102 + idx * 10}
                         type="text"
                         className="ot-input ot-amount-input"
                         placeholder="0.00"
@@ -246,6 +244,7 @@ export function VoucherLineGrid({
                     {!isDr ? (
                       <input
                         id={`line-amount-${idx}`}
+                        data-terminal-order={102 + idx * 10}
                         type="text"
                         className="ot-input ot-amount-input"
                         placeholder="0.00"
@@ -263,6 +262,7 @@ export function VoucherLineGrid({
                   <td>
                     <input
                       id={`line-narration-${idx}`}
+                      data-terminal-order={103 + idx * 10}
                       type="text"
                       className="ot-input ot-line-narration-input"
                       placeholder="Line remark..."

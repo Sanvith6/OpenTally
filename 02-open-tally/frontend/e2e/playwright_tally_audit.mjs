@@ -1,4 +1,7 @@
 import { chromium } from 'playwright';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { auditV401Features } from './audit_v401_features.mjs';
 
 const CDP_URL = process.env.CDP_URL || 'http://127.0.0.1:9222';
 
@@ -73,6 +76,11 @@ async function runAudit() {
   const page = pages.find((p) => p.url().includes('tauri.localhost')) || pages[0];
   if (!page) throw new Error('No OpenTally page found');
 
+  const downloadDir = new URL('../../.verification/native-audit-v401/downloads/', import.meta.url);
+  await mkdir(downloadDir, { recursive: true });
+  const cdp = await context.newCDPSession(page);
+  await cdp.send('Page.setDownloadBehavior', { behavior: 'allow', downloadPath: fileURLToPath(downloadDir) });
+
   console.log(`Attached to page: ${page.url()} (title: "${await page.title()}")`);
 
   let stepErrors = [];
@@ -94,6 +102,15 @@ async function runAudit() {
     });
   });
 
+  async function recoverToGateway() {
+    for (let attempt = 0; attempt < 8; attempt++) {
+      const modalCount = await page.locator('[role="dialog"]:visible,.ot-modal-overlay:visible,.ot-modal-backdrop:visible,.ot-lan-modal-backdrop:visible').count();
+      if (await page.locator('h2:has-text("Gateway of OpenTally")').isVisible() && modalCount === 0) return;
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(100);
+    }
+  }
+
   // Helper to run a step and isolate errors
   async function execStep(stepNum, stepName, fn) {
     stepErrors = [];
@@ -107,6 +124,7 @@ async function runAudit() {
     } catch (err) {
       stepErrors.push(err.message || String(err));
       recordStep(stepNum, stepName, 'FAIL', stepErrors, '');
+      try { await recoverToGateway(); } catch { /* preserve the original step failure */ }
     }
   }
 
@@ -231,6 +249,7 @@ async function runAudit() {
   await execStep(3, 'Chart of Accounts ([A])', async () => {
     await page.keyboard.press('a');
     await page.waitForSelector('h2:has-text("Chart of Accounts"), h3:has-text("Chart of Accounts")', { timeout: 8000 });
+    await page.getByText('Current Assets', { exact: true }).waitFor({ timeout: 10000 });
     await checkLayout(page, 'Chart of Accounts');
     const text = await page.locator('body').innerText();
     if (!text.includes('Current Assets') || !text.includes('Indirect Expenses')) {
@@ -659,12 +678,30 @@ async function runAudit() {
     return 'All 20+ v3.0.0 screens & 1280x800/1440x900 layout checks passed cleanly';
   });
 
+  const v401 = await auditV401Features(page, checkLayout, execStep, 21);
+
   console.log('\n================ AUDIT SUMMARY ================');
   const passed = results.filter((r) => r.status === 'PASS').length;
   console.log(`Passed: ${passed} / ${results.length}`);
   console.log(`Total console.error count: ${globalConsoleErrors.length}`);
   console.log(`Total pageerror count: ${globalPageErrors.length}`);
   console.log(JSON.stringify(results, null, 2));
+  console.log(`v4.0.1 real PDF exports captured: ${v401.pdfExports.length}`);
+
+  const artifactDir = new URL('../../docs/v4.0.1-ui-audit/', import.meta.url);
+  await mkdir(artifactDir, { recursive: true });
+  await writeFile(new URL('audit-results.json', artifactDir), JSON.stringify({
+    version: '4.0.1', viewports: ['1280x800', '1440x900'], results,
+    consoleErrors: globalConsoleErrors, pageErrors: globalPageErrors,
+    pdfExports: v401.pdfExports,
+  }, null, 2));
+  await writeFile(new URL('audit-results.md', artifactDir), [
+    '# OpenTally 4.0.1 live UI audit', '',
+    'Native Tauri/WebView2 CDP run. Viewports: 1280×800 and 1440×900.', '',
+    '| Step | Result | Check | Notes |', '|---:|:---:|---|---|',
+    ...results.map((item) => `| ${item.step} | ${item.status} | ${item.name} | ${item.notes.replaceAll('|', '\\|')} |`), '',
+    `Console errors: ${globalConsoleErrors.length}. Page errors: ${globalPageErrors.length}. PDF exports verified: ${v401.pdfExports.length}.`, '',
+  ].join('\n'));
 
   await browser.close();
   if (passed !== results.length || globalConsoleErrors.length > 0 || globalPageErrors.length > 0) {

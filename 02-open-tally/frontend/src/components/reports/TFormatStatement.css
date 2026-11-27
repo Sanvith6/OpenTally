@@ -1,0 +1,8 @@
+.ot-report-table.ot-t-format { table-layout: fixed; min-width: 0; width: 100%; }
+.ot-t-format th, .ot-t-format td { overflow-wrap: anywhere; }
+.ot-t-format .money { font-variant-numeric: tabular-nums; text-align: right; white-space: normal; }
+.ot-t-format th:nth-child(3), .ot-t-format td:nth-child(3) { border-left: 1px solid #d6e2dc; }
+.ot-t-format .ot-t-label small { display: block; color: #5b6870; font-weight: normal; }
+.ot-t-format .ot-t-section { font-weight: bold; background: #e6f0f7; }
+.ot-t-format .ot-t-subtotal, .ot-t-format .ot-t-balance { font-weight: bold; border-top: 1px solid #d6e2dc; }
+.ot-t-format .ot-t-grand-total th, .ot-t-format .ot-t-grand-total td { font-weight: bold; border-top: 1px solid #d6e2dc; border-bottom: 3px double #1e4e79; padding: 12px; }

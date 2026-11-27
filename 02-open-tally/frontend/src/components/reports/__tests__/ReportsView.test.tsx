@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { DayBookView } from '../DayBookView';
 import { LedgerReportView } from '../LedgerReportView';
 import { TrialBalanceView } from '../TrialBalanceView';
@@ -183,9 +183,15 @@ describe('M24 CA PDF exports and accounting T-format', () => {
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
     fireEvent.click(button);
     await waitFor(() => expect(api[operation]).toHaveBeenCalledTimes(1));
+    const today = new Date().toISOString().slice(0, 10);
+    const argumentsForOperation = operation === 'exportLedgerStatementPdf' ? ['l1', '2026-04-01', today, company.id]
+      : operation === 'exportOutstandingAgingPdf' ? ['receivable', today, company.id]
+      : operation === 'exportProfitAndLossPdf' ? ['2026-04-01', '2026-04-01', company.id]
+      : ['2026-04-01', company.id];
+    expect(api[operation]).toHaveBeenCalledWith(...argumentsForOperation);
     await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
     const event = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true });
-    window.dispatchEvent(event);
+    await act(async () => { window.dispatchEvent(event); });
     expect(event.defaultPrevented).toBe(true);
     await waitFor(() => expect(api[operation]).toHaveBeenCalledTimes(2));
     expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
@@ -230,6 +236,38 @@ describe('M24 CA PDF exports and accounting T-format', () => {
     expect(URL.createObjectURL).not.toHaveBeenCalled();
   });
 
+  it('exports the selected payable aging scope', async () => {
+    vi.spyOn(api, 'getAgingAnalysis').mockResolvedValue({ as_of_date: '2026-11-27', report_type: 'payable', parties: [],
+      grand_total: { not_due: '0.00', days_0_30: '0.00', days_31_60: '0.00', days_61_90: '0.00', days_90_plus: '0.00', total: '0.00' } });
+    render(<OutstandingAgingView activeCompany={company} onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Aging Analysis' }));
+    fireEvent.change(screen.getByLabelText('Aging Category'), { target: { value: 'payable' } });
+    const button = screen.getByRole('button', { name: 'Export PDF (Ctrl+P)' });
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(button);
+    await waitFor(() => expect(api.exportOutstandingAgingPdf).toHaveBeenCalledWith('payable', new Date().toISOString().slice(0, 10), company.id));
+  });
+
+  it('keeps a mismatched balance sheet visibly unbalanced', async () => {
+    const original = await api.getBalanceSheet({ as_of_date: '2026-04-01', include_zero_balances: false });
+    vi.mocked(api.getBalanceSheet).mockResolvedValue({ ...original, total_liabilities_and_equity: '100.00', balance_difference: '50.00', is_balanced: false });
+    render(<BalanceSheetView activeCompany={company} onBack={vi.fn()} />);
+    const statement = await screen.findByRole('table', { name: 'Balance Sheet T-format' });
+    const totals = statement.querySelectorAll('tfoot .money');
+    expect(totals[0].textContent).toBe('100.00');
+    expect(totals[1].textContent).toBe('150.00');
+    expect(screen.getByText('Not balanced')).toBeTruthy();
+  });
+
+  it('balances a loss on the income side using exact decimal totals', async () => {
+    const original = await api.getProfitAndLoss({ period: { date_from: '2026-04-01', date_to: '2026-04-30' }, include_zero_balances: false });
+    vi.mocked(api.getProfitAndLoss).mockResolvedValue({ ...original, direct_expense_subtotal: '125.10', net_profit_or_loss: '25.10', net_result_type: 'Loss' });
+    render(<ProfitAndLossView activeCompany={company} onBack={vi.fn()} />);
+    const statement = await screen.findByRole('table', { name: 'Profit & Loss T-format' });
+    expect(statement.querySelectorAll('tfoot .money')[0].textContent).toBe('125.10');
+    expect(statement.querySelectorAll('tfoot .money')[1].textContent).toBe('125.10');
+  });
+
   it('sums outstanding amounts exactly beyond the IEEE754 safe integer range', async () => {
     vi.mocked(api.getBillsReceivable).mockResolvedValue([
       { party_ledger_id: 'p1', party_name: 'Precision Supplier', bill_name: 'LARGE', bill_date: '2026-04-01', due_date: null, dr_cr: 'Dr', original_amount: '90071992547409.91', settled_amount: '0.00', pending_amount: '90071992547409.91', overdue_days: 0 },
@@ -238,5 +276,19 @@ describe('M24 CA PDF exports and accounting T-format', () => {
     render(<OutstandingAgingView activeCompany={company} onBack={vi.fn()} />);
     await screen.findByText('LARGE');
     expect(screen.getAllByText('90071992547410.01').length).toBeGreaterThan(0);
+  });
+
+  it('keeps an empty profit and loss report in T-format', async () => {
+    const original = await api.getProfitAndLoss({ period: { date_from: '2026-04-01', date_to: '2026-04-30' }, include_zero_balances: false });
+    vi.mocked(api.getProfitAndLoss).mockResolvedValue({ ...original, ledger_count: 0, direct_income_rows: [], direct_expense_rows: [], indirect_income_rows: [], indirect_expense_rows: [] });
+    render(<ProfitAndLossView activeCompany={company} onBack={vi.fn()} />);
+    expect(await screen.findByRole('table', { name: 'Profit & Loss T-format' })).toBeTruthy();
+  });
+
+  it('keeps an empty balance sheet report in T-format', async () => {
+    const original = await api.getBalanceSheet({ as_of_date: '2026-04-01', include_zero_balances: false });
+    vi.mocked(api.getBalanceSheet).mockResolvedValue({ ...original, ledger_count: 0, asset_rows: [], liability_rows: [], equity_rows: [] });
+    render(<BalanceSheetView activeCompany={company} onBack={vi.fn()} />);
+    expect(await screen.findByRole('table', { name: 'Balance Sheet T-format' })).toBeTruthy();
   });
 });

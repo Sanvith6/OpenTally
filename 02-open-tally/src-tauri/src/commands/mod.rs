@@ -1,4 +1,5 @@
 use crate::app::AppState;
+pub mod factory_ui;
 use crate::database::DatabaseHealth;
 use crate::errors::OpenTallyError;
 use chrono::Utc;

@@ -1,0 +1,311 @@
+{
+  "version": "4.0.1",
+  "viewports": [
+    "1280x800",
+    "1440x900"
+  ],
+  "results": [
+    {
+      "step": 1,
+      "name": "Startup & Onboarding (SelectCompanyView -> Sample Company & 2-Step F11)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Sample company & 2-step F11 GSTIN auto-detection verified"
+    },
+    {
+      "step": 2,
+      "name": "Top Utility Bar, Gateway Uniqueness, FunctionKeyBar & F11 Esc unwind",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Top bar, 40 unique hotkeys, FunctionKeyBar & F11 Esc unwind verified"
+    },
+    {
+      "step": 3,
+      "name": "Chart of Accounts ([A])",
+      "status": "PASS",
+      "errors": [],
+      "notes": "29 predefined groups & ledgers rendered cleanly"
+    },
+    {
+      "step": 4,
+      "name": "Core Vouchers (F4/F5/F6/F7) + Signature Color Ribbons",
+      "status": "PASS",
+      "errors": [],
+      "notes": "F4/F5/F6/F7 ribbons & shortcuts switched cleanly without page reload"
+    },
+    {
+      "step": 5,
+      "name": "Commercial Vouchers (F8 Sales & F9 Purchase) + Ribbons",
+      "status": "PASS",
+      "errors": [],
+      "notes": "F8 Sales & F9 Purchase ribbons rendered cleanly with 0 NaN/overflow"
+    },
+    {
+      "step": 6,
+      "name": "Credit/Debit Notes (Alt+F6/Alt+F5) & Stock Journal (Alt+F7)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Alt+F6, Alt+F5, Alt+F7 Stock Journal rendered cleanly"
+    },
+    {
+      "step": 7,
+      "name": "Order Processing (Ctrl+F8 / Ctrl+F9)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Order Processing (Ctrl+F8) rendered cleanly"
+    },
+    {
+      "step": 8,
+      "name": "Financial Statements (TB, P&L, BS, DayBook) & Voucher Detail Inspector",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Trial Balance & Day Book -> Voucher Detail Inspector verified"
+    },
+    {
+      "step": 9,
+      "name": "Outstanding & Aging + Banking & BRS",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Outstanding & Aging and Bank Reconciliation rendered cleanly"
+    },
+    {
+      "step": 10,
+      "name": "Indian GST Reports (GSTR-1/3B/2B) & TDS Reports (26Q)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "GST Reports & TDS Reports rendered cleanly"
+    },
+    {
+      "step": 11,
+      "name": "Inventory Pro (Godown, Batch) & Manufacturing BOM via Alt+G",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Godown Summary, Batch Expiry & Manufacturing BOM verified via Alt+G"
+    },
+    {
+      "step": 12,
+      "name": "Management Accounting (Ratio Analysis, Cost Centres & Budgets)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Ratio Analysis, Cost Centres & Budgets verified (0 NaN/Infinity)"
+    },
+    {
+      "step": 13,
+      "name": "Indian Payroll (Ctrl+F4) - Employee, LOP Preview & Payslip",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Payroll F11 seeding, Employee CRUD, LOP preview, GL post & Payslip PDF verified"
+    },
+    {
+      "step": 14,
+      "name": "Year-End Closing & MCA 2023 Forensic Audit Trail Certification",
+      "status": "PASS",
+      "errors": [],
+      "notes": "MCA 2023 Audit Trail verified clean with 0 broken hash links"
+    },
+    {
+      "step": 15,
+      "name": "Alt+G Go-To, Alt+I Tally XML, Alt+B Backup & Security Control (0)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Alt+G, Alt+I, Alt+B & Security Control (0) Esc unwinding verified cleanly"
+    },
+    {
+      "step": 16,
+      "name": "Statements & Ledgers (BS [B], P&L [P], Cash Flow [C], Ledger [L])",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Balance Sheet, P&L, Cash Flow & Ledger Report verified cleanly via unique hotkeys"
+    },
+    {
+      "step": 17,
+      "name": "Milestone 16: Multi-Currency, Forex & Cheque Printing UI ([9])",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Multi-Currency, Forex & Cheque Printing UI verified cleanly"
+    },
+    {
+      "step": 18,
+      "name": "Milestone 17: LAN Host / Multi-User Gold Modal ([-])",
+      "status": "PASS",
+      "errors": [],
+      "notes": "LAN Host Modal (port 7900, Zero-Footprint default, Esc close) verified cleanly"
+    },
+    {
+      "step": 19,
+      "name": "Milestone 18: Custom Reports ([=]) & BYO-GSP Connector Settings",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Custom Report Extensions & GST BYO-GSP Settings verified cleanly"
+    },
+    {
+      "step": 20,
+      "name": "Remaining Screens (Parties, Inventory Valuation/Reports) & 1440x900 Sweep",
+      "status": "PASS",
+      "errors": [],
+      "notes": "All 20+ v3.0.0 screens & 1280x800/1440x900 layout checks passed cleanly"
+    },
+    {
+      "step": 21,
+      "name": "All Gateway routes, hotkey uniqueness and Esc (1280x800)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "40 routes opened and unwound; unique accelerators"
+    },
+    {
+      "step": 22,
+      "name": "M19-M22 statutory, pricing, quantity and payroll controls (1280x800)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "GSTN validator, CMP-08, price slabs, actual/billed, work state/regime, ECR and27Q/27EQ"
+    },
+    {
+      "step": 23,
+      "name": "M21 XML export and dry-run roundtrip (1280x800)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Rust XML envelope exported and parsed by native dry-run (12688 chars)"
+    },
+    {
+      "step": 24,
+      "name": "M24 five real Rust statement PDF exports (1280x800)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "All5 Ctrl+P actions returned completePDF documents from registered Rust commands"
+    },
+    {
+      "step": 25,
+      "name": "M25 job-work, extension tabs and hardware bridge (1280x800)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "All M25 tabs, real frame parser and exact by-product cost command"
+    },
+    {
+      "step": 26,
+      "name": "All Gateway routes, hotkey uniqueness and Esc (1440x900)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "40 routes opened and unwound; unique accelerators"
+    },
+    {
+      "step": 27,
+      "name": "M19-M22 statutory, pricing, quantity and payroll controls (1440x900)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "GSTN validator, CMP-08, price slabs, actual/billed, work state/regime, ECR and27Q/27EQ"
+    },
+    {
+      "step": 28,
+      "name": "M21 XML export and dry-run roundtrip (1440x900)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "Rust XML envelope exported and parsed by native dry-run (12688 chars)"
+    },
+    {
+      "step": 29,
+      "name": "M24 five real Rust statement PDF exports (1440x900)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "All5 Ctrl+P actions returned completePDF documents from registered Rust commands"
+    },
+    {
+      "step": 30,
+      "name": "M25 job-work, extension tabs and hardware bridge (1440x900)",
+      "status": "PASS",
+      "errors": [],
+      "notes": "All M25 tabs, real frame parser and exact by-product cost command"
+    }
+  ],
+  "consoleErrors": [],
+  "pageErrors": [],
+  "pdfExports": [
+    {
+      "command": "export_trial_balance_pdf",
+      "args": {
+        "asOfDate": "2025-04-01",
+        "companyId": null
+      },
+      "byteLength": 1782
+    },
+    {
+      "command": "export_profit_and_loss_pdf",
+      "args": {
+        "fromDate": "2025-04-01",
+        "toDate": "2025-04-01",
+        "companyId": null
+      },
+      "byteLength": 1486
+    },
+    {
+      "command": "export_balance_sheet_pdf",
+      "args": {
+        "asOfDate": "2025-04-01",
+        "companyId": null
+      },
+      "byteLength": 1525
+    },
+    {
+      "command": "export_ledger_statement_pdf",
+      "args": {
+        "ledgerId": "led_apex_automations_pvt_ltd_04ae609fa9684c00bef12fc73cceb31a",
+        "fromDate": "2025-04-01",
+        "toDate": "2026-11-27",
+        "companyId": null
+      },
+      "byteLength": 1859
+    },
+    {
+      "command": "export_outstanding_aging_pdf",
+      "args": {
+        "reportType": "receivable",
+        "asOfDate": "2026-11-27",
+        "companyId": null
+      },
+      "byteLength": 1739
+    },
+    {
+      "command": "export_trial_balance_pdf",
+      "args": {
+        "asOfDate": "2025-04-01",
+        "companyId": null
+      },
+      "byteLength": 1782
+    },
+    {
+      "command": "export_profit_and_loss_pdf",
+      "args": {
+        "fromDate": "2025-04-01",
+        "toDate": "2025-04-01",
+        "companyId": null
+      },
+      "byteLength": 1486
+    },
+    {
+      "command": "export_balance_sheet_pdf",
+      "args": {
+        "asOfDate": "2025-04-01",
+        "companyId": null
+      },
+      "byteLength": 1525
+    },
+    {
+      "command": "export_ledger_statement_pdf",
+      "args": {
+        "ledgerId": "led_apex_automations_pvt_ltd_04ae609fa9684c00bef12fc73cceb31a",
+        "fromDate": "2025-04-01",
+        "toDate": "2026-11-27",
+        "companyId": null
+      },
+      "byteLength": 1859
+    },
+    {
+      "command": "export_outstanding_aging_pdf",
+      "args": {
+        "reportType": "receivable",
+        "asOfDate": "2026-11-27",
+        "companyId": null
+      },
+      "byteLength": 1739
+    }
+  ]
+}

@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { AgingReport, Company, PendingBill } from '../../types';
-import { getAgingAnalysis, getBillsPayable, getBillsReceivable } from '../../services/api';
+import { exportOutstandingAgingPdf, getAgingAnalysis, getBillsPayable, getBillsReceivable } from '../../services/api';
+import { formatFromScaledBigInt, parseToScaledBigInt } from '../../utils/decimal';
+import { PdfExportAction } from './PdfExportAction';
 import './Reports.css';
 
 interface Props {
@@ -70,18 +72,12 @@ export function OutstandingAgingView({ activeCompany, onBack, onViewLedger }: Pr
     );
   });
 
-  const totalOriginal = filteredBills.reduce(
-    (sum, b) => sum + (parseFloat(b.original_amount) || 0),
-    0
+  const sumAmounts = (field: 'original_amount' | 'settled_amount' | 'pending_amount') => formatFromScaledBigInt(
+    filteredBills.reduce((sum, bill) => sum + parseToScaledBigInt(bill[field], 2), 0n), 2, 2,
   );
-  const totalSettled = filteredBills.reduce(
-    (sum, b) => sum + (parseFloat(b.settled_amount) || 0),
-    0
-  );
-  const totalPending = filteredBills.reduce(
-    (sum, b) => sum + (parseFloat(b.pending_amount) || 0),
-    0
-  );
+  const totalOriginal = sumAmounts('original_amount');
+  const totalSettled = sumAmounts('settled_amount');
+  const totalPending = sumAmounts('pending_amount');
   const overdueCount = filteredBills.filter((b) => b.overdue_days > 0).length;
 
   return (
@@ -98,6 +94,7 @@ export function OutstandingAgingView({ activeCompany, onBack, onViewLedger }: Pr
           Back to Gateway
         </button>
       </header>
+
 
       <div className="ot-report-toolbar" style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', gap: '0.25rem', background: '#1e293b', padding: '0.25rem', borderRadius: '4px' }}>
@@ -160,6 +157,8 @@ export function OutstandingAgingView({ activeCompany, onBack, onViewLedger }: Pr
         <button className="ot-report-action" onClick={() => void loadData()} disabled={loading}>
           {loading ? 'Refreshing...' : 'Refresh (F5)'}
         </button>
+        <PdfExportAction filename={`outstanding-${tab}-${asOfDate}.pdf`} disabled={!activeCompany || loading || !asOfDate}
+          loadPdf={() => exportOutstandingAgingPdf(tab === 'aging' ? agingType : tab === 'payables' ? 'payable' : 'receivable', asOfDate, activeCompany?.id)} />
       </div>
 
       {error && (
@@ -180,16 +179,16 @@ export function OutstandingAgingView({ activeCompany, onBack, onViewLedger }: Pr
           >
             <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '4px', borderLeft: '4px solid #3b82f6' }}>
               <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase' }}>Total Original</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#f8fafc' }}>{totalOriginal.toFixed(2)}</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#f8fafc' }}>{totalOriginal}</div>
             </div>
             <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '4px', borderLeft: '4px solid #10b981' }}>
               <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase' }}>Total Settled</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#f8fafc' }}>{totalSettled.toFixed(2)}</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#f8fafc' }}>{totalSettled}</div>
             </div>
             <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '4px', borderLeft: '4px solid #f59e0b' }}>
               <div style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase' }}>Pending Balance</div>
               <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#f8fafc' }}>
-                {totalPending.toFixed(2)} {tab === 'receivables' ? 'Dr' : 'Cr'}
+                {totalPending} {tab === 'receivables' ? 'Dr' : 'Cr'}
               </div>
             </div>
             <div style={{ background: '#1e293b', padding: '1rem', borderRadius: '4px', borderLeft: '4px solid #ef4444' }}>
@@ -289,10 +288,10 @@ export function OutstandingAgingView({ activeCompany, onBack, onViewLedger }: Pr
                   <tr style={{ background: '#0f172a', borderTop: '2px solid #334155', fontWeight: 'bold' }}>
                     <td colSpan={5} style={{ padding: '0.75rem' }}>Grand Total ({filteredBills.length} bills)</td>
                     <td style={{ padding: '0.75rem', textAlign: 'right', fontFamily: 'monospace' }}>
-                      {totalOriginal.toFixed(2)}
+                      {totalOriginal}
                     </td>
                     <td style={{ padding: '0.75rem', textAlign: 'right', fontFamily: 'monospace' }}>
-                      {totalSettled.toFixed(2)}
+                      {totalSettled}
                     </td>
                     <td
                       style={{
@@ -302,7 +301,7 @@ export function OutstandingAgingView({ activeCompany, onBack, onViewLedger }: Pr
                         color: '#38bdf8',
                       }}
                     >
-                      {totalPending.toFixed(2)} {tab === 'receivables' ? 'Dr' : 'Cr'}
+                      {totalPending} {tab === 'receivables' ? 'Dr' : 'Cr'}
                     </td>
                   </tr>
                 </tfoot>

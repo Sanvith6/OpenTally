@@ -220,18 +220,18 @@ pub struct WebhookService;
 
 impl WebhookService {
     pub fn validate_target_url(url: &str) -> Result<(), OpenTallyError> {
-        let u = url.trim();
-        if u.starts_with("https://")
-            || u.starts_with("http://127.0.0.1")
-            || u.starts_with("http://localhost")
+        let parsed = reqwest::Url::parse(url.trim())
+            .map_err(|_| OpenTallyError::Validation("Invalid webhook URL".into()))?;
+        let local = matches!(parsed.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"));
+        if parsed.host_str().is_none()
+            || !parsed.username().is_empty()
+            || parsed.password().is_some()
+            || parsed.fragment().is_some()
+            || !(parsed.scheme() == "https" || (parsed.scheme() == "http" && local))
         {
-            Ok(())
-        } else {
-            Err(OpenTallyError::Validation(
-                "Webhook target_url must use https:// (or http://127.0.0.1 / http://localhost)"
-                    .into(),
-            ))
+            return Err(OpenTallyError::Validation("Webhook URL must use HTTPS or an exact localhost address, without credentials or a fragment".into()));
         }
+        Ok(())
     }
 
     /// RFC 2104 HMAC-SHA256 hex digest.

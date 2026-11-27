@@ -1,3 +1,5 @@
+import { minorAmount } from './terminalAmounts';
+
 interface VoucherTotalBarProps {
   debitTotal: string;
   creditTotal: string;
@@ -19,7 +21,7 @@ export function VoucherTotalBar({
   onNewDraft,
   saving = false,
 }: VoucherTotalBarProps) {
-  const diffVal = parseFloat(difference) || 0;
+  const diffVal = minorAmount(difference);
 
   return (
     <div className="ot-voucher-total-bar">
@@ -35,7 +37,7 @@ export function VoucherTotalBar({
 
       <div className="ot-total-column">
         <span className="ot-total-label">Difference</span>
-        <span className={`ot-total-value ${diffVal > 0 ? 'ot-diff-unbalanced' : 'ot-diff-zero'}`}>
+        <span className={`ot-total-value ${diffVal > 0n ? 'ot-diff-unbalanced' : 'ot-diff-zero'}`}>
           ₹ {difference}
         </span>
       </div>

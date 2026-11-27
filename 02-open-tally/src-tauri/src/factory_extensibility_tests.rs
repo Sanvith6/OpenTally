@@ -14,35 +14,90 @@ use uuid::Uuid;
 
 #[test]
 fn test_webhook_target_host_is_parsed_not_prefix_matched() {
-    for url in ["http://localhost.attacker.test/hook", "http://127.0.0.1.attacker.test/hook", "http://localhost@attacker.test/hook", "https://"] {
-        assert!(WebhookService::validate_target_url(url).is_err(), "accepted {url}");
+    for url in [
+        "http://localhost.attacker.test/hook",
+        "http://127.0.0.1.attacker.test/hook",
+        "http://localhost@attacker.test/hook",
+        "https://",
+    ] {
+        assert!(
+            WebhookService::validate_target_url(url).is_err(),
+            "accepted {url}"
+        );
     }
-    for url in ["https://example.test/hook", "http://localhost:9001/hook", "http://127.0.0.1:9001/hook"] {
-        assert!(WebhookService::validate_target_url(url).is_ok(), "rejected {url}");
+    for url in [
+        "https://example.test/hook",
+        "http://localhost:9001/hook",
+        "http://127.0.0.1:9001/hook",
+    ] {
+        assert!(
+            WebhookService::validate_target_url(url).is_ok(),
+            "rejected {url}"
+        );
     }
 }
 
 #[tokio::test]
 async fn test_nested_bom_preview_honors_each_base_output_quantity() {
-    use crate::inventory::bom::{CreateBomInput, CreateBomComponentInput};
+    use crate::inventory::bom::{CreateBomComponentInput, CreateBomInput};
     let (_dir, db, cid) = setup_m25_db().await;
     let pool = db.pool();
     let unit = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO units (id,company_id,symbol,formal_name) VALUES (?,?,'NOS','Number')")
-        .bind(&unit).bind(&cid).execute(pool).await.unwrap();
+        .bind(&unit)
+        .bind(&cid)
+        .execute(pool)
+        .await
+        .unwrap();
     let group = Uuid::new_v4().to_string();
     sqlx::query("INSERT INTO stock_groups (id,company_id,name) VALUES (?,?,'Preview materials')")
-        .bind(&group).bind(&cid).execute(pool).await.unwrap();
+        .bind(&group)
+        .bind(&cid)
+        .execute(pool)
+        .await
+        .unwrap();
     let items: Vec<String> = (0..3).map(|_| Uuid::new_v4().to_string()).collect();
-    for (index,item) in items.iter().enumerate() {
+    for (index, item) in items.iter().enumerate() {
         sqlx::query("INSERT INTO stock_items (id,company_id,stock_group_id,name,base_unit_id) VALUES (?,?,?,?,?)")
             .bind(item).bind(&cid).bind(&group).bind(format!("Preview item {index}")).bind(&unit).execute(pool).await.unwrap();
     }
-    let component = |id: &str, qty: &str| CreateBomComponentInput { raw_stock_item_id: id.into(), source_godown_id:None, required_qty:qty.into() };
-    BomService::create_bom(pool,CreateBomInput { company_id:cid.clone(),finished_stock_item_id:items[1].clone(),bom_name:"Nested batch of three".into(),base_output_qty:"3".into(),default_godown_id:None,components:vec![component(&items[2],"9")] },"test").await.unwrap();
-    let root = BomService::create_bom(pool,CreateBomInput { company_id:cid.clone(),finished_stock_item_id:items[0].clone(),bom_name:"Finished batch of two".into(),base_output_qty:"2".into(),default_godown_id:None,components:vec![component(&items[1],"3")] },"test").await.unwrap();
-    let expanded = BomService::expand_multilevel_bom(pool,&cid,&root.id,Decimal::from(4)).await.unwrap();
-    assert_eq!(expanded,vec![(items[2].clone(),Decimal::from(18))]);
+    let component = |id: &str, qty: &str| CreateBomComponentInput {
+        raw_stock_item_id: id.into(),
+        source_godown_id: None,
+        required_qty: qty.into(),
+    };
+    BomService::create_bom(
+        pool,
+        CreateBomInput {
+            company_id: cid.clone(),
+            finished_stock_item_id: items[1].clone(),
+            bom_name: "Nested batch of three".into(),
+            base_output_qty: "3".into(),
+            default_godown_id: None,
+            components: vec![component(&items[2], "9")],
+        },
+        "test",
+    )
+    .await
+    .unwrap();
+    let root = BomService::create_bom(
+        pool,
+        CreateBomInput {
+            company_id: cid.clone(),
+            finished_stock_item_id: items[0].clone(),
+            bom_name: "Finished batch of two".into(),
+            base_output_qty: "2".into(),
+            default_godown_id: None,
+            components: vec![component(&items[1], "3")],
+        },
+        "test",
+    )
+    .await
+    .unwrap();
+    let expanded = BomService::expand_multilevel_bom(pool, &cid, &root.id, Decimal::from(4))
+        .await
+        .unwrap();
+    assert_eq!(expanded, vec![(items[2].clone(), Decimal::from(18))]);
 }
 
 async fn setup_m25_db() -> (TempDir, DatabaseManager, String) {

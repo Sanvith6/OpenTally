@@ -16,6 +16,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'party_masters', label: 'Party Masters', hotkey: '1', category: 'MASTERS', sprint: 'Sprint 6', description: 'Customer and supplier master records linked to ledgers' },
   { id: 'cost_centres', label: 'Cost Categories & Centres', hotkey: 'E', category: 'MASTERS', sprint: 'Milestone 11', description: 'Cost hierarchy setup and multi-dimensional tracking' },
   { id: 'budgets', label: 'Budgets & Scenarios', hotkey: '2', category: 'MASTERS', sprint: 'Milestone 12', description: 'Group, Ledger and Cost Centre budget targets' },
+  { id: 'price_levels', label: 'Price Levels & Quantity Slabs', hotkey: '[', category: 'MASTERS', sprint: 'Milestone 20', description: 'Distributor price tiers, quantity slabs and effective dates' },
 
   // TRANSACTIONS
   { id: 'vouchers', label: 'Accounting Vouchers', hotkey: 'V', category: 'TRANSACTIONS', sprint: 'Sprint 2', description: 'Sales, Purchase, Payment, Receipt, Journal, Contra' },
@@ -27,6 +28,7 @@ const MENU_ITEMS: MenuItem[] = [
   { id: 'day_book', label: 'Day Book', hotkey: 'D', category: 'TRANSACTIONS', sprint: 'Sprint 2', description: 'Chronological transaction register' },
   { id: 'order_processing', label: 'Order Processing (Ctrl+F8/F9)', hotkey: '3', category: 'TRANSACTIONS', sprint: 'Milestone 13', description: 'Sales & Purchase Order processing, pending order tracking and invoice conversion' },
   { id: 'manufacturing_bom', label: 'Manufacturing & BOM', hotkey: '4', category: 'TRANSACTIONS', sprint: 'Milestone 14', description: 'Define multi-component BOM recipes, proportional scaling & manufacturing stock journals' },
+  { id: 'job_work', label: 'Job-Work & GST ITC-04', hotkey: ']', category: 'TRANSACTIONS', sprint: 'Milestone 25', description: 'Material dispatch, linked receipts, scrap and statutory due-date review' },
   { id: 'payroll', label: 'Payroll (Ctrl+F4)', hotkey: 'Y', category: 'TRANSACTIONS', sprint: 'Milestone 15', description: 'Employee masters, LOP proration, EPF/ESI/PT statutory computation & A4 Payslips' },
 
   // UTILITIES

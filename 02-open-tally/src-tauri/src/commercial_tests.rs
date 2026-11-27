@@ -15,6 +15,178 @@ use crate::vouchers::{
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
+fn billed_purchase_request(
+    actual: &str,
+    billed: Option<&str>,
+    rate: &str,
+) -> PurchaseDocumentRequest {
+    serde_json::from_value(serde_json::json!({
+        "series_id":"series_pur_a", "party_id":"party_supp_a", "bill_date":"2026-04-10",
+        "document_discount_amount":"0", "additional_charges":"0", "lines":[{
+            "description":"Actual/billed inventory", "stock_item_id":"item_widget", "unit_id":"unit_pcs",
+            "godown_id":"godown_main", "quantity":actual, "billed_quantity":billed, "rate":rate,
+            "discount_kind":"none", "discount_value":"0"
+        }]
+    })).unwrap()
+}
+
+fn billed_sales_request(actual: &str, billed: Option<&str>, rate: &str) -> SalesDocumentRequest {
+    serde_json::from_value(serde_json::json!({
+        "series_id":"series_sal_a", "party_id":"party_cust_a", "invoice_date":"2026-04-15",
+        "document_discount_amount":"0", "additional_charges":"0", "lines":[{
+            "description":"Actual/billed inventory", "stock_item_id":"item_widget", "unit_id":"unit_pcs",
+            "godown_id":"godown_main", "quantity":actual, "billed_quantity":billed, "rate":rate,
+            "discount_kind":"none", "discount_value":"0"
+        }]
+    })).unwrap()
+}
+
+#[tokio::test]
+async fn test_actual_billed_purchase_draft_roundtrip_and_update() {
+    let (_dir, db) = setup_fixture().await;
+    let created = PurchaseDocumentService::create_draft(
+        db.pool(),
+        "cmp_a",
+        billed_purchase_request("11", Some("10"), "55"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(created.document.net_total, "550");
+    let loaded = PurchaseDocumentService::get_draft(db.pool(), "cmp_a", &created.document.id)
+        .await
+        .unwrap();
+    assert_eq!(loaded.lines[0].quantity, "11");
+    assert_eq!(
+        serde_json::to_value(&loaded.lines[0]).unwrap()["billed_quantity"],
+        "10"
+    );
+    let updated = PurchaseDocumentService::update_draft(
+        db.pool(),
+        "cmp_a",
+        &created.document.id,
+        billed_purchase_request("11", Some("9"), "55"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.document.net_total, "495");
+    assert_eq!(
+        serde_json::to_value(&updated.lines[0]).unwrap()["billed_quantity"],
+        "9"
+    );
+}
+
+#[tokio::test]
+async fn test_actual_billed_sales_draft_roundtrip_and_update() {
+    let (_dir, db) = setup_fixture().await;
+    let created = SalesDocumentService::create_draft(
+        db.pool(),
+        "cmp_a",
+        billed_sales_request("11", Some("10"), "100"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(created.document.net_total, "1000");
+    let loaded = SalesDocumentService::get_draft(db.pool(), "cmp_a", &created.document.id)
+        .await
+        .unwrap();
+    assert_eq!(loaded.lines[0].quantity, "11");
+    assert_eq!(
+        serde_json::to_value(&loaded.lines[0]).unwrap()["billed_quantity"],
+        "10"
+    );
+    let updated = SalesDocumentService::update_draft(
+        db.pool(),
+        "cmp_a",
+        &created.document.id,
+        billed_sales_request("11", Some("9"), "100"),
+    )
+    .await
+    .unwrap();
+    assert_eq!(updated.document.net_total, "900");
+}
+
+#[tokio::test]
+async fn test_actual_billed_posting_finance_uses_billed_stock_uses_actual() {
+    let (_dir, db) = setup_fixture().await;
+    let pool = db.pool();
+    let purchase = PurchaseDocumentService::create_draft(
+        pool,
+        "cmp_a",
+        billed_purchase_request("22", Some("20"), "55"),
+    )
+    .await
+    .unwrap();
+    let receipt = PurchaseDocumentService::post_purchase_document(
+        pool,
+        "cmp_a",
+        &purchase.document.id,
+        Some("led_purchase_a".into()),
+    )
+    .await
+    .unwrap();
+    assert!(receipt.voucher.is_balanced);
+    let layer: (String, String, String) = sqlx::query_as("SELECT remaining_quantity, unit_cost, original_value FROM inventory_cost_layers WHERE id=?")
+        .bind(&receipt.cost_layer_ids[0]).fetch_one(pool).await.unwrap();
+    assert_eq!(layer, ("22".into(), "50".into(), "1100".into()));
+    let sale = SalesDocumentService::create_draft(
+        pool,
+        "cmp_a",
+        billed_sales_request("11", Some("10"), "100"),
+    )
+    .await
+    .unwrap();
+    let dispatch = SalesDocumentService::post_sales_document(
+        pool,
+        "cmp_a",
+        &sale.document.id,
+        Some("led_sales_a".into()),
+    )
+    .await
+    .unwrap();
+    assert!(dispatch.voucher.is_balanced);
+    assert_eq!(dispatch.cogs_amount, Some(Decimal::new(550, 0)));
+    let remaining: String =
+        sqlx::query_scalar("SELECT remaining_quantity FROM inventory_cost_layers WHERE id=?")
+            .bind(&receipt.cost_layer_ids[0])
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(remaining, "11");
+    let customer_amount: String =
+        sqlx::query_scalar("SELECT amount FROM voucher_lines WHERE voucher_id=? AND line_number=1")
+            .bind(&dispatch.voucher.voucher.id)
+            .fetch_one(pool)
+            .await
+            .unwrap();
+    assert_eq!(customer_amount, "1000");
+}
+
+#[tokio::test]
+async fn test_actual_billed_rejects_invalid_billed_quantities_before_writing() {
+    let (_dir, db) = setup_fixture().await;
+    for billed in ["-1", "12", "NaN", "1e3"] {
+        assert!(PurchaseDocumentService::create_draft(
+            db.pool(),
+            "cmp_a",
+            billed_purchase_request("11", Some(billed), "55")
+        )
+        .await
+        .is_err());
+        assert!(SalesDocumentService::create_draft(
+            db.pool(),
+            "cmp_a",
+            billed_sales_request("11", Some(billed), "55")
+        )
+        .await
+        .is_err());
+    }
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM sales_documents")
+        .fetch_one(db.pool())
+        .await
+        .unwrap();
+    assert_eq!(count, 0);
+}
+
 async fn setup_fixture() -> (tempfile::TempDir, DatabaseManager) {
     let dir = tempfile::tempdir().unwrap();
     let db = DatabaseManager::init(&dir.path().join("commercial_test.db"))
@@ -184,6 +356,7 @@ async fn test_commercial_e2e_purchase_and_sales_posting_with_fifo_and_cogs() {
             unit_id: Some("unit_pcs".to_string()),
             godown_id: Some("godown_main".to_string()),
             quantity: "10".to_string(),
+            billed_quantity: None,
             rate: "50".to_string(),
             discount_kind: PurchaseDiscountKind::None,
             discount_value: "0".to_string(),
@@ -248,6 +421,7 @@ async fn test_commercial_e2e_purchase_and_sales_posting_with_fifo_and_cogs() {
             unit_id: Some("unit_pcs".to_string()),
             godown_id: Some("godown_main".to_string()),
             quantity: "6".to_string(),
+            billed_quantity: None,
             rate: "100".to_string(),
             discount_kind: DiscountKind::None,
             discount_value: "0".to_string(),
@@ -373,6 +547,7 @@ async fn test_commercial_insufficient_stock_atomic_rollback() {
             unit_id: Some("unit_pcs".to_string()),
             godown_id: Some("godown_main".to_string()),
             quantity: "5".to_string(),
+            billed_quantity: None,
             rate: "100".to_string(),
             discount_kind: DiscountKind::None,
             discount_value: "0".to_string(),
@@ -451,6 +626,7 @@ async fn test_commercial_purchase_cancellation_fifo_guardrail() {
                 unit_id: Some("unit_pcs".to_string()),
                 godown_id: Some("godown_main".to_string()),
                 quantity: "10".to_string(),
+                billed_quantity: None,
                 rate: "50".to_string(),
                 discount_kind: PurchaseDiscountKind::None,
                 discount_value: "0".to_string(),
@@ -489,6 +665,7 @@ async fn test_commercial_purchase_cancellation_fifo_guardrail() {
                 unit_id: Some("unit_pcs".to_string()),
                 godown_id: Some("godown_main".to_string()),
                 quantity: "4".to_string(),
+                billed_quantity: None,
                 rate: "100".to_string(),
                 discount_kind: DiscountKind::None,
                 discount_value: "0".to_string(),
@@ -582,6 +759,7 @@ async fn test_commercial_unconsumed_purchase_cancellation_and_sales_cancellation
                 unit_id: Some("unit_pcs".to_string()),
                 godown_id: Some("godown_main".to_string()),
                 quantity: "5".to_string(),
+                billed_quantity: None,
                 rate: "40".to_string(),
                 discount_kind: PurchaseDiscountKind::None,
                 discount_value: "0".to_string(),
@@ -644,6 +822,7 @@ async fn test_commercial_unconsumed_purchase_cancellation_and_sales_cancellation
                 unit_id: Some("unit_pcs".to_string()),
                 godown_id: Some("godown_main".to_string()),
                 quantity: "8".to_string(),
+                billed_quantity: None,
                 rate: "60".to_string(),
                 discount_kind: PurchaseDiscountKind::None,
                 discount_value: "0".to_string(),
@@ -681,6 +860,7 @@ async fn test_commercial_unconsumed_purchase_cancellation_and_sales_cancellation
                 unit_id: Some("unit_pcs".to_string()),
                 godown_id: Some("godown_main".to_string()),
                 quantity: "3".to_string(),
+                billed_quantity: None,
                 rate: "120".to_string(),
                 discount_kind: DiscountKind::None,
                 discount_value: "0".to_string(),
@@ -771,6 +951,7 @@ async fn test_commercial_multi_company_isolation() {
                 unit_id: Some("unit_pcs".to_string()),
                 godown_id: Some("godown_main".to_string()),
                 quantity: "5".to_string(),
+                billed_quantity: None,
                 rate: "50".to_string(),
                 discount_kind: PurchaseDiscountKind::None,
                 discount_value: "0".to_string(),
