@@ -156,3 +156,87 @@ describe('Milestone 2 Outstanding & Aging View', () => {
     expect(screen.getAllByText('90+ Days').length).toBeGreaterThan(0);
   });
 });
+
+describe('M24 CA PDF exports and accounting T-format', () => {
+  beforeEach(() => {
+    const pdf = Array.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF', (char) => char.charCodeAt(0));
+    vi.spyOn(api, 'exportTrialBalancePdf').mockResolvedValue(pdf);
+    vi.spyOn(api, 'exportProfitAndLossPdf').mockResolvedValue(pdf);
+    vi.spyOn(api, 'exportBalanceSheetPdf').mockResolvedValue(pdf);
+    vi.spyOn(api, 'exportLedgerStatementPdf').mockResolvedValue(pdf);
+    vi.spyOn(api, 'exportOutstandingAgingPdf').mockResolvedValue(pdf);
+    vi.spyOn(api, 'getBillsReceivable').mockResolvedValue([]);
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: vi.fn(() => 'blob:statement') });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  });
+
+  it.each([
+    { View: TrialBalanceView, operation: 'exportTrialBalancePdf' as const },
+    { View: ProfitAndLossView, operation: 'exportProfitAndLossPdf' as const },
+    { View: BalanceSheetView, operation: 'exportBalanceSheetPdf' as const },
+    { View: LedgerReportView, operation: 'exportLedgerStatementPdf' as const },
+    { View: OutstandingAgingView, operation: 'exportOutstandingAgingPdf' as const },
+  ])('wires the PDF button and Ctrl+P in $operation', async ({ View, operation }) => {
+    render(<View activeCompany={company} onBack={vi.fn()} />);
+    const button = screen.getByRole('button', { name: 'Export PDF (Ctrl+P)' });
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(button);
+    await waitFor(() => expect(api[operation]).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+    const event = new KeyboardEvent('keydown', { key: 'p', ctrlKey: true, bubbles: true, cancelable: true });
+    window.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => expect(api[operation]).toHaveBeenCalledTimes(2));
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2);
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses selected dates and the active company for statement exports', async () => {
+    render(<ProfitAndLossView activeCompany={company} onBack={vi.fn()} />);
+    const button = screen.getByRole('button', { name: 'Export PDF (Ctrl+P)' });
+    fireEvent.change(screen.getByLabelText('To'), { target: { value: '2026-05-31' } });
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(button);
+    await waitFor(() => expect(api.exportProfitAndLossPdf).toHaveBeenCalledWith('2026-04-01', '2026-05-31', company.id));
+  });
+
+  it('renders expenses to the left of income with a balancing net result', async () => {
+    render(<ProfitAndLossView activeCompany={company} onBack={vi.fn()} />);
+    const statement = await screen.findByRole('table', { name: 'Profit & Loss T-format' });
+    const headings = Array.from(statement.querySelectorAll('thead th')).map((cell) => cell.textContent);
+    expect(headings[0]).toBe('Expenses');
+    expect(headings[2]).toBe('Income');
+    const totals = statement.querySelectorAll('tfoot .money');
+    expect(totals[0].textContent).toBe(totals[1].textContent);
+  });
+
+  it('renders liabilities and capital left, assets right without concealing differences', async () => {
+    render(<BalanceSheetView activeCompany={company} onBack={vi.fn()} />);
+    const statement = await screen.findByRole('table', { name: 'Balance Sheet T-format' });
+    const headings = Array.from(statement.querySelectorAll('thead th')).map((cell) => cell.textContent);
+    expect(headings[0]).toBe('Liabilities & Capital');
+    expect(headings[2]).toBe('Assets');
+    expect(statement.querySelectorAll('tfoot .money')[0].textContent).toBe('150.00');
+  });
+
+  it('rejects invalid PDF bytes and displays a visible export error', async () => {
+    vi.mocked(api.exportTrialBalancePdf).mockResolvedValue([65, 66, 67]);
+    render(<TrialBalanceView activeCompany={company} onBack={vi.fn()} />);
+    const button = screen.getByRole('button', { name: 'Export PDF (Ctrl+P)' });
+    await waitFor(() => expect(button.hasAttribute('disabled')).toBe(false));
+    fireEvent.click(button);
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', expect.stringContaining('PDF'));
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it('sums outstanding amounts exactly beyond the IEEE754 safe integer range', async () => {
+    vi.mocked(api.getBillsReceivable).mockResolvedValue([
+      { party_ledger_id: 'p1', party_name: 'Precision Supplier', bill_name: 'LARGE', bill_date: '2026-04-01', due_date: null, dr_cr: 'Dr', original_amount: '90071992547409.91', settled_amount: '0.00', pending_amount: '90071992547409.91', overdue_days: 0 },
+      { party_ledger_id: 'p1', party_name: 'Precision Supplier', bill_name: 'SMALL', bill_date: '2026-04-01', due_date: null, dr_cr: 'Dr', original_amount: '0.10', settled_amount: '0.00', pending_amount: '0.10', overdue_days: 0 },
+    ]);
+    render(<OutstandingAgingView activeCompany={company} onBack={vi.fn()} />);
+    await screen.findByText('LARGE');
+    expect(screen.getAllByText('90071992547410.01').length).toBeGreaterThan(0);
+  });
+});
